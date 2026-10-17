@@ -43,17 +43,13 @@ public static class SupplyAdjustmentProcedure
             + "DVM on the rear [bold]DC REFERENCE OUTPUT[/]. Remove the top cover.");
         AnsiConsole.MarkupLine($"Adjust [bold]{Markup.Escape(limits.Adjustment)}[/] for {Si.Format(limits.TargetVolts, "V", 5)} "
             + $"± {Si.Format(limits.ToleranceVolts, "V", 3)}; aim for the centre.");
-        if (sim is not null)
+        session.Bench.Step("Press Enter when set", s =>
         {
-            sim.SetReference(ReferenceSwitch.Int);
-            sim.SetPolarity(PolaritySwitch.Normal);
-            sim.SetRange(limits.Range);
-            sim.SetFunction(FunctionSwitch.Calibrate);
-        }
-        else
-        {
-            ConsoleUi.Prompt("Press Enter when set");
-        }
+            s.SetReference(ReferenceSwitch.Int);
+            s.SetPolarity(PolaritySwitch.Normal);
+            s.SetRange(limits.Range);
+            s.SetFunction(FunctionSwitch.Calibrate);
+        });
 
         dvm.Configure(DvmFunction.DcVoltage, 1, Nplc);
         var detector = new RangeDetector(DvmFunction.DcVoltage,

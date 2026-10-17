@@ -39,21 +39,30 @@ try
     var config = AppConfig.Load(options.ConfigPath);
     options.ApplyTo(config);
 
-    var command = options.Command ?? ChooseFromMenu(options);
-    return command switch
+    if (options.Command is { } command)
+        return RunCommand(command, config, options);
+
+    // The menu: run a command, then come back, until Exit.
+    while (true)
     {
-        "dvm-check" => DvmCheckCommand.Run(config, options),
-        "spec-table" => SpecTableCommand.Run(config, options),
-        "wiring" => WiringCommand(),
-        "verify" => VerifyCommand.Run(config, options),
-        "part1" => Part1Command.Run(config, options),
-        "part2" => Part2Command.Run(config, options),
-        "adjust" => AdjustCommand.Run(config, options),
-        "part4" => Part4Command.Run(config, options),
-        "meter-test" => MeterTestCommand.Run(config, options),
-        "exit" => 0,
-        _ => throw new ArgumentException($"Unknown command '{command}'."),
-    };
+        var choice = ChooseFromMenu(options);
+        if (choice == "exit")
+            return 0;
+        try
+        {
+            // Fresh config each time, so an edit to appsettings.local.json takes effect without restarting.
+            var fresh = AppConfig.Load(options.ConfigPath);
+            options.ApplyTo(fresh);
+            RunCommand(choice, fresh, options);
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.WriteException(ex, ExceptionFormats.ShortenEverything);
+        }
+        AnsiConsole.WriteLine();
+        ConsoleUi.Prompt("Press Enter to return to the menu");
+        AnsiConsole.Clear();
+    }
 }
 catch (ArgumentException ex)
 {
@@ -68,6 +77,21 @@ catch (Exception ex)
     return 1;
 }
 
+static int RunCommand(string command, AppConfig config, CommandLine options) => command switch
+{
+    "dvm-check" => DvmCheckCommand.Run(config, options),
+    "spec-table" => SpecTableCommand.Run(config, options),
+    "wiring" => WiringCommand(),
+    "verify" => VerifyCommand.Run(config, options),
+    "part1" => Part1Command.Run(config, options),
+    "part2" => Part2Command.Run(config, options),
+    "adjust" => AdjustCommand.Run(config, options),
+    "part4" => Part4Command.Run(config, options),
+    "meter-test" => MeterTestCommand.Run(config, options),
+    "exit" => 0,
+    _ => throw new ArgumentException($"Unknown command '{command}'."),
+};
+
 static int WiringCommand()
 {
     Verify11683A.App.Reports.Wiring.Write();
@@ -79,6 +103,8 @@ static string ChooseFromMenu(CommandLine options)
     AnsiConsole.Write(new FigletText("11683A-Verify").Color(Color.SteelBlue));
     if (options.IsSimulation)
         AnsiConsole.MarkupLine($"[yellow]Simulation: {Markup.Escape(options.SimulateScenario!)}[/]");
+    if (options.IsSimulation && ConsoleUi.Interactive)
+        AnsiConsole.MarkupLine("[grey]Walkthrough: the app shows every bench prompt; answering it turns the simulated 11683A's knobs.[/]");
     var choices = new Dictionary<string, string>
     {
         ["DVM check (step 1 bench check)"] = "dvm-check",

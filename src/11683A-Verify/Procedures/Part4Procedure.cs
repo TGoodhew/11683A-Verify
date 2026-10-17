@@ -60,28 +60,20 @@ public static class Part4Procedure
         AnsiConsole.MarkupLine("Connect the power meter to the POWER METER output with the 11730A cable. Power cord in, LINE on, "
             + "REF [bold]INT[/], RANGE [bold]1 mW[/], POLARITY [bold]NORMAL[/].");
         AnsiConsole.MarkupLine("Set FUNCTION to [bold]STANDBY[/]. Wait for the meter's downward drift to stop (typically under 60 s), then [bold]ZERO[/] it.");
-        if (sim is not null)
+        session.Bench.Step("Press Enter when the meter is zeroed", s =>
         {
-            sim.SetReference(ReferenceSwitch.Int);
-            sim.SetPolarity(PolaritySwitch.Normal);
-            sim.SetRange("1mW");
-            sim.SetFunction(FunctionSwitch.Standby);
+            s.SetReference(ReferenceSwitch.Int);
+            s.SetPolarity(PolaritySwitch.Normal);
+            s.SetRange("1mW");
+            s.SetFunction(FunctionSwitch.Standby);
             ((SimulatedPowerMeter)meter).Zero();
-        }
-        else
-        {
-            ConsoleUi.Prompt("Press Enter when the meter is zeroed");
-        }
+        });
         AnsiConsole.MarkupLine("Set FUNCTION to [bold]CALIBRATE[/], then [bold]CAL[/] the power meter.");
-        if (sim is not null)
+        session.Bench.Step("Press Enter when the meter is calibrated", s =>
         {
-            sim.SetFunction(FunctionSwitch.Calibrate);
+            s.SetFunction(FunctionSwitch.Calibrate);
             ((SimulatedPowerMeter)meter).Cal();
-        }
-        else
-        {
-            ConsoleUi.Prompt("Press Enter when the meter is calibrated");
-        }
+        });
         var intWatts = ReadPower(session, meter, "REF INT, 1 mW");
 
         // Step 2: REF EXT.
@@ -96,17 +88,13 @@ public static class Part4Procedure
         AnsiConsole.MarkupLine($"Set RANGE [bold]{Markup.Escape(RangeSwitch.Get(table.RangeSetting).Label)}[/] and REF [bold]EXT[/]; FUNCTION stays CALIBRATE. "
             + $"[grey]({Markup.Escape(table.RangeSource)})[/]");
         AnsiConsole.MarkupLine("Move the DVM from DC REFERENCE OUTPUT to a [bold]BNC tee on REF EXT[/], and connect the DC calibrator's HI/LO to the tee.");
-        if (sim is not null)
+        session.Bench.Step("Press Enter when connected", s =>
         {
-            sim.LinePowered = false;
-            sim.SetRange(table.RangeSetting);
-            sim.SetReference(ReferenceSwitch.Ext);
-            sim.DvmAt = DvmPoint.RefExtTee;
-        }
-        else
-        {
-            ConsoleUi.Prompt("Press Enter when connected");
-        }
+            s.LinePowered = false;
+            s.SetRange(table.RangeSetting);
+            s.SetReference(ReferenceSwitch.Ext);
+            s.DvmAt = DvmPoint.RefExtTee;
+        });
         var applied = SetSource(session, v1.Value, "the 1 mW voltage");
         var extWatts = ReadPower(session, meter, "REF EXT, 1 mW voltage");
         var transfer = new TransferCheck(intWatts, v1.Value, applied, extWatts, table.TransferTolerance);
@@ -121,24 +109,17 @@ public static class Part4Procedure
             AnsiConsole.WriteLine();
             AnsiConsole.Write(new Rule("Step 3: Table 2-4 (E4418B Service Guide steps 9–14)").LeftJustified());
             AnsiConsole.MarkupLine("FUNCTION [bold]STANDBY[/]; DC calibrator to 0 V, output off; meter filter 512; then [bold]ZERO[/] the meter.");
-            if (sim is not null)
+            session.Bench.Step("Press Enter when the meter is zeroed", s =>
             {
-                sim.SetFunction(FunctionSwitch.Standby);
-                sim.ExternalSourceVolts = 0;
+                s.SetFunction(FunctionSwitch.Standby);
+                s.ExternalSourceVolts = 0;
                 ((SimulatedPowerMeter)meter).Zero();
-            }
-            else
-            {
-                ConsoleUi.Prompt("Press Enter when the meter is zeroed");
-            }
+            });
             AnsiConsole.MarkupLine($"FUNCTION [bold]CALIBRATE[/]; DC calibrator to {Si.Format(table.CalibrationVolts, "V", 5)}, output '+'; then [bold]CAL[/] the meter.");
             if (sim is not null)
                 sim.SetFunction(FunctionSwitch.Calibrate);
             SetSource(session, table.CalibrationVolts, "the calibration voltage");
-            if (sim is not null)
-                ((SimulatedPowerMeter)meter).Cal();
-            else
-                ConsoleUi.Prompt("Press Enter when the meter is calibrated");
+            session.Bench.Step("Press Enter when the meter is calibrated", s => ((SimulatedPowerMeter)meter).Cal());
 
             foreach (var row in table.Rows)
             {
@@ -179,18 +160,14 @@ public static class Part4Procedure
         var sim = session.Bench.Simulator;
         AnsiConsole.MarkupLine("No Part 1 result in this session, so first the 1 mW DC REFERENCE OUTPUT voltage: DVM on DC REFERENCE OUTPUT, "
             + "REF [bold]INT[/], POLARITY [bold]NORMAL[/], RANGE [bold]1 mW[/], FUNCTION [bold]CALIBRATE[/].");
-        if (sim is not null)
+        session.Bench.Step("Press Enter when set", s =>
         {
-            sim.DvmAt = DvmPoint.DcReferenceOutput;
-            sim.SetReference(ReferenceSwitch.Int);
-            sim.SetPolarity(PolaritySwitch.Normal);
-            sim.SetRange("1mW");
-            sim.SetFunction(FunctionSwitch.Calibrate);
-        }
-        else
-        {
-            ConsoleUi.Prompt("Press Enter when set");
-        }
+            s.DvmAt = DvmPoint.DcReferenceOutput;
+            s.SetReference(ReferenceSwitch.Int);
+            s.SetPolarity(PolaritySwitch.Normal);
+            s.SetRange("1mW");
+            s.SetFunction(FunctionSwitch.Calibrate);
+        });
         var acquirer = session.Acquirer(new RangeDetector(DvmFunction.DcVoltage, [new ExpectedValue("1mW", limits.NominalPart1Volts("1mW"))]));
         return session.MeasureNext(acquirer)?.Statistics.Mean;
     }
@@ -208,6 +185,8 @@ public static class Part4Procedure
         AnsiConsole.MarkupLine($"Set the DC calibrator to [bold]{Si.Format(target, "V", 5)}[/] ({Markup.Escape(what)}).");
         if (sim is not null)
             sim.ExternalSourceVolts = target * (1 + 3e-6);   // a calibrator set a few ppm off
+        if (session.Bench.Walkthrough)
+            ConsoleUi.Prompt("Press Enter when the DC calibrator is set [simulator: it lands 3 ppm high]");
 
         if (ConsoleUi.Interactive && sim is null)
         {
@@ -243,7 +222,7 @@ public static class Part4Procedure
         double watts;
         if (meter.OverBus)
         {
-            if (session.Bench.Simulator is null)
+            if (session.Bench.Simulator is null || session.Bench.Walkthrough)
                 ConsoleUi.Prompt("Wait for the power meter reading to settle, then press Enter");
             var values = new List<double>();
             for (var i = 0; i < PowerReadings; i++)

@@ -28,10 +28,7 @@ public static class Part2Procedure
         AnsiConsole.MarkupLine("Set the 11683A FUNCTION switch to [bold]STANDBY[/]. Leave the 4-wire cable on DC REFERENCE OUTPUT.");
         AnsiConsole.MarkupLine("[grey]Before ohms current is applied, the DVM reads the output on its 100 mV DC range: it must be grounded, "
             + $"within {Si.Format(OhmsSafety.DefaultThresholdVolts, "V", 2)} of zero.[/]");
-        if (sim is not null)
-            sim.SetFunction(FunctionSwitch.Standby);
-        else
-            ConsoleUi.Prompt("Press Enter when FUNCTION is in STANDBY");
+        session.Bench.Step("Press Enter when FUNCTION is in STANDBY", s => s.SetFunction(FunctionSwitch.Standby));
 
         var checks = new List<OhmsSafetyRecord>();
         var interlock = OhmsSafety.Interlock(dvm, c =>
@@ -60,7 +57,11 @@ public static class Part2Procedure
                     AnsiConsole.Write(ConsoleReport.Part2Table(current, limits, session.Convention));
                 }
                 AnsiConsole.WriteLine();
-                if (sim is not null)
+                if (session.Bench.Walkthrough)
+                {
+                    SimulatorKnobs.ChooseRange(sim!, remaining);
+                }
+                else if (sim is not null)
                 {
                     sim.SetRange(remaining[0]);
                     AnsiConsole.MarkupLine($"[grey]Simulator: RANGE → {RangeSwitch.Get(remaining[0])}[/]");

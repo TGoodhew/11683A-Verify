@@ -130,7 +130,7 @@ public sealed class VerificationSession : IDisposable
 
                 case AcquisitionOutcome.NotDetected:
                     AnsiConsole.MarkupLine($"[yellow]⚠ {Markup.Escape(Capitalise(acquisition.Message))}.[/]");
-                    if (Bench.IsSimulation || ConsoleUi.Choose("Fix the switches, then:", ["Try again", "Stop"], "Stop") == "Stop")
+                    if (!Retry("Fix the switches, then:"))
                         return null;
                     break;
 
@@ -145,17 +145,34 @@ public sealed class VerificationSession : IDisposable
 
                 case AcquisitionOutcome.Blocked:
                     AnsiConsole.MarkupLine($"[red]✗ {Markup.Escape(Capitalise(acquisition.Message))}.[/]");
-                    if (Bench.IsSimulation || ConsoleUi.Choose("Ohms not applied. Set FUNCTION to STANDBY, then:", ["Try again", "Stop"], "Stop") == "Stop")
+                    if (!Retry("Ohms not applied. Set FUNCTION to STANDBY, then:"))
                         return null;
                     break;
 
                 default:
                     AnsiConsole.MarkupLine($"[yellow]⚠ {Markup.Escape(Capitalise(acquisition.Message))}.[/]");
-                    if (Bench.IsSimulation || ConsoleUi.Choose("Leave the knobs alone while a point is measured, then:", ["Try again", "Stop"], "Stop") == "Stop")
+                    if (!Retry("Leave the knobs alone while a point is measured, then:"))
                         return null;
                     break;
             }
         }
+    }
+
+    /// <summary>
+    /// Try again or stop. A scripted simulation stops (nothing would change); in a walkthrough the operator can turn the
+    /// simulated knobs before trying again.
+    /// </summary>
+    private bool Retry(string title)
+    {
+        if (Bench.IsSimulation && !Bench.Walkthrough)
+            return false;
+        var choices = Bench.Walkthrough ? new[] { "Change the simulated switches, then try again", "Stop" } : new[] { "Try again", "Stop" };
+        var choice = ConsoleUi.Choose(title, choices, "Stop");
+        if (choice == "Stop")
+            return false;
+        if (Bench.Walkthrough)
+            SimulatorKnobs.Adjust(Bench.Simulator!);
+        return true;
     }
 
     private PointAcquisition AcquireWithStatus(PointAcquirer acquirer, bool allowUnsettled, double? startRange)

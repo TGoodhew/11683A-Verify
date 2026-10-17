@@ -17,7 +17,7 @@ public static class Preparation
 
     private static void AskAmbient(VerificationSession session)
     {
-        if (session.AmbientC is not null || session.Bench.IsSimulation || Console.IsInputRedirected)
+        if (session.AmbientC is not null || (session.Bench.IsSimulation && !session.Bench.Walkthrough) || Console.IsInputRedirected)
             return;
         var band = session.Specs.CalibrationBandC;
         var text = AnsiConsole.Prompt(new TextPrompt<string>(
@@ -38,6 +38,8 @@ public static class Preparation
         if (session.Bench.IsSimulation || session.Options.SkipWarmup || Console.IsInputRedirected)
         {
             session.Log.Write(session.Bench.IsSimulation ? "Warm-up: simulated, not timed." : "Warm-up: skipped.");
+            if (session.Bench.Walkthrough)
+                AnsiConsole.MarkupLine("[grey]Simulator: the warm-up countdown is skipped (on the bench it asks how long each instrument has been on and counts down).[/]");
             return;
         }
 

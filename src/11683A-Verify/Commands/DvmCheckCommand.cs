@@ -63,10 +63,7 @@ public static class DvmCheckCommand
         // 3. Before any ohms range is configured, make sure the 11683A output is not live.
         AnsiConsole.MarkupLine("This check configures the 4-wire ohms ranges, so the 11683A output must not be live.");
         AnsiConsole.MarkupLine("Set the 11683A [bold]FUNCTION[/] switch to [bold]STANDBY[/] (or disconnect the DVM).");
-        if (bench.Simulator is { } sim)
-            sim.SetFunction(FunctionSwitch.Standby);
-        else
-            ConsoleUi.Prompt("Press Enter when FUNCTION is in STANDBY");
+        bench.Step("Press Enter when FUNCTION is in STANDBY", s => s.SetFunction(FunctionSwitch.Standby));
 
         var safety = OhmsSafety.Check(dvm);
         bench.Log.Write($"Ohms safety: {safety.Reading.Value} V, safe={safety.Safe}");
@@ -127,17 +124,13 @@ public static class DvmCheckCommand
 
         AnsiConsole.MarkupLine("Set the 11683A: REF switch [bold]INT[/], POLARITY [bold]NORMAL[/], RANGE [bold]1 mW[/], FUNCTION [bold]CALIBRATE[/].");
         AnsiConsole.MarkupLine("[grey]DVM on the rear DC REFERENCE OUTPUT BNC.[/]");
-        if (bench.Simulator is { } sim)
+        bench.Step("Press Enter when set", s =>
         {
-            sim.SetReference(ReferenceSwitch.Int);
-            sim.SetPolarity(PolaritySwitch.Normal);
-            sim.SetRange(point.Range);
-            sim.SetFunction(FunctionSwitch.Calibrate);
-        }
-        else
-        {
-            ConsoleUi.Prompt("Press Enter when set");
-        }
+            s.SetReference(ReferenceSwitch.Int);
+            s.SetPolarity(PolaritySwitch.Normal);
+            s.SetRange(point.Range);
+            s.SetFunction(FunctionSwitch.Calibrate);
+        });
 
         // Only the 1 mW point is expected, so any other setting shows up as a warning.
         var detector = new RangeDetector(DvmFunction.DcVoltage, [new ExpectedValue(point.Range, limits.NominalPart1Volts(point.Range))]);

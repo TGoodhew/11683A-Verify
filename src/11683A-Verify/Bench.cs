@@ -26,6 +26,24 @@ public sealed class Bench : IDisposable
     public SessionLog Log { get; }
     public bool IsSimulation => Simulator is not null;
 
+    /// <summary>
+    /// Simulation with a person at the console: every bench prompt is shown, and the simulated knobs turn when the
+    /// operator answers it. Scripted (redirected) simulation runs straight through instead.
+    /// </summary>
+    public bool Walkthrough => IsSimulation && ConsoleUi.Interactive;
+
+    /// <summary>
+    /// A bench step: on the bench and in a walkthrough the operator is prompted; in simulation the 11683A is then set
+    /// as the prompt asked.
+    /// </summary>
+    public void Step(string prompt, Action<Simulated11683A>? simulate = null)
+    {
+        if (!IsSimulation || Walkthrough)
+            ConsoleUi.Prompt(Walkthrough ? $"{prompt} [simulator: Enter sets it]" : prompt);
+        if (Simulator is { } sim)
+            simulate?.Invoke(sim);
+    }
+
     public static Bench Open(AppConfig config, CommandLine options, string sessionName)
     {
         var log = new SessionLog(Path.Combine(config.ResultsDirectory, "logs"), sessionName);

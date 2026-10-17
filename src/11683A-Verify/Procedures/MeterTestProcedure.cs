@@ -183,10 +183,11 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         if (test.Points.Any(p => test.SourceOf(p) == ReadingSource.Recorder))
             AnsiConsole.MarkupLine("[bold]The bench DVM reads the power meter's rear-panel RECORDER OUTPUT[/] (move it from the 11683A).");
 
+        if ((Sim is null || bench.Walkthrough) && !AskGo("Press Enter when the setup above is done (S to skip this test)"
+                + (bench.Walkthrough ? " [simulator: Enter does the zero and CAL]" : "")))
+            return new MeterTestResult(test.Id, test.Title, test.Source, channel, []);
         if (Sim is not null)
             PrepareSimulation(test);
-        else if (!AskGo("Press Enter when the setup above is done (S to skip this test)"))
-            return new MeterTestResult(test.Id, test.Title, test.Source, channel, []);
 
         var results = new List<MeterPointResult>();
         foreach (var point in test.Points)
@@ -201,16 +202,26 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             var simulated = false;
             if (Sim is not null)
             {
-                ApplySimulation(point);
-                if (source == ReadingSource.Operator)
+                if (bench.Walkthrough && source != ReadingSource.Operator
+                    && !AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip) [simulator: Enter sets it]"))
                 {
-                    // The simulator cannot read a display; a simulated operator types the expected value with a last-digit wobble.
-                    reading = point.Expected + (point.Max - point.Min) * 0.02 * (_simOperator.NextDouble() - 0.5);
-                    simulated = true;
+                    reading = null;
                 }
                 else
                 {
-                    reading = Read(point, source, meter);
+                    ApplySimulation(point);
+                    if (source == ReadingSource.Operator)
+                    {
+                        // The simulator cannot read a display: it offers the expected value with a last-digit wobble, which the
+                        // walkthrough operator can accept or overtype (and a scripted run just takes).
+                        var display = point.Expected + (point.Max - point.Min) * 0.02 * (_simOperator.NextDouble() - 0.5);
+                        reading = bench.Walkthrough ? AskReading(point, display) : display;
+                        simulated = reading == display;
+                    }
+                    else
+                    {
+                        reading = Read(point, source, meter);
+                    }
                 }
             }
             else if (source == ReadingSource.Operator)
@@ -323,16 +334,24 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         return !text.Trim().Equals("s", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static double? AskReading(MeterTestPoint point)
+    private static double? AskReading(MeterTestPoint point, double? simulatedDisplay = null)
     {
         if (!ConsoleUi.Interactive)
             throw new InvalidOperationException("A typed reading needs an operator at the console.");
-        var text = AnsiConsole.Prompt(new TextPrompt<string>($"Reading in {Markup.Escape(MeterUnits.Display(point.Unit))} [grey](Enter to skip)[/]:")
-            .AllowEmpty()
+        var shown = simulatedDisplay is { } d ? Fmt(d, point) : null;
+        var prompt = new TextPrompt<string>($"Reading in {Markup.Escape(MeterUnits.Display(point.Unit))} "
+                + (shown is null ? "[grey](Enter to skip)[/]:" : $"[grey](the simulated display shows {shown}; Enter accepts it)[/]:"))
+            .AllowEmpty();
+        if (shown is not null)
+            prompt = prompt.DefaultValue(shown).HideDefaultValue();
+        var text = AnsiConsole.Prompt(prompt
             .Validate(t => t.Trim() == "" || double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out _)
                 ? ValidationResult.Success()
                 : ValidationResult.Error("Enter a number, or nothing to skip.")));
-        return text.Trim() == "" ? null : double.Parse(text, CultureInfo.InvariantCulture);
+        if (text.Trim() == "")
+            return null;
+        var value = double.Parse(text, CultureInfo.InvariantCulture);
+        return simulatedDisplay is { } sd && text.Trim() == shown ? sd : value;
     }
 
     private static double? WattsOf(double value, string unit) => unit switch

@@ -25,16 +25,12 @@ public static class Part1Procedure
         AnsiConsole.MarkupLine("DVM on the rear [bold]DC REFERENCE OUTPUT[/] BNC (the lower one), 4-wire cable direct to the BNC.");
         AnsiConsole.MarkupLine("Set the 11683A: REF switch [bold]INT[/], POLARITY [bold]NORMAL[/], FUNCTION [bold]CALIBRATE[/].");
         AnsiConsole.MarkupLine("[grey]The manual starts from RANGE 100 mW with FUNCTION in STANDBY; switch to CALIBRATE now.[/]");
-        if (sim is not null)
+        session.Bench.Step("Press Enter when set", s =>
         {
-            sim.SetReference(ReferenceSwitch.Int);
-            sim.SetPolarity(PolaritySwitch.Normal);
-            sim.SetFunction(FunctionSwitch.Calibrate);
-        }
-        else
-        {
-            ConsoleUi.Prompt("Press Enter when set");
-        }
+            s.SetReference(ReferenceSwitch.Int);
+            s.SetPolarity(PolaritySwitch.Normal);
+            s.SetFunction(FunctionSwitch.Calibrate);
+        });
 
         var candidates = part.Points.Select(p => new ExpectedValue(p.Range, limits.NominalPart1Volts(p.Range))).ToList();
         var acquirer = session.Acquirer(new RangeDetector(DvmFunction.DcVoltage, candidates));
@@ -54,7 +50,11 @@ public static class Part1Procedure
                 AnsiConsole.Write(ConsoleReport.Part1Table(current, limits, session.Convention));
             }
             AnsiConsole.WriteLine();
-            if (sim is not null)
+            if (session.Bench.Walkthrough)
+            {
+                SimulatorKnobs.ChooseRange(sim!, remaining);
+            }
+            else if (sim is not null)
             {
                 sim.SetRange(remaining[0]);
                 AnsiConsole.MarkupLine($"[grey]Simulator: RANGE → {RangeSwitch.Get(remaining[0])}[/]");
