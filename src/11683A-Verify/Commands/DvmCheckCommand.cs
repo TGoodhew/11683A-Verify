@@ -5,6 +5,7 @@ using Verify11683A.Instruments.Dvm;
 using Verify11683A.Instruments.Measurement;
 using Verify11683A.Measurement;
 using Verify11683A.Specs;
+using Verify11683A.Uncertainty;
 
 namespace Verify11683A.App.Commands;
 
@@ -47,7 +48,8 @@ public static class DvmCheckCommand
         grid.AddRow("[grey]Serial (config)[/]", config.Dvm.Serial == ""
             ? "[yellow]not set: add dvm.serial to appsettings.local.json[/]"
             : Markup.Escape(config.Dvm.Serial));
-        grid.AddRow("[grey]Cal date (config)[/]", CalDateText(config.Dvm));
+        var details = config.Dvm.Details(identity);
+        grid.AddRow("[grey]Cal date (config)[/]", ConsoleUi.CalibrationText(details, DateOnly.FromDateTime(DateTime.Today)));
         grid.AddRow("[grey]Spec table[/]", Markup.Escape(specs.Source));
         AnsiConsole.Write(grid);
         if (identity.Serial is "" or "0")
@@ -64,7 +66,7 @@ public static class DvmCheckCommand
         if (bench.Simulator is { } sim)
             sim.SetFunction(FunctionSwitch.Standby);
         else
-            Prompt("Press Enter when FUNCTION is in STANDBY");
+            ConsoleUi.Prompt("Press Enter when FUNCTION is in STANDBY");
 
         var safety = OhmsSafety.Check(dvm);
         bench.Log.Write($"Ohms safety: {safety.Reading.Value} V, safe={safety.Safe}");
@@ -106,7 +108,7 @@ public static class DvmCheckCommand
         AnsiConsole.WriteLine();
 
         // 5. Optional: readings of the 11683A at 1 mW
-        if (Confirm("Take readings of the 11683A at RANGE 1 mW?"))
+        if (ConsoleUi.Confirm("Take readings of the 11683A at RANGE 1 mW?"))
             failures += ReadOneMilliwatt(bench, config, specs, limits, options.AmbientC);
 
         AnsiConsole.WriteLine();
@@ -134,7 +136,7 @@ public static class DvmCheckCommand
         }
         else
         {
-            Prompt("Press Enter when set");
+            ConsoleUi.Prompt("Press Enter when set");
         }
 
         // Only the 1 mW point is expected, so any other setting shows up as a warning.
@@ -166,7 +168,9 @@ public static class DvmCheckCommand
         var mean = stats.Mean;
         var sigma = stats.StandardDeviation;
         var spec = specs.Limit(DvmFunction.DcVoltage, result.Configuration!.Range, mean, config.Dvm.Period, ambientC);
-        var inLimits = mean >= point.VoltsMin && mean <= point.VoltsMax;
+        var convention = config.Uncertainty.Convention;
+        var uncertainty = MeasurementUncertainty.Of(spec, stats, convention);
+        var assessment = Assessment.Of(mean, uncertainty.Expanded, new Tolerance(point.VoltsMin!.Value, point.VoltsMax!.Value), convention);
 
         var grid = new Grid().AddColumn().AddColumn();
         grid.AddRow("[grey]Mean[/]", $"[bold]{Si.Format(mean, "V", 6)}[/]");
@@ -174,31 +178,13 @@ public static class DvmCheckCommand
         grid.AddRow($"[grey]{Markup.Escape(specs.Model)} {spec.Period.Key()} spec[/]",
             $"±{Si.Format(spec.Total, "V", 3)} ({Si.Ppm(spec.Relative)})"
             + (spec.TemperatureError > 0 ? $" incl. ±{Si.Format(spec.TemperatureError, "V", 2)} temperature" : ""));
+        grid.AddRow($"[grey]U (k = {convention.CoverageFactor:0.#})[/]", $"±{Si.Format(uncertainty.Expanded, "V", 3)} ({Si.Ppm(uncertainty.Expanded / Math.Abs(mean))})");
         grid.AddRow("[grey]Manual limit[/]", $"{Si.Format(point.VoltsMin!.Value, "V", 5)} to {Si.Format(point.VoltsMax!.Value, "V", 5)}  [grey]({Markup.Escape(limits.Part1.Source)})[/]");
-        grid.AddRow("[grey]Indication[/]", inLimits
-            ? "[green]inside the 1 mW limits[/] [grey](a preview: the full Part 1 test comes in step 2)[/]"
-            : "[yellow]outside the 1 mW limits: the Power Supply Adjustment (A2R1) would be recommended[/]");
+        grid.AddRow("[grey]TUR[/]", ConsoleUi.TurMarkup(assessment));
+        grid.AddRow("[grey]Indication[/]", ConsoleUi.VerdictMarkup(assessment.Verdict) + (assessment.Verdict == Verdict.Pass
+            ? " [grey](a preview: the full Part 1 test checks every range)[/]"
+            : " [yellow]the Power Supply Adjustment (A2R1) would be recommended[/]"));
         AnsiConsole.Write(new Panel(grid).Header("11683A DC REFERENCE OUTPUT, RANGE 1 mW"));
         return 0;
     }
-
-    private static string CalDateText(DvmConfig dvm)
-    {
-        if (dvm.CalibrationDate is not { } date)
-            return "[yellow]not set: add dvm.calibrationDate to appsettings.local.json[/]";
-        var due = date.AddMonths(dvm.CalibrationIntervalMonths);
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        return due < today
-            ? $"{date:yyyy-MM-dd} [red](due {due:yyyy-MM-dd}: PAST DUE)[/]"
-            : $"{date:yyyy-MM-dd} [grey](due {due:yyyy-MM-dd})[/]";
-    }
-
-    private static void Prompt(string message)
-    {
-        AnsiConsole.Markup($"[blue]{Markup.Escape(message)}[/] ");
-        Console.ReadLine();
-    }
-
-    private static bool Confirm(string question) =>
-        Console.IsInputRedirected || AnsiConsole.Confirm(question);
 }

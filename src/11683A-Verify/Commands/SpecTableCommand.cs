@@ -4,6 +4,7 @@ using Verify11683A.Calibrator;
 using Verify11683A.Formatting;
 using Verify11683A.Measurement;
 using Verify11683A.Specs;
+using Verify11683A.Uncertainty;
 
 namespace Verify11683A.App.Commands;
 
@@ -53,45 +54,76 @@ public static class SpecTableCommand
             AnsiConsole.MarkupLine($"[grey]• {Markup.Escape(note)}[/]");
         AnsiConsole.WriteLine();
 
-        // The spec limit at each test point, on the fixed range the test will use.
+        // The spec limit at each test point, on the fixed range the test will use, and the TUR it allows.
+        var convention = config.Uncertainty.Convention;
+        var k = convention.CoverageFactor.ToString("0.#", CultureInfo.InvariantCulture);
         var points = new Table().Border(TableBorder.Rounded)
-            .Title($"[bold]{Markup.Escape(specs.Model)} {period.Key()} spec limit at the 11683A test points[/]"
+            .Title($"[bold]{Markup.Escape(specs.Model)} {period.Key()} spec limit and TUR at the 11683A test points[/]"
                 + (options.AmbientC is { } a ? $" (ambient {a.ToString(CultureInfo.InvariantCulture)} °C)" : ""))
             .AddColumn("Part").AddColumn("11683A range").AddColumn(new TableColumn("Nominal").RightAligned())
             .AddColumn("DVM range").AddColumn(new TableColumn("Spec limit ±").RightAligned())
-            .AddColumn(new TableColumn("Relative").RightAligned()).AddColumn("Test tolerance");
+            .AddColumn(new TableColumn("Relative").RightAligned()).AddColumn("Test tolerance")
+            .AddColumn(new TableColumn($"U (k = {k})").RightAligned()).AddColumn(new TableColumn("TUR").RightAligned());
 
-        var dcvRanges = specs.RangesFor(DvmFunction.DcVoltage);
+        // Type B only: the readings' own scatter adds to this on the bench.
+        MeasurementUncertainty SpecOnly(DvmFunction function, double nominal)
+        {
+            var range = RangePicker.Pick(specs.RangesFor(function), nominal);
+            var limit = specs.Limit(function, range, nominal, period, options.AmbientC);
+            return MeasurementUncertainty.Of(limit, ReadingStatistics.Of([nominal]), convention);
+        }
+
+        var reference = SpecOnly(DvmFunction.DcVoltage, limits.NominalPart1Volts(limits.Part1.ReferenceRange));
         foreach (var p in limits.Part1.Points)
         {
             var nominal = limits.NominalPart1Volts(p.Range);
-            var range = RangePicker.Pick(dcvRanges, nominal);
-            var limit = specs.Limit(DvmFunction.DcVoltage, range, nominal, period, options.AmbientC);
-            var tolerance = p.Range == limits.Part1.ReferenceRange
-                ? "reference for the ratios"
-                : $"ratio {p.RatioMin.ToString(CultureInfo.InvariantCulture)}–{p.RatioMax.ToString(CultureInfo.InvariantCulture)} "
-                  + $"(±{Si.Ppm((p.RatioMax - p.RatioMin) / 2 / p.RatioMid)})";
+            var u = SpecOnly(DvmFunction.DcVoltage, nominal);
+            var cells = new List<string>
+            {
+                "1", RangeSwitch.Get(p.Range).Label, Si.Format(nominal, "V", 5), Si.Range(u.Spec.Range, "V"),
+                Si.Format(u.Spec.Total, "V", 3), Si.Ppm(u.Spec.Relative),
+            };
+            if (p.Range == limits.Part1.ReferenceRange)
+            {
+                points.AddRow([.. cells, "reference for the ratios", Si.Format(u.Expanded, "V", 3), "—"]);
+                continue;
+            }
+
+            var ratio = RatioUncertainty.Of(reference, u, convention);
+            var ratioCheck = Assessment.Of(p.RatioMid, ratio.Expanded, new Tolerance(p.RatioMin, p.RatioMax), convention);
+            points.AddRow([.. cells,
+                $"ratio {Plain(p.RatioMin)}–{Plain(p.RatioMax)}",
+                ratio.Expanded.ToString("0.00000", CultureInfo.InvariantCulture),
+                ConsoleUi.TurMarkup(ratioCheck)]);
+
             if (p.VoltsMin is { } lo && p.VoltsMax is { } hi)
-                tolerance += $"; {Si.Format(lo, "V", 5)}–{Si.Format(hi, "V", 5)}";
-            points.AddRow("1", RangeSwitch.Get(p.Range).Label, Si.Format(nominal, "V", 5), Si.Range(range, "V"),
-                Si.Format(limit.Total, "V", 3), Si.Ppm(limit.Relative), tolerance);
+            {
+                var voltsCheck = Assessment.Of(nominal, u.Expanded, new Tolerance(lo, hi), convention);
+                points.AddRow("", "", "", "", "", "", $"{Plain(lo * 1e3)}–{Plain(hi * 1e3)} mV",
+                    Si.Format(u.Expanded, "V", 3), ConsoleUi.TurMarkup(voltsCheck));
+            }
         }
 
-        var ohmsRanges = specs.RangesFor(DvmFunction.FourWireResistance);
         foreach (var p in limits.Part2.Points)
         {
-            var range = RangePicker.Pick(ohmsRanges, p.OhmsMid);
-            var limit = specs.Limit(DvmFunction.FourWireResistance, range, p.OhmsMid, period, options.AmbientC);
-            var tolerance = $"{Si.Format(p.OhmsMin, "Ω", 5)}–{Si.Format(p.OhmsMax, "Ω", 5)} (±{Si.Ppm((p.OhmsMax - p.OhmsMin) / 2 / p.OhmsMid)})";
-            points.AddRow("2", RangeSwitch.Get(p.Range).Label, Si.Format(p.OhmsMid, "Ω", 5), Si.Range(range, "Ω"),
-                Si.Format(limit.Total, "Ω", 3), Si.Ppm(limit.Relative), tolerance);
+            var u = SpecOnly(DvmFunction.FourWireResistance, p.OhmsMid);
+            var check = Assessment.Of(p.OhmsMid, u.Expanded, new Tolerance(p.OhmsMin, p.OhmsMax), convention);
+            points.AddRow("2", RangeSwitch.Get(p.Range).Label, Si.Format(p.OhmsMid, "Ω", 5), Si.Range(u.Spec.Range, "Ω"),
+                Si.Format(u.Spec.Total, "Ω", 3), Si.Ppm(u.Spec.Relative),
+                $"{Plain(p.OhmsMin)}–{Plain(p.OhmsMax)} Ω",
+                Si.Format(u.Expanded, "Ω", 3), ConsoleUi.TurMarkup(check));
         }
 
         AnsiConsole.Write(points);
         AnsiConsole.MarkupLine("[grey]Nominal Part 1 voltages are derived from the 145.00 mV supply target and the mid-band ratios; "
-            + "the manual gives only ratios. Uncertainty, TUR and verdicts follow in step 3.[/]");
+            + "the manual gives only ratios.[/]");
+        AnsiConsole.MarkupLine($"[grey]U is the spec alone: u = spec/√3, U = {k}u; ratios combine {convention.RatioCombination}. "
+            + $"The readings' scatter (s/√N) adds to it on the bench. TUR = half the tolerance / U; below {convention.MinimumTur:0.#}:1 is flagged.[/]");
         return 0;
     }
+
+    /// <summary>A limit as the manual prints it: 3143.3, 3.3457, 143.00.</summary>
+    private static string Plain(double value) => value.ToString(value >= 100 ? "0.00###" : "0.000##", CultureInfo.InvariantCulture);
 
     private static string Term(SpecTerm t) =>
         $"{t.Reading.ToString("0.####", CultureInfo.InvariantCulture)} + {t.Range.ToString("0.####", CultureInfo.InvariantCulture)}";

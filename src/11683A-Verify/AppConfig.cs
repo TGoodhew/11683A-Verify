@@ -1,7 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Verify11683A.Instruments.Dvm;
 using Verify11683A.Measurement;
 using Verify11683A.Specs;
+using Verify11683A.Uncertainty;
 
 namespace Verify11683A.App;
 
@@ -32,6 +34,10 @@ public sealed class DvmConfig
     public string SpecPeriod { get; set; } = "1y";
 
     public SpecPeriod Period => SpecPeriodExtensions.Parse(SpecPeriod);
+
+    /// <summary>The DVM for the report: the bus identity, with the serial and calibration date from config.</summary>
+    public DvmDetails Details(DvmIdentity identity) => new(identity.Manufacturer, identity.Model,
+        DvmDetails.ChooseSerial(identity.Serial, Serial), identity.Firmware, CalibrationDate, CalibrationIntervalMonths);
 }
 
 public sealed class MeasurementConfig
@@ -57,6 +63,23 @@ public sealed class MeasurementConfig
     };
 }
 
+public sealed class UncertaintyConfig
+{
+    public double CoverageFactor { get; set; } = 2;
+
+    /// <summary>Rss (default) or Linear (worst case) for the two readings of a ratio.</summary>
+    public RatioCombination RatioCombination { get; set; } = RatioCombination.Rss;
+
+    public double MinimumTur { get; set; } = 4;
+
+    public UncertaintyConvention Convention => new()
+    {
+        CoverageFactor = CoverageFactor,
+        RatioCombination = RatioCombination,
+        MinimumTur = MinimumTur,
+    };
+}
+
 public sealed class AppConfig
 {
     public string Company { get; set; } = "";
@@ -64,6 +87,7 @@ public sealed class AppConfig
     public CalibratorConfig Calibrator { get; set; } = new();
     public DvmConfig Dvm { get; set; } = new();
     public MeasurementConfig Measurement { get; set; } = new();
+    public UncertaintyConfig Uncertainty { get; set; } = new();
     public string ResultsDirectory { get; set; } = "results";
 
     /// <summary>
