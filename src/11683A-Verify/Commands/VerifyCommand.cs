@@ -12,6 +12,7 @@ public static class VerifyCommand
     public static int Run(AppConfig config, CommandLine options)
     {
         using var session = VerificationSession.Start(config, options, "verify");
+        Preparation.Run(session);
 
         var part1 = Part1Procedure.Run(session);
         AnsiConsole.WriteLine();
@@ -33,8 +34,9 @@ public static class VerifyCommand
 
         AnsiConsole.WriteLine();
         var run = session.CreateRun(part1, part2);
-        ConsoleReport.Overall("Range Switch Performance Test", run.Verdict, run.Complete);
-        session.Save(run);
+        var path = session.Save(run);
+        AnsiConsole.WriteLine();
+        ConsoleReport.Summary(run, path);
         ConsoleUi.SessionLogLine(session.Log);
         return run.Complete && run.Verdict == Verdict.Pass ? 0 : 1;
     }

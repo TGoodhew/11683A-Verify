@@ -13,7 +13,7 @@ public enum AcquisitionPhase
 }
 
 /// <summary>Reported after every reading, for progress displays.</summary>
-public sealed record AcquisitionProgress(AcquisitionPhase Phase, DvmReading Reading, int Done, int Total, int Attempt);
+public sealed record AcquisitionProgress(AcquisitionPhase Phase, DvmReading Reading, int Done, int Total, int Attempt, ExpectedValue? Point = null);
 
 public enum AcquisitionOutcome
 {
@@ -185,7 +185,7 @@ public sealed class PointAcquirer
             while (true)
             {
                 var r = _dvm.Read();
-                Progress?.Invoke(new AcquisitionProgress(AcquisitionPhase.Settling, r, settling.Count + 1, 0, attempt));
+                Progress?.Invoke(new AcquisitionProgress(AcquisitionPhase.Settling, r, settling.Count + 1, 0, attempt, expected));
                 if (Moved(r, expected, range))
                 {
                     Log?.Invoke($"settling reading {r.Value}{(r.Overload ? " (overload)" : "")} no longer matches {expected.Range}: detecting again");
@@ -216,7 +216,7 @@ public sealed class PointAcquirer
             while (readings.Count < ReadingsPerPoint)
             {
                 var r = _dvm.Read();
-                Progress?.Invoke(new AcquisitionProgress(AcquisitionPhase.Measuring, r, readings.Count + 1, ReadingsPerPoint, attempt));
+                Progress?.Invoke(new AcquisitionProgress(AcquisitionPhase.Measuring, r, readings.Count + 1, ReadingsPerPoint, attempt, expected));
                 if (Moved(r, expected, range) || monitor.IsInterruption(r.Value))
                 {
                     Log?.Invoke($"reading {readings.Count + 1}: {r.Value} left the band (±{monitor.Threshold:G3} around {monitor.Reference}): abandoning the point");

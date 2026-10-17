@@ -1,4 +1,6 @@
 using Spectre.Console;
+using Spectre.Console.Rendering;
+using Verify11683A.App.Reports;
 using Verify11683A.Calibrator;
 using Verify11683A.Formatting;
 using Verify11683A.Measurement;
@@ -38,10 +40,19 @@ public static class Part1Procedure
         var acquirer = session.Acquirer(new RangeDetector(DvmFunction.DcVoltage, candidates));
         var measured = new Dictionary<string, MeasuredPoint>();
         double? lastRange = null;
+        Part1Result Evaluate() => Part1Evaluator.Evaluate(limits, measured.Values, session.Specs, session.Period, session.AmbientC, session.Convention);
 
         while (measured.Count < part.Points.Count)
         {
             var remaining = part.Points.Select(p => p.Range).Where(r => !measured.ContainsKey(r)).ToList();
+            var current = Evaluate();
+            IRenderable View(string status, ExpectedValue? at) =>
+                ConsoleReport.Live(ConsoleReport.Part1Table(current, limits, session.Convention, at?.RangeId), status);
+            if (ConsoleUi.Interactive)
+            {
+                AnsiConsole.Clear();
+                AnsiConsole.Write(ConsoleReport.Part1Table(current, limits, session.Convention));
+            }
             AnsiConsole.WriteLine();
             if (sim is not null)
             {
@@ -53,7 +64,7 @@ public static class Part1Procedure
                 ConsoleUi.Prompt($"Set RANGE to any of {string.Join(", ", remaining.Select(r => RangeSwitch.Get(r).Label))}, then press Enter");
             }
 
-            var point = session.MeasureNext(acquirer, lastRange);
+            var point = session.MeasureNext(acquirer, lastRange, View);
             if (point is null)
             {
                 AnsiConsole.MarkupLine("[yellow]Part 1 stopped by the operator.[/]");
@@ -73,6 +84,8 @@ public static class Part1Procedure
                 + (point.Settled ? "" : " [yellow](not settled)[/]"));
         }
 
-        return Part1Evaluator.Evaluate(limits, measured.Values, session.Specs, session.Period, session.AmbientC, session.Convention);
+        if (ConsoleUi.Interactive)
+            AnsiConsole.Clear();
+        return Evaluate();
     }
 }

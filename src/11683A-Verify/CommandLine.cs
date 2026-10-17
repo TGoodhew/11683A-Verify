@@ -14,6 +14,7 @@ public sealed class CommandLine
     public string? Resource { get; private set; }
     public string? SpecPeriod { get; private set; }
     public double? AmbientC { get; private set; }
+    public bool SkipWarmup { get; private set; }
 
     public bool IsSimulation => SimulateScenario is not null;
 
@@ -29,6 +30,7 @@ public sealed class CommandLine
                                100 mW, with uncertainty, TUR and verdicts.
           part2                Part 2: four-wire ohms from 300 uW to 3 uW with FUNCTION in STANDBY. No ohms
                                current unless a DC reading first shows the output is grounded.
+          wiring               Show the wiring diagram and the 4-wire cable rules.
           spec-table           Show the DVM's spec table, and the spec limit and TUR at every 11683A test point.
           (none)               Menu.
 
@@ -39,6 +41,8 @@ public sealed class CommandLine
           --resource <name>    VISA resource, e.g. GPIB0::22::INSTR (overrides dvm.resource).
           --period <p>         Spec column: 24h, 90d, 1y or 2y (overrides dvm.specPeriod).
           --ambient <degC>     Ambient temperature, for the temperature coefficient outside 18-28 C.
+                               Asked for at the start of a test if not given.
+          --skip-warmup        Don't ask about or time the warm-up (it is then not recorded).
           --config <path>      appsettings.json to use.
           -h, --help           This help.
         """;
@@ -75,6 +79,9 @@ public sealed class CommandLine
                     break;
                 case "--ambient":
                     result.AmbientC = double.Parse(Value(), System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+                case "--skip-warmup":
+                    result.SkipWarmup = true;
                     break;
                 case "--config":
                     result.ConfigPath = Value();

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 using Verify11683A.Calibrator;
 using Verify11683A.Formatting;
 using Verify11683A.Results;
@@ -7,88 +8,98 @@ using Verify11683A.Uncertainty;
 
 namespace Verify11683A.App.Reports;
 
-/// <summary>Results tables for the console.</summary>
+/// <summary>
+/// Results tables for the console. The same tables are the live view while a part runs (with the range being
+/// measured highlighted) and the report at the end.
+/// </summary>
 public static class ConsoleReport
 {
-    public static void Part1(Part1Result result, CalibratorLimits limits, UncertaintyConvention convention)
+    public static Table Part1Table(Part1Result result, CalibratorLimits limits, UncertaintyConvention convention, string? active = null)
     {
-        var k = convention.CoverageFactor.ToString("0.#", CultureInfo.InvariantCulture);
+        var k = K(convention);
         var table = new Table().Border(TableBorder.Rounded).Title("[bold]Part 1: DC voltage and ratio[/]")
             .AddColumn("Range")
+            .AddColumn(new TableColumn("Nominal").RightAligned())
             .AddColumn(new TableColumn("Mean ± σ").RightAligned())
-            .AddColumn(new TableColumn($"U (k = {k})").RightAligned())
+            .AddColumn(new TableColumn($"U (k={k})").RightAligned())
             .AddColumn(new TableColumn("Ratio").RightAligned())
-            .AddColumn(new TableColumn("Limits").Centered())
-            .AddColumn(new TableColumn($"U (k = {k})").RightAligned())
+            .AddColumn(new TableColumn("Min–Max").Centered())
+            .AddColumn(new TableColumn($"U (k={k})").RightAligned())
             .AddColumn(new TableColumn("TUR").RightAligned())
             .AddColumn("Verdict");
 
         foreach (var limit in limits.Part1.Points)
         {
-            var label = RangeSwitch.Get(limit.Range).Label;
+            var label = Label(limit.Range, active);
+            var nominal = Si.Format(limits.NominalPart1Volts(limit.Range), "V", 5);
             var p = result.Point(limit.Range);
             if (p is null)
             {
-                table.AddRow(label, "[grey]not measured[/]", "", "", "", "", "", "");
+                table.AddRow(label, $"[grey]{nominal}[/]", limit.Range == active ? "[yellow]measuring…[/]" : "[grey]—[/]", "", "",
+                    limit.Range == result.ReferenceRange ? "[grey]reference[/]" : $"[grey]{Plain(limit.RatioMin, 5)}–{Plain(limit.RatioMax, 5)}[/]",
+                    "", "", "");
                 continue;
             }
-            var s = p.Measurement.Statistics;
-            var mean = $"{Si.Format(s.Mean, "V", 7)} ± {Si.Format(s.StandardDeviation, "V", 2)}"
-                + (p.Measurement.Settled ? "" : " [yellow]*[/]");
+            var mean = MeanSigma(p.Measurement, "V");
             var u = Si.Format(p.Uncertainty.Expanded, "V", 3);
 
             if (p.RatioAssessment is { } ra)
-                table.AddRow(label, mean, u, Plain(ra.Value, 5), $"{Plain(limit.RatioMin, 5)}–{Plain(limit.RatioMax, 5)}",
+                table.AddRow(label, nominal, mean, u, Plain(ra.Value, 5), $"{Plain(limit.RatioMin, 5)}–{Plain(limit.RatioMax, 5)}",
                     Plain(ra.ExpandedUncertainty, 3), ConsoleUi.TurMarkup(ra), ConsoleUi.VerdictMarkup(ra.Verdict));
             else
-                table.AddRow(label, mean, u, limit.Range == result.ReferenceRange ? "[grey]reference[/]" : "[grey]—[/]", "", "", "",
+                table.AddRow(label, nominal, mean, u,
+                    limit.Range == result.ReferenceRange ? "[grey]reference[/]" : "[grey]needs 100 mW[/]", "", "", "",
                     p.VoltsAssessment is null ? ConsoleUi.VerdictMarkup(Verdict.Info) : "");
 
             if (p.VoltsAssessment is { } va)
-                table.AddRow("", "", "", "[grey]voltage[/]", $"{Si.Format(va.Tolerance!.Min, "V", 5)}–{Si.Format(va.Tolerance.Max, "V", 5)}",
+                table.AddRow("", "", "", "", "[grey]voltage[/]", $"{Si.Format(va.Tolerance!.Min, "V", 5)}–{Si.Format(va.Tolerance.Max, "V", 5)}",
                     Si.Format(va.ExpandedUncertainty, "V", 3), ConsoleUi.TurMarkup(va), ConsoleUi.VerdictMarkup(va.Verdict));
         }
-        AnsiConsole.Write(table);
-        if (result.Points.Any(p => !p.Measurement.Settled))
-            AnsiConsole.MarkupLine("[yellow]*[/] [grey]measured without settling; the operator chose to go on.[/]");
+        return table;
+    }
+
+    public static Table Part2Table(Part2Result result, CalibratorLimits limits, UncertaintyConvention convention, string? active = null)
+    {
+        var table = new Table().Border(TableBorder.Rounded).Title("[bold]Part 2: four-wire resistance (STANDBY)[/]")
+            .AddColumn("Range")
+            .AddColumn(new TableColumn("Nominal").RightAligned())
+            .AddColumn(new TableColumn("Mean ± σ").RightAligned())
+            .AddColumn("DVM range")
+            .AddColumn(new TableColumn("Min–Max").Centered())
+            .AddColumn(new TableColumn($"U (k={K(convention)})").RightAligned())
+            .AddColumn(new TableColumn("TUR").RightAligned())
+            .AddColumn("Verdict");
+
+        foreach (var limit in limits.Part2.Points)
+        {
+            var label = Label(limit.Range, active);
+            var nominal = Si.Format(limit.OhmsMid, "Ω", 5);
+            var minMax = $"{Plain(limit.OhmsMin, 5)}–{Plain(limit.OhmsMax, 5)} Ω";
+            var p = result.Point(limit.Range);
+            if (p is null)
+            {
+                table.AddRow(label, $"[grey]{nominal}[/]", limit.Range == active ? "[yellow]measuring…[/]" : "[grey]—[/]", "",
+                    $"[grey]{minMax}[/]", "", "", "");
+                continue;
+            }
+            table.AddRow(label, nominal, MeanSigma(p.Measurement, "Ω"), Si.Range(p.Measurement.DvmRange, "Ω"), minMax,
+                Si.Format(p.Assessment.ExpandedUncertainty, "Ω", 3), ConsoleUi.TurMarkup(p.Assessment), ConsoleUi.VerdictMarkup(p.Verdict));
+        }
+        return table;
+    }
+
+    public static void Part1(Part1Result result, CalibratorLimits limits, UncertaintyConvention convention)
+    {
+        AnsiConsole.Write(Part1Table(result, limits, convention));
+        Unsettled(result.Points.Select(p => p.Measurement));
         Notes(result.Notes);
         Overall("Part 1", result.Verdict, result.Complete);
     }
 
     public static void Part2(Part2Result result, CalibratorLimits limits, UncertaintyConvention convention)
     {
-        var k = convention.CoverageFactor.ToString("0.#", CultureInfo.InvariantCulture);
-        var table = new Table().Border(TableBorder.Rounded).Title("[bold]Part 2: four-wire resistance (STANDBY)[/]")
-            .AddColumn("Range")
-            .AddColumn(new TableColumn("Mean ± σ").RightAligned())
-            .AddColumn("DVM range")
-            .AddColumn(new TableColumn("Limits").Centered())
-            .AddColumn(new TableColumn($"U (k = {k})").RightAligned())
-            .AddColumn(new TableColumn("TUR").RightAligned())
-            .AddColumn("Verdict");
-
-        foreach (var limit in limits.Part2.Points)
-        {
-            var label = RangeSwitch.Get(limit.Range).Label;
-            var p = result.Point(limit.Range);
-            if (p is null)
-            {
-                table.AddRow(label, "[grey]not measured[/]", "", "", "", "", "");
-                continue;
-            }
-            var s = p.Measurement.Statistics;
-            table.AddRow(label,
-                $"{Si.Format(s.Mean, "Ω", 7)} ± {Si.Format(s.StandardDeviation, "Ω", 2)}" + (p.Measurement.Settled ? "" : " [yellow]*[/]"),
-                Si.Range(p.Measurement.DvmRange, "Ω"),
-                $"{Plain(limit.OhmsMin, 5)}–{Plain(limit.OhmsMax, 5)} Ω",
-                Si.Format(p.Assessment.ExpandedUncertainty, "Ω", 3),
-                ConsoleUi.TurMarkup(p.Assessment),
-                ConsoleUi.VerdictMarkup(p.Verdict));
-        }
-        AnsiConsole.Write(table);
-        if (result.Points.Any(p => !p.Measurement.Settled))
-            AnsiConsole.MarkupLine("[yellow]*[/] [grey]measured without settling; the operator chose to go on.[/]");
-
+        AnsiConsole.Write(Part2Table(result, limits, convention));
+        Unsettled(result.Points.Select(p => p.Measurement));
         var safe = result.SafetyChecks.Where(c => c.Safe).ToList();
         if (safe.Count > 0)
             AnsiConsole.MarkupLine($"[grey]Output confirmed grounded {safe.Count} time(s) before ohms current was applied "
@@ -98,6 +109,52 @@ public static class ConsoleReport
             AnsiConsole.MarkupLine($"[yellow]{refused} time(s) the output was live and ohms were refused.[/]");
         Notes(result.Notes);
         Overall("Part 2", result.Verdict, result.Complete);
+    }
+
+    /// <summary>The closing summary: each part, the overall verdict, TUR flags, conditions and where the results went.</summary>
+    public static void Summary(VerificationRun run, string? resultsPath)
+    {
+        var grid = new Grid().AddColumn().AddColumn();
+        grid.AddRow("[grey]Unit[/]", Markup.Escape($"{run.Unit.Model} s/n {run.Unit.Serial}" + (run.Unit.Options == "" ? "" : $", option {run.Unit.Options}")));
+        grid.AddRow("[grey]DVM[/]", Markup.Escape($"{run.Dvm.Details.Model}" + (run.Dvm.Details.Serial == "" ? "" : $" s/n {run.Dvm.Details.Serial}")
+            + (run.Dvm.Details.CalibrationDate is { } d ? $", calibrated {d:yyyy-MM-dd}" : ", calibration date not entered")));
+        if (run.Dvm.CalibrationState == Specs.CalibrationState.PastDue)
+            grid.AddRow("", "[red]DVM calibration past due[/]");
+        grid.AddRow("[grey]Conditions[/]", Markup.Escape(Conditions(run.Conditions)));
+
+        if (run.Part1 is { } p1)
+            grid.AddRow("[grey]Part 1[/]", PartLine(p1.Verdict, p1.Complete, p1.Points.Select(p => p.Verdict),
+                p1.Points.SelectMany(p => new[] { p.RatioAssessment, p.VoltsAssessment }).OfType<Assessment>()));
+        else
+            grid.AddRow("[grey]Part 1[/]", "[grey]not run[/]");
+        if (run.Part2 is { } p2)
+            grid.AddRow("[grey]Part 2[/]", PartLine(p2.Verdict, p2.Complete, p2.Points.Select(p => p.Verdict), p2.Points.Select(p => p.Assessment)));
+        else
+            grid.AddRow("[grey]Part 2[/]", "[grey]not run[/]");
+
+        if (run.Part1?.SupplyAdjustmentRecommended == true)
+            grid.AddRow("", "[yellow]Power Supply Adjustment (A2R1) recommended, then repeat Part 1.[/]");
+        if (resultsPath is not null)
+            grid.AddRow("[grey]Results[/]", Markup.Escape(Path.GetFullPath(resultsPath)));
+
+        var overall = !run.Complete && run.Verdict != Verdict.Fail ? "[yellow bold]INCOMPLETE[/]" : ConsoleUi.VerdictMarkup(run.Verdict);
+        AnsiConsole.Write(new Panel(grid).Header($" Range Switch Performance Test: {overall} ").Border(BoxBorder.Double));
+    }
+
+    public static string Conditions(TestConditions c)
+    {
+        var parts = new List<string>
+        {
+            c.AmbientC is { } a ? $"ambient {a.ToString("0.0", CultureInfo.InvariantCulture)} °C" : "ambient not entered",
+            c.WarmupMinutes is { } w ? $"11683A on {w.ToString("0", CultureInfo.InvariantCulture)} min" : "11683A warm-up not recorded",
+        };
+        if (c.DvmWarmupMinutes is { } dw)
+            parts.Add($"DVM on {dw.ToString("0", CultureInfo.InvariantCulture)} min");
+        if (c.WarmupCutShort)
+            parts.Add("warm-up cut short by the operator");
+        if (c.SimulationScenario is { } s)
+            parts.Add($"SIMULATED ({s})");
+        return string.Join("; ", parts);
     }
 
     public static void Notes(IEnumerable<string> notes)
@@ -113,6 +170,42 @@ public static class ConsoleReport
             : ConsoleUi.VerdictMarkup(verdict);
         AnsiConsole.MarkupLine($"{Markup.Escape(part)}: {text}");
     }
+
+    /// <summary>The live view: the table, then a status line.</summary>
+    public static IRenderable Live(Table table, string status) =>
+        new Rows(table, new Markup($"[blue]{Markup.Escape(status)}[/]"));
+
+    private static string PartLine(Verdict verdict, bool complete, IEnumerable<Verdict> points, IEnumerable<Assessment> assessments)
+    {
+        var list = points.ToList();
+        var lowTur = assessments.Count(a => a.LowTur);
+        var counts = string.Join(", ", new[]
+        {
+            (Verdict.Pass, "pass"), (Verdict.Fail, "fail"), (Verdict.Indeterminate, "indeterminate"),
+        }.Select(x => (Count: list.Count(v => v == x.Item1), Name: x.Item2)).Where(x => x.Count > 0).Select(x => $"{x.Count} {x.Name}"));
+        var head = !complete && verdict != Verdict.Fail ? "[yellow bold]INCOMPLETE[/]" : ConsoleUi.VerdictMarkup(verdict);
+        return $"{head}  [grey]{Markup.Escape(counts)}{(lowTur > 0 ? $"; {lowTur} below the TUR threshold" : "")}[/]";
+    }
+
+    private static void Unsettled(IEnumerable<MeasuredPoint> points)
+    {
+        if (points.Any(p => !p.Settled))
+            AnsiConsole.MarkupLine("[yellow]*[/] [grey]measured without settling; the operator chose to go on.[/]");
+    }
+
+    private static string MeanSigma(MeasuredPoint m, string unit)
+    {
+        var s = m.Statistics;
+        return $"{Si.Format(s.Mean, unit, 7)} ± {Si.Format(s.StandardDeviation, unit, 2)}" + (m.Settled ? "" : " [yellow]*[/]");
+    }
+
+    private static string Label(string rangeId, string? active)
+    {
+        var label = Markup.Escape(RangeSwitch.Get(rangeId).Label);
+        return rangeId == active ? $"[yellow bold]▶ {label}[/]" : label;
+    }
+
+    private static string K(UncertaintyConvention convention) => convention.CoverageFactor.ToString("0.#", CultureInfo.InvariantCulture);
 
     private static string Plain(double value, int significant)
     {

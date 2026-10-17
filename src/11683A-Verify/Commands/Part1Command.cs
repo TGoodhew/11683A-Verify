@@ -10,10 +10,14 @@ public static class Part1Command
     public static int Run(AppConfig config, CommandLine options)
     {
         using var session = VerificationSession.Start(config, options, "part1");
+        Preparation.Run(session);
         var result = Part1Procedure.Run(session);
         Spectre.Console.AnsiConsole.WriteLine();
         ConsoleReport.Part1(result, session.Limits, session.Convention);
-        session.Save(session.CreateRun(result, null));
+        var run = session.CreateRun(result, null);
+        var path = session.Save(run);
+        Spectre.Console.AnsiConsole.WriteLine();
+        ConsoleReport.Summary(run, path);
         ConsoleUi.SessionLogLine(session.Log);
         return result.Complete && result.Verdict == Verdict.Pass ? 0 : 1;
     }
