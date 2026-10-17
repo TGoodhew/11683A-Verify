@@ -1,0 +1,62 @@
+{
+  "model": "34401A",
+  "source": "HP 34401A Service Guide, Chapter 1 Specifications, DC Characteristics, p. 12 (34401A Service.pdf PDF p. 20); notes p. 13 (PDF p. 21). Same table in the 34401A User's Guide (PDF p. 224).",
+  "units": "%",
+  "calibrationBandC": [ 18.0, 28.0 ],
+  "warmupMinutes": 60,
+  "notes": [
+    "Accuracy is +/-(% of reading + % of range), relative to calibration standards [2].",
+    "Specifications are for a 1-hour warm-up at 6 1/2 digits [1].",
+    "24-hour column is 23 C +/- 1 C; 90-day and 1-year columns are 23 C +/- 5 C.",
+    "Temperature coefficient is per C, applied for each degree outside 18-28 C.",
+    "Resistance specifications are for 4-wire ohms [4].",
+    "Input resistance: 0.1, 1 and 10 V ranges selectable 10 MOhm or >10 GOhm (INP:IMP:AUTO ON); 100 and 1000 V ranges 10 MOhm +/-1%.",
+    "Autozero OFF adds 0.0002% of range + 5 uV; this app always runs autozero ON.",
+    "20% overrange on all ranges except 1000 Vdc."
+  ],
+  "functions": [
+    {
+      "function": "DcVoltage",
+      "ranges": [
+        { "range": 0.1,    "inputResistance": "10 MOhm or >10 GOhm", "highImpedanceAvailable": true,
+          "accuracy": { "24h": { "reading": 0.0030, "range": 0.0030 }, "90d": { "reading": 0.0040, "range": 0.0035 }, "1y": { "reading": 0.0050, "range": 0.0035 } },
+          "tempcoPerC": { "reading": 0.0005, "range": 0.0005 } },
+        { "range": 1.0,    "inputResistance": "10 MOhm or >10 GOhm", "highImpedanceAvailable": true,
+          "accuracy": { "24h": { "reading": 0.0020, "range": 0.0006 }, "90d": { "reading": 0.0030, "range": 0.0007 }, "1y": { "reading": 0.0040, "range": 0.0007 } },
+          "tempcoPerC": { "reading": 0.0005, "range": 0.0001 } },
+        { "range": 10.0,   "inputResistance": "10 MOhm or >10 GOhm", "highImpedanceAvailable": true,
+          "accuracy": { "24h": { "reading": 0.0015, "range": 0.0004 }, "90d": { "reading": 0.0020, "range": 0.0005 }, "1y": { "reading": 0.0035, "range": 0.0005 } },
+          "tempcoPerC": { "reading": 0.0005, "range": 0.0001 } },
+        { "range": 100.0,  "inputResistance": "10 MOhm +/-1%", "highImpedanceAvailable": false,
+          "accuracy": { "24h": { "reading": 0.0020, "range": 0.0006 }, "90d": { "reading": 0.0035, "range": 0.0006 }, "1y": { "reading": 0.0045, "range": 0.0006 } },
+          "tempcoPerC": { "reading": 0.0005, "range": 0.0001 } },
+        { "range": 1000.0, "inputResistance": "10 MOhm +/-1%", "highImpedanceAvailable": false,
+          "accuracy": { "24h": { "reading": 0.0020, "range": 0.0006 }, "90d": { "reading": 0.0035, "range": 0.0010 }, "1y": { "reading": 0.0045, "range": 0.0010 } },
+          "tempcoPerC": { "reading": 0.0005, "range": 0.0001 } }
+      ]
+    },
+    {
+      "function": "FourWireResistance",
+      "ranges": [
+        { "range": 100.0,   "testCurrent": "1 mA",
+          "accuracy": { "24h": { "reading": 0.0030, "range": 0.0030 }, "90d": { "reading": 0.008, "range": 0.004 }, "1y": { "reading": 0.010, "range": 0.004 } },
+          "tempcoPerC": { "reading": 0.0006, "range": 0.0005 } },
+        { "range": 1.0e3,   "testCurrent": "1 mA",
+          "accuracy": { "24h": { "reading": 0.0020, "range": 0.0005 }, "90d": { "reading": 0.008, "range": 0.001 }, "1y": { "reading": 0.010, "range": 0.001 } },
+          "tempcoPerC": { "reading": 0.0006, "range": 0.0001 } },
+        { "range": 1.0e4,   "testCurrent": "100 uA",
+          "accuracy": { "24h": { "reading": 0.0020, "range": 0.0005 }, "90d": { "reading": 0.008, "range": 0.001 }, "1y": { "reading": 0.010, "range": 0.001 } },
+          "tempcoPerC": { "reading": 0.0006, "range": 0.0001 } },
+        { "range": 1.0e5,   "testCurrent": "10 uA",
+          "accuracy": { "24h": { "reading": 0.0020, "range": 0.0005 }, "90d": { "reading": 0.008, "range": 0.001 }, "1y": { "reading": 0.010, "range": 0.001 } },
+          "tempcoPerC": { "reading": 0.0006, "range": 0.0001 } },
+        { "range": 1.0e6,   "testCurrent": "5 uA",
+          "accuracy": { "24h": { "reading": 0.002, "range": 0.001 }, "90d": { "reading": 0.008, "range": 0.001 }, "1y": { "reading": 0.010, "range": 0.001 } },
+          "tempcoPerC": { "reading": 0.0010, "range": 0.0002 } },
+        { "range": 1.0e7,   "testCurrent": "500 nA",
+          "accuracy": { "24h": { "reading": 0.015, "range": 0.001 }, "90d": { "reading": 0.020, "range": 0.001 }, "1y": { "reading": 0.040, "range": 0.001 } },
+          "tempcoPerC": { "reading": 0.0030, "range": 0.0004 } }
+      ]
+    }
+  ]
+}

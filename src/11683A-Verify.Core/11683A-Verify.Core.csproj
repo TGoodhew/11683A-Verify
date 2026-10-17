@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Model, limits, DVM spec tables and the measurement maths. No I/O to instruments. -->
+  <PropertyGroup>
+    <AssemblyName>11683A-Verify.Core</AssemblyName>
+    <RootNamespace>Verify11683A</RootNamespace>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,41 @@
+{
+  "model": "11683A",
+  "source": "HP 11683A Range Calibrator Operating and Service Manual (11683A.pdf)",
+  "loadMinimumOhms": 1.0e8,
+  "loadMinimumSource": "Front and Rear Panel Features, manual p. 5 (PDF p. 16): DC REFERENCE OUTPUT load resistance must be >= 100 MOhm. Rear panel is marked '100 MEG LOAD MIN'.",
+
+  "part1": {
+    "title": "Range Switch Performance Test - DC voltage and ratio",
+    "source": "Range Switch Performance Test, para 41 step d, manual p. 7 (PDF p. 18)",
+    "referenceRange": "100mW",
+    "points": [
+      { "range": "100mW", "ratioMin": 1.0,    "ratioMax": 1.0 },
+      { "range": "30mW",  "ratioMin": 3.3457, "ratioMax": 3.3604 },
+      { "range": "10mW",  "ratioMin": 10.768, "ratioMax": 10.815 },
+      { "range": "3mW",   "ratioMin": 34.394, "ratioMax": 34.545 },
+      { "range": "1mW",   "ratioMin": 108.76, "ratioMax": 109.23, "voltsMin": 0.14300, "voltsMax": 0.14700 },
+      { "range": "300uW", "ratioMin": 343.95, "ratioMax": 345.45 }
+    ]
+  },
+
+  "part2": {
+    "title": "Range Switch Performance Test - four-wire resistance",
+    "source": "Range Switch Performance Test, para 41 step f, manual p. 8 (PDF p. 19)",
+    "points": [
+      { "range": "300uW", "ohmsMin": 3143.3, "ohmsMax": 3157.1 },
+      { "range": "100uW", "ohmsMin": 995.90, "ohmsMax": 1000.2 },
+      { "range": "30uW",  "ohmsMin": 315.14, "ohmsMax": 316.52 },
+      { "range": "10uW",  "ohmsMin": 99.749, "ohmsMax": 100.18 },
+      { "range": "3uW",   "ohmsMin": 31.580, "ohmsMax": 31.718 }
+    ]
+  },
+
+  "supplyAdjustment": {
+    "title": "Power Supply Adjustment",
+    "source": "Power Supply Adjustment, para 47, manual p. 8 (PDF p. 19)",
+    "range": "1mW",
+    "targetVolts": 0.14500,
+    "toleranceVolts": 0.00200,
+    "adjustment": "A2R1"
+  }
+}

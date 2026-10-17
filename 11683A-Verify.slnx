@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/11683A-Verify.Core/11683A-Verify.Core.csproj" />
+    <Project Path="src/11683A-Verify.Instruments/11683A-Verify.Instruments.csproj" />
+    <Project Path="src/11683A-Verify/11683A-Verify.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/11683A-Verify.Tests/11683A-Verify.Tests.csproj" />
+  </Folder>
+</Solution>
