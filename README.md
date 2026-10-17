@@ -216,5 +216,5 @@ Do the Step 1 check above first, if you haven't already.
    - Before each point, the log shows an "Ohms safety check" line of a few µV.
    - Try leaving FUNCTION in CALIBRATE at the start. Ohms must be refused, and the log must show no
      `CONF:FRES` command.
-6. Send back the session log (`results\logserify_*.log`) and a screenshot or copy of the two results
+6. Send back the session log (`results\logs\verify_*.log`) and a screenshot or copy of the two results
    tables.
