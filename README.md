@@ -16,7 +16,7 @@ C# / .NET 10 (x64), NI-VISA, Spectre.Console, QuestPDF (step 3). MIT licence.
 | Step | Issues | State |
 |---|---|---|
 | 1. DVM drivers, spec tables, simulation | #1–#4 | **Ready for the bench** |
-| 2. Range auto-detection, Part 1 (volts/ratios), Part 2 (4-wire ohms) | #5–#7 | In progress: #5 done |
+| 2. Range auto-detection, Part 1 (volts/ratios), Part 2 (4-wire ohms) | #5–#7 | In progress: #5, #6 done |
 | 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | In progress: #8 done |
 | 4. Part 3 supply-adjustment assist, Part 4 H01 REF EXT check | #13–#15 | Not started |
 
@@ -27,7 +27,8 @@ dotnet build 11683A-Verify.slnx
 dotnet test 11683A-Verify.slnx
 cd src\11683A-Verify\bin\Debug\net10.0
 11683A-Verify dvm-check                 # the step-1 bench check
-11683A-Verify spec-table                # DVM spec table and the limit at every test point
+11683A-Verify spec-table                # DVM spec table, and the limit and TUR at every test point
+11683A-Verify part1                     # Part 1: DC voltage and ratio test
 11683A-Verify dvm-check --simulate      # no hardware; also --simulate=supply-low, ratio-fail,
                                         # ohms-fail, noisy, drifting
 11683A-Verify --help

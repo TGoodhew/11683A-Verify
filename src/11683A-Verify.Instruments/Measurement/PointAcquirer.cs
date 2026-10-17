@@ -87,7 +87,7 @@ public sealed class PointAcquirer
 
     public Action<string>? Log { get; init; }
 
-    public Action<AcquisitionProgress>? Progress { get; init; }
+    public Action<AcquisitionProgress>? Progress { get; set; }
 
     /// <summary>Scout readings must agree this closely across <see cref="ScoutHoldTime"/>.</summary>
     public double ScoutAgreement { get; init; } = 0.01;

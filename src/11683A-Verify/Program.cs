@@ -22,6 +22,7 @@ try
     {
         "dvm-check" => DvmCheckCommand.Run(config, options),
         "spec-table" => SpecTableCommand.Run(config, options),
+        "part1" => Part1Command.Run(config, options),
         "exit" => 0,
         _ => throw new ArgumentException($"Unknown command '{command}'."),
     };
@@ -47,6 +48,7 @@ static string ChooseFromMenu(CommandLine options)
     var choices = new Dictionary<string, string>
     {
         ["DVM check (step 1 bench check)"] = "dvm-check",
+        ["Part 1: DC voltage and ratio test"] = "part1",
         ["DVM spec table and test-point limits"] = "spec-table",
         ["Exit"] = "exit",
     };

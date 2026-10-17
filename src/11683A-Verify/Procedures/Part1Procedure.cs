@@ -1,0 +1,78 @@
+using Spectre.Console;
+using Verify11683A.Calibrator;
+using Verify11683A.Formatting;
+using Verify11683A.Measurement;
+using Verify11683A.Results;
+
+namespace Verify11683A.App.Procedures;
+
+/// <summary>
+/// Part 1: the voltage and ratio test (11683A manual, Range Switch Performance Test, p. 7, PDF p. 18). The operator
+/// sets each range from 100 mW down to 300 µW, in any order; the app detects which one it is.
+/// </summary>
+public static class Part1Procedure
+{
+    public static Part1Result Run(VerificationSession session)
+    {
+        var limits = session.Limits;
+        var part = limits.Part1;
+        var sim = session.Bench.Simulator;
+
+        AnsiConsole.Write(new Rule("[bold]Part 1: DC voltage and ratio[/]").LeftJustified());
+        AnsiConsole.MarkupLine($"[grey]{Markup.Escape(part.Source)}[/]");
+        AnsiConsole.MarkupLine("DVM on the rear [bold]DC REFERENCE OUTPUT[/] BNC (the lower one), 4-wire cable direct to the BNC.");
+        AnsiConsole.MarkupLine("Set the 11683A: REF switch [bold]INT[/], POLARITY [bold]NORMAL[/], FUNCTION [bold]CALIBRATE[/].");
+        AnsiConsole.MarkupLine("[grey]The manual starts from RANGE 100 mW with FUNCTION in STANDBY; switch to CALIBRATE now.[/]");
+        if (sim is not null)
+        {
+            sim.SetReference(ReferenceSwitch.Int);
+            sim.SetPolarity(PolaritySwitch.Normal);
+            sim.SetFunction(FunctionSwitch.Calibrate);
+        }
+        else
+        {
+            ConsoleUi.Prompt("Press Enter when set");
+        }
+
+        var candidates = part.Points.Select(p => new ExpectedValue(p.Range, limits.NominalPart1Volts(p.Range))).ToList();
+        var acquirer = session.Acquirer(new RangeDetector(DvmFunction.DcVoltage, candidates));
+        var measured = new Dictionary<string, MeasuredPoint>();
+        double? lastRange = null;
+
+        while (measured.Count < part.Points.Count)
+        {
+            var remaining = part.Points.Select(p => p.Range).Where(r => !measured.ContainsKey(r)).ToList();
+            AnsiConsole.WriteLine();
+            if (sim is not null)
+            {
+                sim.SetRange(remaining[0]);
+                AnsiConsole.MarkupLine($"[grey]Simulator: RANGE → {RangeSwitch.Get(remaining[0])}[/]");
+            }
+            else
+            {
+                ConsoleUi.Prompt($"Set RANGE to any of {string.Join(", ", remaining.Select(r => RangeSwitch.Get(r).Label))}, then press Enter");
+            }
+
+            var point = session.MeasureNext(acquirer, lastRange);
+            if (point is null)
+            {
+                AnsiConsole.MarkupLine("[yellow]Part 1 stopped by the operator.[/]");
+                break;
+            }
+            lastRange = point.DvmRange;
+
+            var label = RangeSwitch.Get(point.RangeId).Label;
+            if (measured.ContainsKey(point.RangeId)
+                && !ConsoleUi.Confirm($"{label} has already been measured. Replace it with this result?"))
+                continue;
+            measured[point.RangeId] = point;
+            session.Log.Write($"Part 1 {point.RangeId}: mean {point.Statistics.Mean} V, s {point.Statistics.StandardDeviation} V, n {point.Statistics.Count}, "
+                + $"DVM {point.DvmRange} V, settled {point.Settled} after {point.SettlingSeconds:0} s, attempts {point.Attempts}");
+            AnsiConsole.MarkupLine($"[green]✓[/] [bold]{Markup.Escape(label)}[/]: {Si.Format(point.Statistics.Mean, "V", 7)}, "
+                + $"σ {Si.Format(point.Statistics.StandardDeviation, "V", 2)} (n = {point.Statistics.Count}) on the {Si.Range(point.DvmRange, "V")} range"
+                + (point.Settled ? "" : " [yellow](not settled)[/]"));
+        }
+
+        return Part1Evaluator.Evaluate(limits, measured.Values, session.Specs, session.Period, session.AmbientC, session.Convention);
+    }
+}

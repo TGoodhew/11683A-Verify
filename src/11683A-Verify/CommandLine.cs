@@ -24,7 +24,9 @@ public sealed class CommandLine
           dvm-check            Step 1 bench check: identify the DVM, configure every range the test uses,
                                read each setting back, check the error queue, then optionally take
                                readings of the 11683A at 1 mW.
-          spec-table           Show the DVM's spec table and the spec limit at every 11683A test point.
+          part1                Part 1: DC voltage at every range from 100 mW to 300 uW and the ratios to
+                               100 mW, with uncertainty, TUR and verdicts.
+          spec-table           Show the DVM's spec table, and the spec limit and TUR at every 11683A test point.
           (none)               Menu.
 
         Options:

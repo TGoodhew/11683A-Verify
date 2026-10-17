@@ -20,6 +20,15 @@ public static class ConsoleUi
     public static bool Confirm(string question, bool defaultValue = true) =>
         Console.IsInputRedirected ? defaultValue : AnsiConsole.Confirm(question, defaultValue);
 
+    /// <summary>A choice; <paramref name="whenRedirected"/> when input is redirected.</summary>
+    public static string Choose(string title, IReadOnlyList<string> choices, string whenRedirected) =>
+        Console.IsInputRedirected
+            ? whenRedirected
+            : AnsiConsole.Prompt(new SelectionPrompt<string>().Title(Markup.Escape(title)).AddChoices(choices));
+
+    public static void SessionLogLine(SessionLog log) =>
+        AnsiConsole.MarkupLine($"[grey]Session log: {Markup.Escape(Path.GetFullPath(log.Path))}[/]");
+
     public static string CalibrationText(DvmDetails dvm, DateOnly today) => dvm.StateOn(today) switch
     {
         CalibrationState.NotEntered => "[yellow]not set: add dvm.calibrationDate to appsettings.local.json[/]",
