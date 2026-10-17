@@ -7,6 +7,9 @@ namespace Verify11683A.App;
 /// <summary>Console prompts and markup shared by the commands.</summary>
 public static class ConsoleUi
 {
+    /// <summary>A person at a real console: live views and screen clears are used only then.</summary>
+    public static bool Interactive => !Console.IsInputRedirected && !Console.IsOutputRedirected;
+
     public static void Prompt(string message)
     {
         AnsiConsole.Markup($"[blue]{Markup.Escape(message)}[/] ");

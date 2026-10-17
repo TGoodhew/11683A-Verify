@@ -17,7 +17,7 @@ C# / .NET 10 (x64), NI-VISA, Spectre.Console, QuestPDF (step 3). MIT licence.
 |---|---|---|
 | 1. DVM drivers, spec tables, simulation | #1–#4 | Merged; bench check still to do |
 | 2. Range auto-detection, Part 1 (volts/ratios), Part 2 (4-wire ohms) | #5–#7 | **Ready for the bench** |
-| 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | In progress: #8, #10 done |
+| 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | In progress: #8, #9, #10 done |
 | 4. Part 3 supply-adjustment assist, Part 4 H01 REF EXT check | #13–#15 | Not started |
 
 ## Build and run
@@ -31,6 +31,7 @@ cd src\11683A-Verify\bin\Debug\net10.0
 11683A-Verify verify                    # Part 1 then Part 2 (the Range Switch Performance Test)
 11683A-Verify part1                     # Part 1 only: DC voltage and ratio test
 11683A-Verify part2                     # Part 2 only: four-wire resistance test
+11683A-Verify wiring                    # wiring diagram and 4-wire cable rules
 11683A-Verify dvm-check --simulate      # no hardware; also --simulate=supply-low, ratio-fail,
                                         # ohms-fail, noisy, drifting
 11683A-Verify --help
@@ -108,6 +109,22 @@ pp. 7–8 (PDF pp. 18–19). All limits are in [`data/limits-11683A.json`](data/
 | 2 | STANDBY | 4-wire ohms from 300 µW down to 3 µW | 3143.3–3157.1 Ω, … , 31.580–31.718 Ω |
 | 3 | 1 mW, CALIBRATE, covers off | Adjust A2R1 for 145.00 ± 2.00 mV | Adjustment, optional |
 | 4 | REF EXT, LINE unplugged | Transfer check against a power meter (E4418B Service Guide, Procedure 2) | Informational |
+
+## Running a test
+
+`verify`, `part1` and `part2` start by showing the wiring diagram.
+
+- **Ambient temperature.** The app asks for it, unless `--ambient` was given. Outside 18–28 °C, the DVM's
+  temperature coefficient is added.
+- **Warm-up.** The app asks how long the 11683A and the DVM have been on, then counts down whatever is
+  left. The 11683A needs 30 min (`warmup.calibratorMinutes`). The DVM's warm-up comes from its spec table:
+  1 hour for the 34401A, 4 hours for the 3458A. Press **S** to skip the countdown; the report then says the
+  warm-up was cut short. `--skip-warmup` leaves the warm-up out entirely.
+- **Live table.** Each part shows a table of every range that is updated while a point is measured. The
+  range being measured is marked ▶, and a status line shows the phase and the latest reading. Verdicts are
+  colour-coded: PASS green, FAIL red, INDETERMINATE yellow, INFO blue.
+- **Summary.** At the end, a summary panel gives each part's verdict and counts, any TUR below 4:1, the
+  conditions, any supply-adjustment recommendation and the path of the results file.
 
 ## Results files
 

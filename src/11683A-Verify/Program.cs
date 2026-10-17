@@ -22,6 +22,7 @@ try
     {
         "dvm-check" => DvmCheckCommand.Run(config, options),
         "spec-table" => SpecTableCommand.Run(config, options),
+        "wiring" => WiringCommand(),
         "verify" => VerifyCommand.Run(config, options),
         "part1" => Part1Command.Run(config, options),
         "part2" => Part2Command.Run(config, options),
@@ -42,6 +43,12 @@ catch (Exception ex)
     return 1;
 }
 
+static int WiringCommand()
+{
+    Verify11683A.App.Reports.Wiring.Write();
+    return 0;
+}
+
 static string ChooseFromMenu(CommandLine options)
 {
     AnsiConsole.Write(new FigletText("11683A-Verify").Color(Color.SteelBlue));
@@ -54,6 +61,7 @@ static string ChooseFromMenu(CommandLine options)
         ["Part 1: DC voltage and ratio test"] = "part1",
         ["Part 2: four-wire resistance test"] = "part2",
         ["DVM spec table and test-point limits"] = "spec-table",
+        ["Wiring diagram"] = "wiring",
         ["Exit"] = "exit",
     };
     var choice = AnsiConsole.Prompt(new SelectionPrompt<string>().Title("What would you like to do?").AddChoices(choices.Keys));

@@ -80,6 +80,12 @@ public sealed class UncertaintyConfig
     };
 }
 
+public sealed class WarmupConfig
+{
+    /// <summary>Minutes the 11683A must be on before testing. The DVM's figure comes from its spec table.</summary>
+    public double CalibratorMinutes { get; set; } = WarmupPlan.DefaultCalibratorMinutes;
+}
+
 public sealed class AppConfig
 {
     public string Company { get; set; } = "";
@@ -88,6 +94,7 @@ public sealed class AppConfig
     public DvmConfig Dvm { get; set; } = new();
     public MeasurementConfig Measurement { get; set; } = new();
     public UncertaintyConfig Uncertainty { get; set; } = new();
+    public WarmupConfig Warmup { get; set; } = new();
     public string ResultsDirectory { get; set; } = "results";
 
     /// <summary>

@@ -1,4 +1,6 @@
 using Spectre.Console;
+using Spectre.Console.Rendering;
+using Verify11683A.App.Reports;
 using Verify11683A.Calibrator;
 using Verify11683A.Formatting;
 using Verify11683A.Instruments.Dvm;
@@ -42,12 +44,21 @@ public static class Part2Procedure
         var acquirer = session.Acquirer(new RangeDetector(DvmFunction.FourWireResistance, candidates), interlock);
         var measured = new Dictionary<string, MeasuredPoint>();
         double? lastRange = null;
+        Part2Result Evaluate() => Part2Evaluator.Evaluate(limits, measured.Values, checks, session.Specs, session.Period, session.AmbientC, session.Convention);
 
         try
         {
             while (measured.Count < part.Points.Count)
             {
                 var remaining = part.Points.Select(p => p.Range).Where(r => !measured.ContainsKey(r)).ToList();
+                var current = Evaluate();
+                IRenderable View(string status, ExpectedValue? at) =>
+                    ConsoleReport.Live(ConsoleReport.Part2Table(current, limits, session.Convention, at?.RangeId), status);
+                if (ConsoleUi.Interactive)
+                {
+                    AnsiConsole.Clear();
+                    AnsiConsole.Write(ConsoleReport.Part2Table(current, limits, session.Convention));
+                }
                 AnsiConsole.WriteLine();
                 if (sim is not null)
                 {
@@ -59,7 +70,7 @@ public static class Part2Procedure
                     ConsoleUi.Prompt($"Set RANGE to any of {string.Join(", ", remaining.Select(r => RangeSwitch.Get(r).Label))}, then press Enter");
                 }
 
-                var point = session.MeasureNext(acquirer, lastRange);
+                var point = session.MeasureNext(acquirer, lastRange, View);
                 if (point is null)
                 {
                     AnsiConsole.MarkupLine("[yellow]Part 2 stopped.[/]");
@@ -93,6 +104,8 @@ public static class Part2Procedure
             }
         }
 
-        return Part2Evaluator.Evaluate(limits, measured.Values, checks, session.Specs, session.Period, session.AmbientC, session.Convention);
+        if (ConsoleUi.Interactive)
+            AnsiConsole.Clear();
+        return Evaluate();
     }
 }

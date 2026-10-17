@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 using Verify11683A.Calibrator;
 using Verify11683A.Formatting;
 using Verify11683A.Instruments.Dvm;
@@ -46,6 +47,10 @@ public sealed class VerificationSession : IDisposable
 
     /// <summary>How long the 11683A had been warming up when the test started, if known.</summary>
     public double? WarmupMinutes { get; set; }
+
+    public double? DvmWarmupMinutes { get; set; }
+
+    public bool WarmupCutShort { get; set; }
     public DateTimeOffset Started { get; }
     public SessionLog Log => Bench.Log;
 
@@ -81,7 +86,8 @@ public sealed class VerificationSession : IDisposable
         grid.AddRow("[grey]DVM calibration[/]", ConsoleUi.CalibrationText(DvmDetails, DateOnly.FromDateTime(Bench.Clock.Now.Date)));
         grid.AddRow("[grey]Spec[/]", Markup.Escape($"{Specs.Model} {Period.Key()} column; U = {Convention.CoverageFactor.ToString("0.#", CultureInfo.InvariantCulture)}·u_c, "
             + $"ratios {Convention.RatioCombination}"));
-        grid.AddRow("[grey]Ambient[/]", AmbientC is { } a ? Markup.Escape(a.ToString("0.0", CultureInfo.InvariantCulture) + " °C") : "[grey]not entered (no temperature coefficient added)[/]");
+        if (AmbientC is { } a)
+            grid.AddRow("[grey]Ambient[/]", Markup.Escape(a.ToString("0.0", CultureInfo.InvariantCulture) + " °C"));
         if (Config.Operator != "")
             grid.AddRow("[grey]Operator[/]", Markup.Escape(Config.Operator));
         AnsiConsole.Write(grid);
@@ -102,12 +108,18 @@ public sealed class VerificationSession : IDisposable
     /// Measures whichever point the 11683A is set to, talking the operator through warnings and a point that will
     /// not settle. Returns null when the operator chooses to stop.
     /// </summary>
-    public MeasuredPoint? MeasureNext(PointAcquirer acquirer, double? startRange = null)
+    /// <param name="view">
+    /// The live view to show while measuring, given the status line and the range detected so far. On a
+    /// redirected console a status line is printed instead.
+    /// </param>
+    public MeasuredPoint? MeasureNext(PointAcquirer acquirer, double? startRange = null, Func<string, ExpectedValue?, IRenderable>? view = null)
     {
         var allowUnsettled = false;
         while (true)
         {
-            var acquisition = AcquireWithStatus(acquirer, allowUnsettled, startRange);
+            var acquisition = view is not null && !Console.IsOutputRedirected
+                ? AcquireLive(acquirer, allowUnsettled, startRange, view)
+                : AcquireWithStatus(acquirer, allowUnsettled, startRange);
             switch (acquisition.Outcome)
             {
                 case AcquisitionOutcome.Measured:
@@ -149,17 +161,36 @@ public sealed class VerificationSession : IDisposable
         PointAcquisition result = null!;
         AnsiConsole.Status().Start("Detecting the range", ctx =>
         {
-            acquirer.Progress = p => ctx.Status(p.Phase switch
-            {
-                AcquisitionPhase.Scouting => $"Detecting the range: {Si.Format(p.Reading.Value, unit, 5)}",
-                AcquisitionPhase.Settling => $"Waiting for the output to settle: reading {p.Done}, {Si.Format(p.Reading.Value, unit, 7)}",
-                _ => $"Reading {p.Done} of {p.Total}: {Si.Format(p.Reading.Value, unit, 7)}",
-            } + (p.Attempt > 1 ? $" (attempt {p.Attempt})" : ""));
+            acquirer.Progress = p => ctx.Status(StatusText(p, unit));
             result = acquirer.Acquire(allowUnsettled, startRange);
         });
         acquirer.Progress = null;
         return result;
     }
+
+    private PointAcquisition AcquireLive(PointAcquirer acquirer, bool allowUnsettled, double? startRange, Func<string, ExpectedValue?, IRenderable> view)
+    {
+        var unit = acquirer.Function.Unit();
+        PointAcquisition result = null!;
+        AnsiConsole.Live(view("Detecting the range", null)).AutoClear(true).Start(ctx =>
+        {
+            acquirer.Progress = p =>
+            {
+                ctx.UpdateTarget(view(StatusText(p, unit), p.Point));
+                ctx.Refresh();
+            };
+            result = acquirer.Acquire(allowUnsettled, startRange);
+        });
+        acquirer.Progress = null;
+        return result;
+    }
+
+    private static string StatusText(AcquisitionProgress p, string unit) => p.Phase switch
+    {
+        AcquisitionPhase.Scouting => $"Detecting the range: {Si.Format(p.Reading.Value, unit, 5)}",
+        AcquisitionPhase.Settling => $"{p.Point?.Range}: waiting for the output to settle, reading {p.Done}: {Si.Format(p.Reading.Value, unit, 7)}",
+        _ => $"{p.Point?.Range}: reading {p.Done} of {p.Total}: {Si.Format(p.Reading.Value, unit, 7)}",
+    } + (p.Attempt > 1 ? $" (attempt {p.Attempt})" : "");
 
     /// <summary>Everything this session produced, ready to save.</summary>
     public VerificationRun CreateRun(Part1Result? part1, Part2Result? part2, IReadOnlyList<string>? notes = null)
@@ -176,7 +207,7 @@ public sealed class VerificationSession : IDisposable
             Operator = Config.Operator,
             Unit = new UnitUnderTest(c.Model, c.Serial, c.Options),
             Dvm = new DvmRecord(DvmDetails, Dvm.ResourceName, Identity.Raw, DvmDetails.StateOn(DateOnly.FromDateTime(Started.Date))),
-            Conditions = new TestConditions(AmbientC, WarmupMinutes, Bench.Simulator?.Scenario.Name),
+            Conditions = new TestConditions(AmbientC, WarmupMinutes, Bench.Simulator?.Scenario.Name, DvmWarmupMinutes, WarmupCutShort),
             Settings = new RunSettings(m.Nplc, m.ReadingsPerPoint, m.LineFrequencyHz, m.SettlingBandPpm, m.SettlingHoldSeconds,
                 m.SettlingTimeoutSeconds, Period, Convention),
             Limits = DataFileVersion.Of(DataFiles.Resolve(DataFiles.LimitsFileName), Limits.Source),

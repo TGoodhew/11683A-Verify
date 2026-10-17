@@ -10,8 +10,16 @@ public sealed record UnitUnderTest(string Model, string Serial, string Options);
 /// <summary>The DVM: what the report states about it, where it was on the bus, and its raw identity reply.</summary>
 public sealed record DvmRecord(DvmDetails Details, string Resource, string IdentityReply, CalibrationState CalibrationState);
 
-/// <summary>The conditions of the run.</summary>
-public sealed record TestConditions(double? AmbientC, double? WarmupMinutes, string? SimulationScenario);
+/// <summary>
+/// The conditions of the run. Warm-up times are how long each instrument had been on when testing started;
+/// <paramref name="WarmupCutShort"/> is set when the operator skipped the rest of the countdown.
+/// </summary>
+public sealed record TestConditions(
+    double? AmbientC,
+    double? WarmupMinutes,
+    string? SimulationScenario,
+    double? DvmWarmupMinutes = null,
+    bool WarmupCutShort = false);
 
 /// <summary>How the points were measured and evaluated.</summary>
 public sealed record RunSettings(
