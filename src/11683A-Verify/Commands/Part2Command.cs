@@ -14,6 +14,7 @@ public static class Part2Command
         var result = Part2Procedure.Run(session);
         AnsiConsole.WriteLine();
         ConsoleReport.Part2(result, session.Limits, session.Convention);
+        session.Save(session.CreateRun(null, result));
         ConsoleUi.SessionLogLine(session.Log);
         return result.Complete && result.Verdict == Verdict.Pass ? 0 : 1;
     }

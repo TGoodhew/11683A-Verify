@@ -32,10 +32,10 @@ public static class VerifyCommand
         }
 
         AnsiConsole.WriteLine();
-        var verdict = Verdicts.Combine(new[] { part1.Verdict, part2?.Verdict ?? Verdict.Info });
-        var complete = part1.Complete && part2 is { Complete: true };
-        ConsoleReport.Overall("Range Switch Performance Test", verdict, complete);
+        var run = session.CreateRun(part1, part2);
+        ConsoleReport.Overall("Range Switch Performance Test", run.Verdict, run.Complete);
+        session.Save(run);
         ConsoleUi.SessionLogLine(session.Log);
-        return complete && verdict == Verdict.Pass ? 0 : 1;
+        return run.Complete && run.Verdict == Verdict.Pass ? 0 : 1;
     }
 }

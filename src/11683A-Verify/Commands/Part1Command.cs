@@ -13,6 +13,7 @@ public static class Part1Command
         var result = Part1Procedure.Run(session);
         Spectre.Console.AnsiConsole.WriteLine();
         ConsoleReport.Part1(result, session.Limits, session.Convention);
+        session.Save(session.CreateRun(result, null));
         ConsoleUi.SessionLogLine(session.Log);
         return result.Complete && result.Verdict == Verdict.Pass ? 0 : 1;
     }
