@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Reflection;
 using Spectre.Console;
 using Spectre.Console.Rendering;
+using Verify11683A.App.Reports;
 using Verify11683A.Calibrator;
 using Verify11683A.Formatting;
 using Verify11683A.Instruments.Dvm;
@@ -218,14 +219,37 @@ public sealed class VerificationSession : IDisposable
         };
     }
 
-    /// <summary>Saves the run as JSON in the results directory, with a copy of the session log beside it.</summary>
+    /// <summary>
+    /// Asks for operator notes, then saves the run as JSON in the results directory with the PDF report and a copy of
+    /// the session log beside it.
+    /// </summary>
     public string Save(VerificationRun run)
     {
+        run = run with { Notes = [.. run.Notes, .. AskNotes()] };
         var path = ResultsFile.Save(run, Config.ResultsDirectory);
         Log.Write($"Results saved to {Path.GetFullPath(path)}");
+        try
+        {
+            var pdf = PdfReport.WriteBeside(run, path);
+            Log.Write($"Report written to {Path.GetFullPath(pdf)}");
+        }
+        catch (Exception ex)
+        {
+            Log.Write($"Report failed: {ex}");
+            AnsiConsole.MarkupLine($"[red]The PDF report could not be written: {Markup.Escape(ex.Message)}[/] "
+                + "[grey]The results are saved; rebuild it later with --regen-pdf.[/]");
+        }
         Log.SaveCopy(Path.ChangeExtension(path, ".log"));
-        AnsiConsole.MarkupLine($"[grey]Results: {Markup.Escape(Path.GetFullPath(path))} (and the session log beside it)[/]");
+        AnsiConsole.MarkupLine($"[grey]Results: {Markup.Escape(Path.GetFullPath(path))}, with the PDF report and session log beside it[/]");
         return path;
+    }
+
+    private static IReadOnlyList<string> AskNotes()
+    {
+        if (!ConsoleUi.Interactive)
+            return [];
+        var text = AnsiConsole.Prompt(new TextPrompt<string>("Operator notes for the report [grey](Enter for none)[/]:").AllowEmpty());
+        return text.Trim() == "" ? [] : [text.Trim()];
     }
 
     public static MeasuredPoint ToMeasured(DvmFunction function, PointAcquisition a)

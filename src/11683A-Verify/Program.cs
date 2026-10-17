@@ -14,6 +14,13 @@ try
         return 0;
     }
 
+    if (options.RegeneratePdf is { } json)
+    {
+        var pdf = Verify11683A.App.Reports.PdfReport.WriteBeside(Verify11683A.Results.ResultsFile.Load(json), json);
+        AnsiConsole.MarkupLine($"Report written: {Markup.Escape(Path.GetFullPath(pdf))}");
+        return 0;
+    }
+
     var config = AppConfig.Load(options.ConfigPath);
     options.ApplyTo(config);
 

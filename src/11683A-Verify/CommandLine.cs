@@ -16,6 +16,9 @@ public sealed class CommandLine
     public double? AmbientC { get; private set; }
     public bool SkipWarmup { get; private set; }
 
+    /// <summary>A results file to rebuild the PDF report from (--regen-pdf).</summary>
+    public string? RegeneratePdf { get; private set; }
+
     public bool IsSimulation => SimulateScenario is not null;
 
     public const string Usage = """
@@ -43,6 +46,7 @@ public sealed class CommandLine
           --ambient <degC>     Ambient temperature, for the temperature coefficient outside 18-28 C.
                                Asked for at the start of a test if not given.
           --skip-warmup        Don't ask about or time the warm-up (it is then not recorded).
+          --regen-pdf <json>   Rebuild the PDF report from a saved results file, beside it, and exit.
           --config <path>      appsettings.json to use.
           -h, --help           This help.
         """;
@@ -79,6 +83,9 @@ public sealed class CommandLine
                     break;
                 case "--ambient":
                     result.AmbientC = double.Parse(Value(), System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+                case "--regen-pdf":
+                    result.RegeneratePdf = Value();
                     break;
                 case "--skip-warmup":
                     result.SkipWarmup = true;
