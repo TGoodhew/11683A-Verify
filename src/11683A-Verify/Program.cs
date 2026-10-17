@@ -48,6 +48,7 @@ try
         "verify" => VerifyCommand.Run(config, options),
         "part1" => Part1Command.Run(config, options),
         "part2" => Part2Command.Run(config, options),
+        "adjust" => AdjustCommand.Run(config, options),
         "exit" => 0,
         _ => throw new ArgumentException($"Unknown command '{command}'."),
     };
@@ -82,6 +83,7 @@ static string ChooseFromMenu(CommandLine options)
         ["Verify: Part 1 then Part 2"] = "verify",
         ["Part 1: DC voltage and ratio test"] = "part1",
         ["Part 2: four-wire resistance test"] = "part2",
+        ["Adjust: Power Supply Adjustment (A2R1), then Part 1"] = "adjust",
         ["DVM spec table and test-point limits"] = "spec-table",
         ["Wiring diagram"] = "wiring",
         ["Exit"] = "exit",

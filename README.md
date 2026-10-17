@@ -31,6 +31,7 @@ cd src\11683A-Verify\bin\Debug\net10.0
 11683A-Verify verify                    # Part 1 then Part 2 (the Range Switch Performance Test)
 11683A-Verify part1                     # Part 1 only: DC voltage and ratio test
 11683A-Verify part2                     # Part 2 only: four-wire resistance test
+11683A-Verify adjust                    # Part 3: Power Supply Adjustment assist (A2R1), then Part 1
 11683A-Verify wiring                    # wiring diagram and 4-wire cable rules
 11683A-Verify --regen-pdf results\11683A_SG52060005_20261017-1430.json   # rebuild a PDF report
 11683A-Verify dvm-check --simulate      # no hardware; also --simulate=supply-low, ratio-fail,
@@ -183,6 +184,26 @@ The operator sets the knobs; the app works out which range is selected.
 4. **Measure.** N readings are taken (`readingsPerPoint`). If one leaves the band around the readings just
    before it, the point is abandoned and detected again: a knob was turned. The band widens to 5σ for a point
    measured unsettled, so noise alone can't abandon it.
+
+## Part 3: Power Supply Adjustment assist
+
+`11683A-Verify adjust`, or *Adjust* in the menu. Use it when Part 1 recommends it, which happens when 1 mW
+reads outside 143.00–147.00 mV. It follows the manual's Power Supply Adjustment (para 43–47, p. 8,
+PDF p. 19):
+
+1. It shows the manual's warning first: *"The operations in this section require the instrument is operated
+   with its covers removed and should only be carried out by qualified service personnel."*
+2. Set RANGE 1 mW, FUNCTION CALIBRATE, POLARITY NORMAL and REF INT, with the DVM on DC REFERENCE OUTPUT.
+   Remove the top cover.
+3. The 1 mW output is shown in large digits at NPLC 10, about 2.5 readings a second. Under it is a gauge
+   from 142 to 148 mV, with the 143.00 and 147.00 mV limits and the 145.00 mV target, plus the error in mV
+   and ppm and which way to turn. **Adjust A2R1 for the centre:** the display turns green within ±0.2 mV.
+   Press Enter when done.
+4. It then offers to rerun Part 1. Refit the cover and let the unit settle first. The Part 1 results are
+   saved with a note of where A2R1 was left.
+
+In simulation (`adjust --simulate=supply-low`), ↑/↓ turn the simulated A2R1 in coarse steps (0.1%) and
+←/→ in fine steps (0.01%).
 
 **FET Balance Adjustment (not implemented).** The manual's FET Balance Adjustment (para 48–51, p. 8) is
 needed only after the U1 assembly is replaced, or after the A3A1–A3J1 wires have moved. It needs an

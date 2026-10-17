@@ -36,6 +36,9 @@ public sealed class CommandLine
                                100 mW, with uncertainty, TUR and verdicts.
           part2                Part 2: four-wire ohms from 300 uW to 3 uW with FUNCTION in STANDBY. No ohms
                                current unless a DC reading first shows the output is grounded.
+          adjust               Part 3: Power Supply Adjustment assist. Live reading of the 1 mW output while
+                               A2R1 is set to 145.00 +/- 2.00 mV, then an offer to rerun Part 1.
+                               (In simulation, the arrow keys turn the simulated A2R1.)
           wiring               Show the wiring diagram and the 4-wire cable rules.
           spec-table           Show the DVM's spec table, and the spec limit and TUR at every 11683A test point.
           (none)               Menu.
