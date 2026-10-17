@@ -29,8 +29,7 @@ public static class AdjustCommand
 
         // A2R1 moved: put the cover back on and let it settle before the voltages are recorded.
         AnsiConsole.MarkupLine("[grey]Refit the top cover and let the 11683A settle for a few minutes before Part 1.[/]");
-        if (!session.Bench.IsSimulation)
-            ConsoleUi.Prompt("Press Enter to start Part 1");
+        session.Bench.Step("Press Enter to start Part 1");
 
         var part1 = Part1Procedure.Run(session);
         AnsiConsole.WriteLine();

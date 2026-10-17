@@ -338,7 +338,19 @@ individuals and for organisations with less than US $1M in annual gross revenue.
 
 ## Simulation
 
-Every command runs without hardware with `--simulate[=scenario]`. The simulator provides a simulated 11683A
+Every command runs without hardware with `--simulate[=scenario]`.
+
+**Walkthrough.** Run the simulator at a console, for example
+`dotnet run --project srcN83A-Verify -- --simulate`, and you get the bench UI exactly as it will be:
+- **Every prompt is shown**, such as "Set RANGE to …", "Press Enter when FUNCTION is in STANDBY" or "zero
+  the meter". Answering it turns the simulated 11683A's knobs.
+- **Where the bench lets you choose**, such as which RANGE to measure next in Parts 1 and 2, a simulator
+  list lets you pick the position. You can pick a wrong one, or change FUNCTION, POLARITY or REF, to see
+  the warnings and the "try again" path.
+- **Typed meter readings** offer the simulated display's value; press Enter to accept it or type another.
+- **The menu comes back** after each command until you choose Exit. This applies on the bench too.
+
+Scripted (redirected) runs still go straight through, setting the knobs themselves. The simulator provides a simulated 11683A
 (knobs, settling, noise, drift, A2R1, REF EXT), a simulated 34401A that measures it with the real reading
 times, and, for Part 4, a simulated power meter with zero and CAL. The app turns the simulated knobs itself.
 Every result is marked SIMULATED in the console, the JSON and the PDF, and an actuals export from a simulated

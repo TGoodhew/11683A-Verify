@@ -98,3 +98,56 @@ public class ConsoleReportTests
         Assert.Contains(Wiring.Rules, r => r.Contains("5 ft"));
     }
 }
+
+/// <summary>The walkthrough's knob picker, driven with keys through Spectre's interactive TestConsole.</summary>
+public class SimulatorKnobsTests
+{
+    private static Verify11683A.Instruments.Simulation.Simulated11683A Sim() =>
+        new(CalibratorLimits.LoadDefault(), Verify11683A.Instruments.Simulation.SimulationScenario.Get("nominal"),
+            new Verify11683A.SimulatedClock());
+
+    [Fact]
+    public void Enter_picks_the_first_range_still_to_measure()
+    {
+        var console = new TestConsole().Interactive();
+        var sim = Sim();
+        console.Input.PushKey(ConsoleKey.Enter);
+        Verify11683A.App.SimulatorKnobs.ChooseRange(sim, ["30mW", "10mW"], console);
+        Assert.Equal("30mW", sim.Range.Id);
+    }
+
+    [Fact]
+    public void A_range_not_on_the_list_can_be_chosen_to_see_the_warning()
+    {
+        var console = new TestConsole().Interactive();
+        var sim = Sim();
+        // Remaining first (30 mW, 10 mW), then every other position from the top: 100 mW is third.
+        console.Input.PushKey(ConsoleKey.DownArrow);
+        console.Input.PushKey(ConsoleKey.DownArrow);
+        console.Input.PushKey(ConsoleKey.Enter);
+        Verify11683A.App.SimulatorKnobs.ChooseRange(sim, ["30mW", "10mW"], console);
+        Assert.Equal("100mW", sim.Range.Id);
+    }
+
+    [Fact]
+    public void Other_switches_can_be_changed_before_choosing_the_range()
+    {
+        var console = new TestConsole().Interactive();
+        var sim = Sim();
+        // The last entry opens the other switches: choose POLARITY (4th), then REVERSE (2nd), then Done, then 30 mW.
+        for (var i = 0; i < 10; i++)
+            console.Input.PushKey(ConsoleKey.DownArrow);
+        console.Input.PushKey(ConsoleKey.Enter);
+        console.Input.PushKey(ConsoleKey.DownArrow);
+        console.Input.PushKey(ConsoleKey.DownArrow);
+        console.Input.PushKey(ConsoleKey.DownArrow);
+        console.Input.PushKey(ConsoleKey.Enter);
+        console.Input.PushKey(ConsoleKey.DownArrow);
+        console.Input.PushKey(ConsoleKey.Enter);
+        console.Input.PushKey(ConsoleKey.Enter);
+        console.Input.PushKey(ConsoleKey.Enter);
+        Verify11683A.App.SimulatorKnobs.ChooseRange(sim, ["30mW", "10mW"], console);
+        Assert.Equal(PolaritySwitch.Reverse, sim.Polarity);
+        Assert.Equal("30mW", sim.Range.Id);
+    }
+}
