@@ -48,6 +48,26 @@ own, with the PDF page in parentheses, from the local manual library.
 | **Table 2-4: not linear above 1 mW** | 458.31 µV up to 144.93 mV is linear in power. Above that it is not: 459.12 mV ≙ 3.1623 mW (linear would be 458.31 mV), 1.4588 V ≙ 10 mW, 4.6872 V ≙ 31.62 mW, and 15.588 V ≙ 100 mW (linear would be 14.493 V). Store the table; never scale it. | p. 2-14 (PDF 54) |
 | True full scale | The "3" ranges are √10 steps: 3.16 µW, 31.6 µW, 316 µW and so on. | p. 2-10 (PDF 50) |
 
+## E4418B Service Guide: Procedure 2 in detail (Part 4)
+
+| Item | Finding | Page |
+|---|---|---|
+| Equipment | 11683A Option H01, 11730A power sensor cable, a DC calibrator (Datron 4000A in the guide). | p. 2-11 (PDF 51) |
+| RANGE in EXT | The 11683A stays at **RANGE 100 mW** with REF EXT: the DC calibrator's voltage sets the level, 144.93 mV ≙ 1 mW. Part 4 uses this for the EXT step. | p. 2-12 (PDF 52) |
+| Zero | STANDBY, calibrator at 0 V with its output off, meter filter 512, then Zero; the display should read 0 ± 0.05 µW. | p. 2-13 (PDF 53) |
+| Table 2-4 | All ten rows: setting, effective power, filter (256/64/16), measurement uncertainty, lower and upper limits. Stored in `data/h01-ext-table.json`. The rows are rounded: 458.31 µV is 3.16228 µW by linear scaling, but the table prints 3.1623 µW, so the app interpolates through the printed rows. "The test limits shown in this table do not take into account the corresponding measurement uncertainty values." | p. 2-14 (PDF 54) |
+
+## Power meter commands (Part 4)
+
+From the GPIB-MCP command database, which is taken from each meter's own manual. None of these has been run against
+a real meter yet.
+
+| Meter | Identity | Reading |
+|---|---|---|
+| E4418B/E4419B (SCPI) | `*IDN?` ("…,E4418B,serial,firmware") | `UNIT1:POW?` (W or DBM), then `FETC1?`; `SYST:ERR?` after. Nothing on the meter is changed. |
+| 437B | `*IDN?` ("HEWLETT-PACKARD,437B,,X.X") | `LN` (watts), `TR2` (one settled reading, read back), `TR3` (free run again). |
+| 438A | `?ID` ("HP438A,VERX.XX") | `AP` (sensor A), `LN`, `TR2`, `TR3`. |
+
 ## Decisions confirmed by the owner (2026-10-16)
 
 - **Rear panel of SG52060005:** an INT/EXT toggle, the **REF EXT** BNC (upper), and the separate

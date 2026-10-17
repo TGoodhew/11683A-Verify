@@ -49,8 +49,9 @@ public sealed class CommandLine
           (none)               Menu.
 
         Options:
-          --simulate[=name]    Use the simulated 11683A and DVM. Scenarios: nominal (default), supply-low,
-                               ratio-fail, ohms-fail, noisy, drifting.
+          --simulate[=name]    Use the simulated 11683A, DVM and (Part 4) power meter. Scenarios: nominal
+                               (default), supply-low, ratio-fail, ohms-fail, noisy, h01-ext-error,
+                               drifting. See the README's Simulation section.
           --dvm <model>        34401A or 3458A (overrides dvm.model).
           --resource <name>    VISA resource, e.g. GPIB0::22::INSTR (overrides dvm.resource).
           --period <p>         Spec column: 24h, 90d, 1y or 2y (overrides dvm.specPeriod).

@@ -233,6 +233,22 @@ public class H01SimulationTests
     }
 
     [Fact]
+    public void The_h01_ext_error_scenario_puts_the_agreement_outside_0_2_percent()
+    {
+        var (calibrator, meter, _) = Bench(SimulationScenario.Get("h01-ext-error"));
+        calibrator.SetRange("1mW");
+        calibrator.SetFunction(FunctionSwitch.Calibrate);
+        meter.Cal();
+        var intWatts = meter.ReadWatts();
+        calibrator.SetRange("100mW");
+        calibrator.SetReference(ReferenceSwitch.Ext);
+        calibrator.ExternalSourceVolts = 0.145;
+        var check = new TransferCheck(intWatts, 0.145, 0.145, meter.ReadWatts(), H01Table.LoadDefault().TransferTolerance);
+        Assert.False(check.WithinTolerance);
+        Assert.InRange(check.Agreement, 0.0040, 0.0050);
+    }
+
+    [Fact]
     public void An_ext_transfer_error_shows_in_the_agreement()
     {
         var (calibrator, meter, _) = Bench(SimulationScenario.Get("nominal") with { ExtTransferError = 0.004 });
