@@ -55,6 +55,51 @@ public static class ConsoleReport
         Overall("Part 1", result.Verdict, result.Complete);
     }
 
+    public static void Part2(Part2Result result, CalibratorLimits limits, UncertaintyConvention convention)
+    {
+        var k = convention.CoverageFactor.ToString("0.#", CultureInfo.InvariantCulture);
+        var table = new Table().Border(TableBorder.Rounded).Title("[bold]Part 2: four-wire resistance (STANDBY)[/]")
+            .AddColumn("Range")
+            .AddColumn(new TableColumn("Mean ± σ").RightAligned())
+            .AddColumn("DVM range")
+            .AddColumn(new TableColumn("Limits").Centered())
+            .AddColumn(new TableColumn($"U (k = {k})").RightAligned())
+            .AddColumn(new TableColumn("TUR").RightAligned())
+            .AddColumn("Verdict");
+
+        foreach (var limit in limits.Part2.Points)
+        {
+            var label = RangeSwitch.Get(limit.Range).Label;
+            var p = result.Point(limit.Range);
+            if (p is null)
+            {
+                table.AddRow(label, "[grey]not measured[/]", "", "", "", "", "");
+                continue;
+            }
+            var s = p.Measurement.Statistics;
+            table.AddRow(label,
+                $"{Si.Format(s.Mean, "Ω", 7)} ± {Si.Format(s.StandardDeviation, "Ω", 2)}" + (p.Measurement.Settled ? "" : " [yellow]*[/]"),
+                Si.Range(p.Measurement.DvmRange, "Ω"),
+                $"{Plain(limit.OhmsMin, 5)}–{Plain(limit.OhmsMax, 5)} Ω",
+                Si.Format(p.Assessment.ExpandedUncertainty, "Ω", 3),
+                ConsoleUi.TurMarkup(p.Assessment),
+                ConsoleUi.VerdictMarkup(p.Verdict));
+        }
+        AnsiConsole.Write(table);
+        if (result.Points.Any(p => !p.Measurement.Settled))
+            AnsiConsole.MarkupLine("[yellow]*[/] [grey]measured without settling; the operator chose to go on.[/]");
+
+        var safe = result.SafetyChecks.Where(c => c.Safe).ToList();
+        if (safe.Count > 0)
+            AnsiConsole.MarkupLine($"[grey]Output confirmed grounded {safe.Count} time(s) before ohms current was applied "
+                + $"(largest {Si.Format(safe.Max(c => Math.Abs(c.Volts)), "V", 2)}).[/]");
+        var refused = result.SafetyChecks.Count - safe.Count;
+        if (refused > 0)
+            AnsiConsole.MarkupLine($"[yellow]{refused} time(s) the output was live and ohms were refused.[/]");
+        Notes(result.Notes);
+        Overall("Part 2", result.Verdict, result.Complete);
+    }
+
     public static void Notes(IEnumerable<string> notes)
     {
         foreach (var note in notes)

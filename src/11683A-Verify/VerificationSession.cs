@@ -87,18 +87,18 @@ public sealed class VerificationSession : IDisposable
         Log.Write($"Unit {c.Model} s/n {c.Serial} {c.Options}; DVM {DvmDetails}; spec {Specs.Model} {Period.Key()}; ambient {AmbientC?.ToString(CultureInfo.InvariantCulture) ?? "n/a"}");
     }
 
-    public PointAcquirer Acquirer(RangeDetector detector) =>
+    public PointAcquirer Acquirer(RangeDetector detector, Func<string?>? interlock = null) =>
         new(Dvm, detector, Config.Measurement.Settling(detector.Function), Config.Measurement.Nplc, Config.Measurement.ReadingsPerPoint)
         {
             Log = Log.Write,
+            Interlock = interlock,
         };
 
     /// <summary>
     /// Measures whichever point the 11683A is set to, talking the operator through warnings and a point that will
     /// not settle. Returns null when the operator chooses to stop.
     /// </summary>
-    /// <param name="beforeRetry">Run before every retry (Part 2 re-checks that the output is not live).</param>
-    public MeasuredPoint? MeasureNext(PointAcquirer acquirer, double? startRange = null, Func<bool>? beforeRetry = null)
+    public MeasuredPoint? MeasureNext(PointAcquirer acquirer, double? startRange = null)
     {
         var allowUnsettled = false;
         while (true)
@@ -124,15 +124,18 @@ public sealed class VerificationSession : IDisposable
                     allowUnsettled = choice.StartsWith("Measure", StringComparison.Ordinal);
                     break;
 
+                case AcquisitionOutcome.Blocked:
+                    AnsiConsole.MarkupLine($"[red]✗ {Markup.Escape(Capitalise(acquisition.Message))}.[/]");
+                    if (Bench.IsSimulation || ConsoleUi.Choose("Ohms not applied. Set FUNCTION to STANDBY, then:", ["Try again", "Stop"], "Stop") == "Stop")
+                        return null;
+                    break;
+
                 default:
                     AnsiConsole.MarkupLine($"[yellow]⚠ {Markup.Escape(Capitalise(acquisition.Message))}.[/]");
                     if (Bench.IsSimulation || ConsoleUi.Choose("Leave the knobs alone while a point is measured, then:", ["Try again", "Stop"], "Stop") == "Stop")
                         return null;
                     break;
             }
-
-            if (beforeRetry is not null && !beforeRetry())
-                return null;
         }
     }
 

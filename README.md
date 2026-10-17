@@ -15,8 +15,8 @@ C# / .NET 10 (x64), NI-VISA, Spectre.Console, QuestPDF (step 3). MIT licence.
 
 | Step | Issues | State |
 |---|---|---|
-| 1. DVM drivers, spec tables, simulation | #1–#4 | **Ready for the bench** |
-| 2. Range auto-detection, Part 1 (volts/ratios), Part 2 (4-wire ohms) | #5–#7 | In progress: #5, #6 done |
+| 1. DVM drivers, spec tables, simulation | #1–#4 | Merged; bench check still to do |
+| 2. Range auto-detection, Part 1 (volts/ratios), Part 2 (4-wire ohms) | #5–#7 | **Ready for the bench** |
 | 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | In progress: #8 done |
 | 4. Part 3 supply-adjustment assist, Part 4 H01 REF EXT check | #13–#15 | Not started |
 
@@ -28,7 +28,9 @@ dotnet test 11683A-Verify.slnx
 cd src\11683A-Verify\bin\Debug\net10.0
 11683A-Verify dvm-check                 # the step-1 bench check
 11683A-Verify spec-table                # DVM spec table, and the limit and TUR at every test point
-11683A-Verify part1                     # Part 1: DC voltage and ratio test
+11683A-Verify verify                    # Part 1 then Part 2 (the Range Switch Performance Test)
+11683A-Verify part1                     # Part 1 only: DC voltage and ratio test
+11683A-Verify part2                     # Part 2 only: four-wire resistance test
 11683A-Verify dvm-check --simulate      # no hardware; also --simulate=supply-low, ratio-fail,
                                         # ohms-fail, noisy, drifting
 11683A-Verify --help
@@ -89,8 +91,11 @@ the serial from `dvm.serial`.
   - The 100 V range, used only for the 100 mW reading of about 15.8 V, is fixed at 10 MΩ. The manual's own
     HP 3455A was also 10 MΩ on that range. The report notes this.
 - **Ohms current is never applied while FUNCTION is in CALIBRATE.** Before any ohms range is configured,
-  the app reads the output on the 100 mV DC range. It applies ohms current only if the output is grounded,
-  within 50 µV of zero, as it is in STANDBY.
+  and again before every point in Part 2, the app reads the output on the 100 mV DC range. It applies ohms
+  current only if the output is grounded, within 50 µV of zero, as it is in STANDBY. It allows up to 4 s
+  for the output to fall to ground after the switch moves. If FUNCTION is moved to CALIBRATE partway through
+  a point, the next reading no longer matches. The point is then abandoned and the check refuses to go on.
+  After Part 2, the DVM is left on DC volts.
 
 ## What the app tests
 
@@ -193,3 +198,23 @@ individuals and for organisations with less than US $1M in annual gross revenue.
    Expect about 145 mV, inside 143.00–147.00 mV, with σ of a few µV.
 6. Run `11683A-Verify spec-table`. Check the 34401A table against Service Guide p. 12 (PDF p. 20).
 7. Send back the session log, from `results\logs\` under the current directory.
+
+## Step 2: what to try on the bench
+
+Do the Step 1 check above first, if you haven't already.
+
+1. Warm up the 34401A for at least an hour, and the 11683A for at least 30 minutes.
+2. Connect the 4-wire cable to DC REFERENCE OUTPUT.
+3. Run `11683A-Verify verify` (or `part1`, then `part2`). Pass `--ambient <°C>` if the room is outside 18–28 °C.
+4. **Part 1.** Set REF INT, POLARITY NORMAL and FUNCTION CALIBRATE, then press Enter.
+   - At each prompt, turn RANGE to any untested position from 100 mW down to 300 µW and press Enter.
+   - The app detects the range, waits for it to settle (about 20–30 s), then takes 10 readings at NPLC 100
+     (about 35 s).
+   - Try turning a knob partway through one point. The point should be abandoned and detected again.
+   - Try POLARITY REVERSE, or FUNCTION STANDBY, at a prompt. You should get a warning, not a result.
+5. **Part 2.** Set FUNCTION to STANDBY and press Enter. Then turn RANGE through 300 µW down to 3 µW.
+   - Before each point, the log shows an "Ohms safety check" line of a few µV.
+   - Try leaving FUNCTION in CALIBRATE at the start. Ohms must be refused, and the log must show no
+     `CONF:FRES` command.
+6. Send back the session log (`results\logserify_*.log`) and a screenshot or copy of the two results
+   tables.

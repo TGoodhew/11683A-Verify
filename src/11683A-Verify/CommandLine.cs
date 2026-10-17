@@ -24,8 +24,11 @@ public sealed class CommandLine
           dvm-check            Step 1 bench check: identify the DVM, configure every range the test uses,
                                read each setting back, check the error queue, then optionally take
                                readings of the 11683A at 1 mW.
+          verify               The Range Switch Performance Test: Part 1, then Part 2.
           part1                Part 1: DC voltage at every range from 100 mW to 300 uW and the ratios to
                                100 mW, with uncertainty, TUR and verdicts.
+          part2                Part 2: four-wire ohms from 300 uW to 3 uW with FUNCTION in STANDBY. No ohms
+                               current unless a DC reading first shows the output is grounded.
           spec-table           Show the DVM's spec table, and the spec limit and TUR at every 11683A test point.
           (none)               Menu.
 

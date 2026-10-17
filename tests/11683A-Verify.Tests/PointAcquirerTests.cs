@@ -96,7 +96,7 @@ public class PointAcquirerTests
         var result = Volts(dvm).Acquire();
 
         Assert.Equal(AcquisitionOutcome.NotDetected, result.Outcome);
-        Assert.Equal(kind, result.Detection.Kind);
+        Assert.Equal(kind, result.Detection!.Kind);
         Assert.Empty(result.Readings);
         Assert.Null(result.Statistics);
     }
@@ -108,7 +108,7 @@ public class PointAcquirerTests
         calibrator.SetRange("100uW");
         calibrator.SetFunction(FunctionSwitch.Calibrate);
         var result = Volts(dvm).Acquire();
-        Assert.Equal(DetectionKind.OutOfFamily, result.Detection.Kind);
+        Assert.Equal(DetectionKind.OutOfFamily, result.Detection!.Kind);
     }
 
     [Fact]
