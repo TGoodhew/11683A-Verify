@@ -1,3 +1,5 @@
+using Verify11683A.Results;
+
 namespace Verify11683A.Instruments.Dvm;
 
 /// <summary>The outcome of checking that the DC REFERENCE OUTPUT is dead before ohms current is applied.</summary>
@@ -19,11 +21,36 @@ public static class OhmsSafety
 {
     public const double DefaultThresholdVolts = 50e-6;
 
-    public static OhmsSafetyCheck Check(IDvm dvm, double thresholdVolts = DefaultThresholdVolts)
+    /// <summary>
+    /// Readings at NPLC 10 (about 0.4 s each, so up to 4 s) to allow, so an output still falling to ground just after FUNCTION went
+    /// to STANDBY is not refused. A live output never reads near zero, so waiting is never a risk.
+    /// </summary>
+    public const int DefaultMaxReadings = 10;
+
+    public static OhmsSafetyCheck Check(IDvm dvm, double thresholdVolts = DefaultThresholdVolts, int maxReadings = DefaultMaxReadings)
     {
         dvm.Configure(DvmFunction.DcVoltage, 0.1, nplc: 10);
-        var reading = dvm.Read();
-        var safe = !reading.Overload && Math.Abs(reading.Value) <= thresholdVolts;
-        return new OhmsSafetyCheck(safe, reading, thresholdVolts);
+        DvmReading reading = default;
+        for (var i = 0; i < Math.Max(1, maxReadings); i++)
+        {
+            reading = dvm.Read();
+            if (!reading.Overload && Math.Abs(reading.Value) <= thresholdVolts)
+                return new OhmsSafetyCheck(true, reading, thresholdVolts);
+        }
+        return new OhmsSafetyCheck(false, reading, thresholdVolts);
     }
+
+    /// <summary>
+    /// An interlock for <see cref="Measurement.PointAcquirer.Interlock"/>: runs the check before every detection
+    /// attempt, records it, and refuses while the output is live.
+    /// </summary>
+    public static Func<string?> Interlock(IDvm dvm, Action<OhmsSafetyCheck>? record = null, double thresholdVolts = DefaultThresholdVolts) => () =>
+    {
+        var check = Check(dvm, thresholdVolts);
+        record?.Invoke(check);
+        return check.Safe ? null : $"{check.Explanation}; set FUNCTION to STANDBY before ohms are measured";
+    };
+
+    public static OhmsSafetyRecord ToRecord(this OhmsSafetyCheck check) =>
+        new(check.Reading.Time, check.Reading.Value, check.Reading.Overload, check.ThresholdVolts, check.Safe);
 }

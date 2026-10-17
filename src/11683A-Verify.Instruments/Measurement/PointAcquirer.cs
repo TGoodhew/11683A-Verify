@@ -28,12 +28,15 @@ public enum AcquisitionOutcome
 
     /// <summary>The output kept moving: every attempt was abandoned.</summary>
     Interrupted,
+
+    /// <summary>The interlock refused: nothing was configured for the function (Part 2: the output is live).</summary>
+    Blocked,
 }
 
 /// <summary>The outcome of measuring one point. Only <see cref="AcquisitionOutcome.Measured"/> carries a result.</summary>
 public sealed record PointAcquisition(
     AcquisitionOutcome Outcome,
-    Detection Detection,
+    Detection? Detection,
     DvmConfiguration? Configuration,
     IReadOnlyList<DvmReading> Readings,
     bool Settled,
@@ -41,7 +44,7 @@ public sealed record PointAcquisition(
     int Attempts,
     string Message)
 {
-    public ExpectedValue? Point => Detection.Candidate;
+    public ExpectedValue? Point => Detection?.Candidate;
 
     public ReadingStatistics? Statistics => Readings.Count == 0 ? null : ReadingStatistics.Of(Readings.Select(r => r.Value).ToList());
 }
@@ -88,6 +91,12 @@ public sealed class PointAcquirer
     public Action<string>? Log { get; init; }
 
     public Action<AcquisitionProgress>? Progress { get; set; }
+
+    /// <summary>
+    /// Checked before every detection attempt, before the DVM is configured for <see cref="Function"/>. Returns
+    /// null to go ahead, or the reason to refuse. Part 2 uses it so ohms current is never applied to a live output.
+    /// </summary>
+    public Func<string?>? Interlock { get; init; }
 
     /// <summary>Scout readings must agree this closely across <see cref="ScoutHoldTime"/>.</summary>
     public double ScoutAgreement { get; init; } = 0.01;
@@ -151,9 +160,15 @@ public sealed class PointAcquirer
     /// </summary>
     public PointAcquisition Acquire(bool allowUnsettled = false, double? startRange = null)
     {
-        Detection detection = null!;
+        Detection? detection = null;
         for (var attempt = 1; attempt <= MaxAttempts; attempt++)
         {
+            if (Interlock?.Invoke() is { } refusal)
+            {
+                Log?.Invoke($"interlock: {refusal}");
+                return new PointAcquisition(AcquisitionOutcome.Blocked, null, null, [], false, TimeSpan.Zero, attempt, refusal);
+            }
+
             (detection, _, var scoutRange) = Scout(startRange, attempt);
             startRange = scoutRange;
             if (!detection.IsMatch)
