@@ -1,0 +1,26 @@
+{
+  "title": "Option H01 REF EXT transfer check",
+  "source": "Keysight E4418B/E4419B Service Guide, Instrument Accuracy Test, Test Procedure 2, pp. 2-11 to 2-14 (E4418B Service.pdf PDF pp. 51-54)",
+  "rangeSetting": "100mW",
+  "rangeSource": "E4418B Service Guide step 8, p. 2-12 (PDF p. 52): RANGE 100 mW, POLARITY NORMAL, FUNCTION STANDBY, REF SWITCH EXT, LINE OFF",
+  "calibrationVolts": 0.14493,
+  "calibrationSource": "E4418B Service Guide steps 12-13, p. 2-13 (PDF p. 53): set the DC calibrator to 144.93 mV, then CAL the power meter",
+  "transferTolerance": 0.002,
+  "notes": [
+    "Table 2-4 is linear in power up to 1 mW (144.93 mV) and NOT above it: 459.12 mV is 3.1623 mW (linear would be 458.31 mV) and 15.588 V is 100 mW (linear would be 14.493 V). Use the rows as data; never scale them.",
+    "The table's limits do not include the measurement uncertainty (the Service Guide's note under Table 2-4).",
+    "The 11683A's power cord is unplugged throughout because of the H01 ground loop; a power meter must stay connected (risk of mild shock from the chassis otherwise). The DC calibrator's Guard and LO must float."
+  ],
+  "rows": [
+    { "settingVolts": 458.31e-6, "effectiveWatts": 3.1623e-6,   "filter": 256, "measUncWatts": 0.028e-6, "lowerWatts": 3.0977e-6,  "upperWatts": 3.2269e-6 },
+    { "settingVolts": 1.4493e-3, "effectiveWatts": 10e-6,       "filter": 256, "measUncWatts": 0.027e-6, "lowerWatts": 9.904e-6,   "upperWatts": 10.096e-6 },
+    { "settingVolts": 4.5831e-3, "effectiveWatts": 31.6228e-6,  "filter": 256, "measUncWatts": 0.027e-6, "lowerWatts": 31.428e-6,  "upperWatts": 31.819e-6 },
+    { "settingVolts": 14.493e-3, "effectiveWatts": 100e-6,      "filter": 64,  "measUncWatts": 0.073e-6, "lowerWatts": 99.49e-6,   "upperWatts": 100.51e-6 },
+    { "settingVolts": 45.831e-3, "effectiveWatts": 316.2278e-6, "filter": 64,  "measUncWatts": 0.104e-6, "lowerWatts": 314.72e-6,  "upperWatts": 317.74e-6 },
+    { "settingVolts": 144.93e-3, "effectiveWatts": 1e-3,        "filter": 16,  "measUncWatts": 0.2e-6,   "lowerWatts": 0.9954e-3,  "upperWatts": 1.0047e-3 },
+    { "settingVolts": 459.12e-3, "effectiveWatts": 3.1623e-3,   "filter": 16,  "measUncWatts": 0.9e-6,   "lowerWatts": 3.1477e-3,  "upperWatts": 3.1769e-3 },
+    { "settingVolts": 1.4588,    "effectiveWatts": 10e-3,       "filter": 16,  "measUncWatts": 1.6e-6,   "lowerWatts": 9.954e-3,   "upperWatts": 10.046e-3 },
+    { "settingVolts": 4.6872,    "effectiveWatts": 31.6228e-3,  "filter": 16,  "measUncWatts": 4.8e-6,   "lowerWatts": 31.477e-3,  "upperWatts": 31.769e-3 },
+    { "settingVolts": 15.588,    "effectiveWatts": 100e-3,      "filter": 16,  "measUncWatts": 18.5e-6,  "lowerWatts": 99.54e-3,   "upperWatts": 100.46e-3 }
+  ]
+}

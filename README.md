@@ -18,7 +18,7 @@ C# / .NET 10 (x64), NI-VISA, Spectre.Console, QuestPDF (step 3). MIT licence.
 | 1. DVM drivers, spec tables, simulation | #1–#4 | Merged; bench check still to do |
 | 2. Range auto-detection, Part 1 (volts/ratios), Part 2 (4-wire ohms) | #5–#7 | **Ready for the bench** |
 | 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | Done |
-| 4. Part 3 supply-adjustment assist, Part 4 H01 REF EXT check | #13–#15 | Not started |
+| 4. Part 3 supply-adjustment assist, Part 4 H01 REF EXT check | #13–#15 | In progress: #13, #14 done |
 
 ## Build and run
 
@@ -31,6 +31,7 @@ cd src\11683A-Verify\bin\Debug\net10.0
 11683A-Verify verify                    # Part 1 then Part 2 (the Range Switch Performance Test)
 11683A-Verify part1                     # Part 1 only: DC voltage and ratio test
 11683A-Verify part2                     # Part 2 only: four-wire resistance test
+11683A-Verify part4                     # Part 4: Option H01 REF EXT check (needs a power meter)
 11683A-Verify adjust                    # Part 3: Power Supply Adjustment assist (A2R1), then Part 1
 11683A-Verify wiring                    # wiring diagram and 4-wire cable rules
 11683A-Verify --regen-pdf results\11683A_SG52060005_20261017-1430.json   # rebuild a PDF report
@@ -204,6 +205,44 @@ PDF p. 19):
 
 In simulation (`adjust --simulate=supply-low`), ↑/↓ turn the simulated A2R1 in coarse steps (0.1%) and
 ←/→ in fine steps (0.01%).
+
+## Part 4: Option H01 REF EXT transfer check
+
+`11683A-Verify part4`, or `verify --part4`. On an H01 unit, `verify` also asks at the end. The check is
+informational: it compares power meter readings, so the result is an indication under the power meter's own
+uncertainty and never changes the verdict. It follows the E4418B Service Guide's Instrument Accuracy Test
+Procedure 2 (pp. 2-11 to 2-14, PDF pp. 51–54), and Table 2-4 is stored in
+[`data/h01-ext-table.json`](data/h01-ext-table.json).
+
+You need:
+
+- a power meter on the 11683A's front-panel POWER METER output, connected with an 11730A cable;
+- a DC calibrator whose Guard and LO can float;
+- a BNC tee.
+
+Set `powerMeter.model` to `E4418B`, `E4419B`, `437B` or `438A` to read the meter over the bus
+(`powerMeter.resource`, default `GPIB0::13::INSTR`). Leave it as `manual` to type the readings in.
+
+1. **1 mW voltage.** The app needs the 1 mW DC REFERENCE OUTPUT voltage. It takes it from Part 1 in the same
+   session, or measures it first.
+2. **Step 1, REF INT.** Connect the power meter with the 11730A cable. Set RANGE 1 mW. In STANDBY, wait for
+   the meter's drift to stop and **zero** it. In CALIBRATE, **CAL** it. The app then reads the meter
+   (P_INT).
+3. **Step 2, REF EXT.** The app first warns about the shock risk from the H01 chassis unless the power meter is
+   connected. **Unplug the 11683A's power cord**: the H01 has a ground loop.
+   - Set RANGE **100 mW** and REF **EXT**, as the Service Guide's step 8 does.
+   - Move the DVM to a **BNC tee on REF EXT**, and connect the DC calibrator to the tee.
+   - Set the calibrator to the 1 mW voltage, to within ±20 ppm. The DVM shows the error live.
+   - The app reads the meter (P_EXT). It reports P_EXT/P_INT − 1, corrected for the calibrator's small offset.
+     The default tolerance is ±0.2%. Table 2-4 relates 144.93 mV to 1 mW, so about +0.05% is expected at
+     145.00 mV.
+4. **Step 3, optional: Table 2-4.** These are the Service Guide's steps 9–14.
+   - Zero the meter in STANDBY with the calibrator at 0 V.
+   - CAL it at 144.93 mV.
+   - Set each of the ten voltages, from 458.31 µV to 15.588 V, with the meter filter the table gives. Each
+     reading is compared with the table's own limits.
+   - The rows are data and are **never scaled**: above 1 mW the table is not linear (15.588 V is 100 mW).
+5. Turn the calibrator off, set REF back to INT, plug the power cord back in, and move the DVM back.
 
 **FET Balance Adjustment (not implemented).** The manual's FET Balance Adjustment (para 48–51, p. 8) is
 needed only after the U1 assembly is replaced, or after the A3A1–A3J1 wires have moved. It needs an

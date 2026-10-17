@@ -49,6 +49,28 @@ public class ResultsFileTests
         };
     }
 
+    internal static Part4Result SamplePart4()
+    {
+        var table = Verify11683A.H01.H01Table.LoadDefault();
+        return new Part4Result(table.Source, "Agilent Technologies E4418B s/n GB12345678, fw A1.06.00, channel 1", true,
+            new TransferCheck(0.99999e-3, 0.1450004, 0.1450008, 1.00050e-3, table.TransferTolerance),
+            table.Rows.Select(r => new H01PointResult(r, r.SettingVolts * (1 + 3e-6), r.EffectiveWatts * 1.00001)).ToList(),
+            ["Indication only."]);
+    }
+
+    [Fact]
+    public void A_run_with_part_4_round_trips_and_part_4_does_not_change_the_verdict()
+    {
+        var run = SampleRun() with { Part4 = SamplePart4() with { Transfer = SamplePart4().Transfer! with { ExtWatts = 1.01e-3 } } };
+        var json = ResultsFile.Serialize(run);
+        var back = ResultsFile.Deserialize(json);
+        Assert.Equal(json, ResultsFile.Serialize(back));
+        Assert.False(back.Part4!.AllWithin);
+        Assert.Equal(Verdict.Pass, back.Verdict);
+        Assert.Equal(10, back.Part4.TablePoints.Count);
+        Assert.Equal(15.588, back.Part4.TablePoints[^1].Row.SettingVolts);
+    }
+
     [Fact]
     public void A_run_survives_the_round_trip_exactly()
     {

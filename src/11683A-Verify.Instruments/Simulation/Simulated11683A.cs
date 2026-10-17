@@ -1,6 +1,14 @@
 using Verify11683A.Calibrator;
+using Verify11683A.H01;
 
 namespace Verify11683A.Instruments.Simulation;
+
+/// <summary>Where the DVM is connected: the rear DC REFERENCE OUTPUT, or (Part 4) a BNC tee on the REF EXT input.</summary>
+public enum DvmPoint
+{
+    DcReferenceOutput,
+    RefExtTee,
+}
 
 /// <summary>
 /// A simulated 11683A as seen at its rear DC REFERENCE OUTPUT. The operator turns its knobs from the
@@ -16,6 +24,7 @@ namespace Verify11683A.Instruments.Simulation;
 public sealed class Simulated11683A
 {
     private readonly CalibratorLimits _limits;
+    private H01Table? _h01;
     private readonly IClock _clock;
     private readonly Random _random;
     private readonly DateTimeOffset _start;
@@ -51,6 +60,38 @@ public sealed class Simulated11683A
     public void SetPolarity(PolaritySwitch polarity) => Change(_state with { Polarity = polarity });
     public void SetReference(ReferenceSwitch reference) => Change(_state with { Reference = reference });
 
+    /// <summary>Where the DVM is connected. Part 4 moves it to a tee on REF EXT to monitor the DC calibrator.</summary>
+    public DvmPoint DvmAt { get; set; }
+
+    /// <summary>The DC calibrator's output into REF EXT (Part 4); 0 when it is off.</summary>
+    public double ExternalSourceVolts { get; set; }
+
+    /// <summary>Whether the power cord is plugged in. REF INT needs it; REF EXT works without it (E4418B SG p. 2-12).</summary>
+    public bool LinePowered { get; set; } = true;
+
+    /// <summary>
+    /// The power a power meter on the front-panel POWER METER output would see, before its own zero and CAL.
+    /// REF INT: the range's full-scale power, scaled by the supply and the scenario's error for that range. REF EXT:
+    /// the power Table 2-4 relates to the REF EXT voltage (for RANGE 100 mW, as the E4418B procedure uses), with the
+    /// scenario's EXT transfer error. STANDBY gives zero.
+    /// </summary>
+    public double OutputPowerWatts()
+    {
+        if (_state.Function == FunctionSwitch.Standby)
+            return 0;
+        var range = _state.Range;
+        if (_state.Reference == ReferenceSwitch.Ext)
+        {
+            _h01 ??= H01Table.LoadDefault();
+            var atFullScale = _h01.EffectiveWatts(Math.Max(0, ExternalSourceVolts));
+            return atFullScale * (TrueFullScaleWatts(range) / 0.1) * (1 + Scenario.ExtTransferError) * Drift();
+        }
+        if (!LinePowered)
+            return 0;
+        var error = Scenario.VoltageErrors.TryGetValue(range.Id, out var e) ? e : 0.0;
+        return TrueFullScaleWatts(range) * SupplyScale * (1 + error) * Drift();
+    }
+
     /// <summary>The settled, noise-free CALIBRATE voltage of a range, including the scenario's errors.</summary>
     public double SettledVolts(RangePosition range)
     {
@@ -80,6 +121,8 @@ public sealed class Simulated11683A
     /// <summary>What a high-impedance DVM sees at the DC REFERENCE OUTPUT now: settling, drift and noise included.</summary>
     public double MeasureVolts()
     {
+        if (DvmAt == DvmPoint.RefExtTee)
+            return ExternalSourceVolts + Noise(ExternalSourceVolts, Scenario.NoiseFloorVolts);
         var value = Blend(OutputVolts(_previous), OutputVolts(_state));
         return value * Drift() + Noise(value, Scenario.NoiseFloorVolts);
     }
@@ -100,8 +143,8 @@ public sealed class Simulated11683A
 
     private double OutputVolts(State s)
     {
-        if (s.Function == FunctionSwitch.Standby || s.Reference == ReferenceSwitch.Ext)
-            return 0.4e-6;   // grounded output: a thermal EMF of a few tenths of a µV
+        if (s.Function == FunctionSwitch.Standby || s.Reference == ReferenceSwitch.Ext || !LinePowered)
+            return 0.4e-6;   // grounded or unpowered output: a thermal EMF of a few tenths of a µV
         var v = SettledVolts(s.Range);
         return s.Polarity == PolaritySwitch.Reverse ? -v : v;
     }

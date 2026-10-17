@@ -29,6 +29,14 @@ public class PdfReportTests
     }
 
     [Fact]
+    public void A_run_with_part_4_renders()
+    {
+        var run = ResultsFileTests.SampleRun() with { Part4 = ResultsFileTests.SamplePart4() };
+        Assert.True(PdfReport.Generate(run).Length > 10_000);
+        Assert.True(PdfReport.Generate(run with { Part1 = null, Part2 = null }).Length > 5_000);
+    }
+
+    [Fact]
     public void Regeneration_from_a_saved_results_file_writes_the_pdf_beside_it()
     {
         var directory = Path.Combine(Path.GetTempPath(), "11683A-Verify-tests", Guid.NewGuid().ToString("N"));

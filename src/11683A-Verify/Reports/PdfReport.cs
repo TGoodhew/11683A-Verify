@@ -58,6 +58,8 @@ public static class PdfReport
                     column.Item().Element(c => Part1(c, p1, run.Settings));
                 if (run.Part2 is { } p2)
                     column.Item().Element(c => Part2(c, p2, run.Settings));
+                if (run.Part4 is { } p4)
+                    column.Item().Element(c => Part4(c, p4));
                 column.Item().Element(c => UncertaintyNotes(c, run));
                 column.Item().Element(c => Notes(c, run));
                 column.Item().Element(Signatures);
@@ -304,6 +306,59 @@ public static class PdfReport
         });
     });
 
+    private static void Part4(IContainer container, Part4Result result) => container.Column(c =>
+    {
+        Section(c, "Part 4: Option H01 REF EXT transfer check (indication only)", result.Source);
+        c.Item().PaddingBottom(3).Text($"Power meter: {result.PowerMeter}.").FontSize(7.5f);
+        c.Item().Table(table =>
+        {
+            table.ColumnsDefinition(cols =>
+            {
+                cols.RelativeColumn(1.3f);
+                cols.RelativeColumn();
+                cols.RelativeColumn();
+                cols.RelativeColumn();
+                cols.RelativeColumn();
+                cols.RelativeColumn(1.4f);
+                cols.ConstantColumn(60);
+            });
+            table.Header(h =>
+            {
+                foreach (var t in new[] { "Step", "DC calibrator", "Expected", "Power meter", "Difference", "Limits", "" })
+                    h.Cell().Element(HeaderCell).Text(t);
+            });
+            void Row(string step, string source, string expected, string reading, string difference, string limits, bool? within)
+            {
+                table.Cell().Element(BodyCell).Text(step);
+                table.Cell().Element(BodyCell).AlignRight().Text(source);
+                table.Cell().Element(BodyCell).AlignRight().Text(expected);
+                table.Cell().Element(BodyCell).AlignRight().Text(reading).SemiBold();
+                table.Cell().Element(BodyCell).AlignRight().Text(difference);
+                table.Cell().Element(BodyCell).Text(limits);
+                var mark = table.Cell().Element(BodyCell).Text(within is null ? "" : within.Value ? "within" : "outside");
+                mark.FontColor(within == false ? Colors.Orange.Darken2 : Colors.Green.Darken2);
+            }
+            if (result.Transfer is { } t)
+            {
+                Row("REF INT, RANGE 1 mW", "—", "", Si.Format(t.IntWatts, "W", 6), "", "", null);
+                Row("REF EXT, RANGE 100 mW", Si.Format(t.AppliedVolts, "V", 7), Si.Format(t.IntWatts, "W", 6), Si.Format(t.ExtWatts, "W", 6),
+                    Percent(t.Agreement), $"±{Percent(t.Tolerance, false)} of the INT reading", t.WithinTolerance);
+            }
+            foreach (var p in result.TablePoints)
+                Row("Table 2-4", Si.Format(p.AppliedVolts, "V", 6), Si.Format(p.Row.EffectiveWatts, "W", 5), Si.Format(p.ReadingWatts, "W", 6),
+                    Percent(p.Deviation), $"{Si.Format(p.Row.LowerWatts, "W", 5)} – {Si.Format(p.Row.UpperWatts, "W", 5)}", p.WithinLimits);
+        });
+        var notes = result.Notes.ToList();
+        if (result.Transfer is { } tr)
+            notes.Insert(0, $"The EXT step fed REF EXT with the 1 mW DC REFERENCE OUTPUT voltage ({Si.Format(tr.TargetVolts, "V", 7)}); the difference is "
+                + "corrected for the DC calibrator's small offset from it (raw " + Percent(tr.RawAgreement) + "). Table 2-4 relates 144.93 mV to 1 mW, "
+                + "so about +0.05% is expected at 145.00 mV.");
+        PartNotes(c, notes, unsettled: false);
+    });
+
+    private static string Percent(double fraction, bool signed = true) =>
+        (fraction * 100).ToString(signed ? "+0.000;-0.000" : "0.0##", CultureInfo.InvariantCulture) + "%";
+
     private static void UncertaintyNotes(IContainer container, VerificationRun run) => container.Column(c =>
     {
         var s = run.Settings;
@@ -353,12 +408,16 @@ public static class PdfReport
 
     private static void Section(ColumnDescriptor column, string title, string? source = null)
     {
+        // A short citation sits beside the title; a long one gets its own line so the title is not squeezed.
+        var beside = source is { Length: <= 80 };
         column.Item().PaddingBottom(2).BorderBottom(0.75f).BorderColor(Rule).Row(row =>
         {
             row.RelativeItem().Text(title).FontSize(10).Bold().FontColor(Accent);
-            if (source is not null)
-                row.AutoItem().AlignBottom().Text(source).FontSize(7).FontColor(Colors.Grey.Darken1);
+            if (beside)
+                row.AutoItem().AlignBottom().Text(source!).FontSize(7).FontColor(Colors.Grey.Darken1);
         });
+        if (source is not null && !beside)
+            column.Item().Text(source).FontSize(7).FontColor(Colors.Grey.Darken1);
     }
 
     private static void PartNotes(ColumnDescriptor column, IEnumerable<string> notes, bool unsettled)

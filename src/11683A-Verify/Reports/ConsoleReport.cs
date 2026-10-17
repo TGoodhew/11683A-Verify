@@ -111,6 +111,26 @@ public static class ConsoleReport
         Overall("Part 2", result.Verdict, result.Complete);
     }
 
+    public static void Part4(Part4Result result)
+    {
+        var table = new Table().Border(TableBorder.Rounded).Title("[bold]Part 4: Option H01 REF EXT (indication)[/]")
+            .AddColumn("Step").AddColumn(new TableColumn("DC calibrator").RightAligned()).AddColumn(new TableColumn("Expected").RightAligned())
+            .AddColumn(new TableColumn("Power meter").RightAligned()).AddColumn(new TableColumn("Difference").RightAligned()).AddColumn("Limits").AddColumn("");
+        if (result.Transfer is { } t)
+        {
+            table.AddRow("INT, 1 mW", "—", "", Si.Format(t.IntWatts, "W", 6), "", "", "");
+            table.AddRow("EXT, 1 mW voltage", Si.Format(t.AppliedVolts, "V", 7), Si.Format(t.IntWatts, "W", 6), Si.Format(t.ExtWatts, "W", 6),
+                Percent(t.Agreement), $"±{Percent(t.Tolerance, false)}", t.WithinTolerance ? "[green]within[/]" : "[yellow]outside[/]");
+        }
+        foreach (var p in result.TablePoints)
+            table.AddRow("Table 2-4", Si.Format(p.AppliedVolts, "V", 6), Si.Format(p.Row.EffectiveWatts, "W", 5), Si.Format(p.ReadingWatts, "W", 6),
+                Percent(p.Deviation), $"{Si.Format(p.Row.LowerWatts, "W", 5)}–{Si.Format(p.Row.UpperWatts, "W", 5)}",
+                p.WithinLimits ? "[green]within[/]" : "[yellow]outside[/]");
+        AnsiConsole.Write(table);
+        AnsiConsole.MarkupLine($"[grey]Power meter: {Markup.Escape(result.PowerMeter)}[/]");
+        Notes(result.Notes);
+    }
+
     /// <summary>The closing summary: each part, the overall verdict, TUR flags, conditions and where the results went.</summary>
     public static void Summary(VerificationRun run, string? resultsPath)
     {
@@ -132,6 +152,9 @@ public static class ConsoleReport
         else
             grid.AddRow("[grey]Part 2[/]", "[grey]not run[/]");
 
+        if (run.Part4 is { } p4)
+            grid.AddRow("[grey]Part 4 (H01)[/]", (p4.AllWithin ? "[green]within[/]" : "[yellow]outside[/]")
+                + (p4.Transfer is { } t ? $" [grey]EXT/INT {Markup.Escape(Percent(t.Agreement))}; indication only[/]" : " [grey]indication only[/]"));
         if (run.Part1?.SupplyAdjustmentRecommended == true)
             grid.AddRow("", "[yellow]Power Supply Adjustment (A2R1) recommended, then repeat Part 1.[/]");
         if (resultsPath is not null)
@@ -186,6 +209,9 @@ public static class ConsoleReport
         var head = !complete && verdict != Verdict.Fail ? "[yellow bold]INCOMPLETE[/]" : ConsoleUi.VerdictMarkup(verdict);
         return $"{head}  [grey]{Markup.Escape(counts)}{(lowTur > 0 ? $"; {lowTur} below the TUR threshold" : "")}[/]";
     }
+
+    private static string Percent(double fraction, bool signed = true) =>
+        (fraction * 100).ToString(signed ? "+0.000;-0.000" : "0.0##", CultureInfo.InvariantCulture) + "%";
 
     private static void Unsettled(IEnumerable<MeasuredPoint> points)
     {
