@@ -16,9 +16,9 @@ C# / .NET 10 (x64), NI-VISA, Spectre.Console, QuestPDF (step 3). MIT licence.
 | Step | Issues | State |
 |---|---|---|
 | 1. DVM drivers, spec tables, simulation | #1–#4 | Merged; bench check still to do |
-| 2. Range auto-detection, Part 1 (volts/ratios), Part 2 (4-wire ohms) | #5–#7 | **Ready for the bench** |
-| 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | Done |
-| 4. Part 3 supply-adjustment assist, Part 4 H01 REF EXT check | #13–#15 | In progress: #13, #14 done |
+| 2. Range auto-detection, Part 1 (volts/ratios), Part 2 (4-wire ohms) | #5–#7 | Done; bench checks below |
+| 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | Done; bench checks below |
+| 4. Part 3 supply-adjustment assist, Part 4 H01 REF EXT check | #13–#15 | Done; bench checks below |
 
 ## Build and run
 
@@ -297,6 +297,30 @@ Accuracy Test Procedure 2 (pp. 2-11 to 2-14, PDF pp. 51–54). For the details, 
 The PDF report (step 3) uses QuestPDF under its **Community** licence. That licence is free for
 individuals and for organisations with less than US $1M in annual gross revenue.
 
+## Simulation
+
+Every command runs without hardware with `--simulate[=scenario]`. The simulator provides a simulated 11683A
+(knobs, settling, noise, drift, A2R1, REF EXT), a simulated 34401A that measures it with the real reading
+times, and, for Part 4, a simulated power meter with zero and CAL. The app turns the simulated knobs itself.
+Every result is marked SIMULATED in the console, the JSON and the PDF, and an actuals export from a simulated
+run is flagged so it can't be used.
+
+| Scenario | What it does | Try it with |
+|---|---|---|
+| `nominal` | Every range at the centre of its limits; 1 ppm noise. | `verify --simulate --part4` |
+| `supply-low` | Supply 2% low: 1 mW about 142.1 mV, so A2R1 needs adjusting. The ratios still pass. | `verify`, then `adjust --simulate=supply-low` |
+| `ratio-fail` | 10 mW 0.6% high: its ratio fails. | `part1 --simulate=ratio-fail` |
+| `ohms-fail` | 3 µW 0.4% high: Part 2 fails. | `part2 --simulate=ohms-fail` |
+| `noisy` | 30 ppm noise: slow to settle, wider σ. | `part1 --simulate=noisy` |
+| `h01-ext-error` | REF EXT path 0.4% high: Part 4's agreement is outside 0.2%. | `part4 --simulate=h01-ext-error` |
+| `drifting` | Outputs drift 15 ppm/min, as if not warmed up. | `part1 --simulate=drifting` |
+
+- **Part 3:** in `adjust --simulate=...`, ↑/↓ turn the simulated A2R1 in coarse steps and ←/→ in fine steps.
+  The live view needs a real console.
+- **Part 4:** the simulated power meter zeroes and CALs itself at the right moments. The simulated DC
+  calibrator lands 3 ppm off each target, so the offset correction is exercised. The DVM is moved to the
+  REF EXT tee and back.
+
 ## Step 1: what to try on the bench
 
 1. Create `appsettings.local.json` with the 34401A's GPIB address, serial and calibration date.
@@ -331,3 +355,30 @@ Do the Step 1 check above first, if you haven't already.
      `CONF:FRES` command.
 6. Send back the session log (`results\logs\verify_*.log`) and a screenshot or copy of the two results
    tables.
+
+## Steps 3 and 4: what to try on the bench
+
+**Part 3, the Power Supply Adjustment assist.** This is a covers-off adjustment. Do it only if Part 1
+recommends it.
+
+1. Run `11683A-Verify adjust`. Accept the warning, then set RANGE 1 mW and FUNCTION CALIBRATE, with the DVM on
+   DC REFERENCE OUTPUT.
+2. Check that the large digits follow the output at about 2.5 readings a second, and that the gauge pointer
+   moves as A2R1 is turned. It turns green within ±0.2 mV of 145.00 mV.
+3. Press Enter. Accept the Part 1 rerun after refitting the cover. The 1 mW voltage should now read near
+   145.00 mV.
+
+Even without adjusting anything, it's worth running `adjust` once on the bench just to watch the live view:
+decline the adjustment by pressing Enter straight away, then decline the rerun.
+
+**Part 4, the Option H01 check.** It needs a power meter and an 11730A cable.
+
+1. In `appsettings.local.json`, set `powerMeter.model` (`E4418B`, `437B`, `438A` or `manual`) and
+   `powerMeter.resource`.
+2. Run `11683A-Verify part4` and follow the prompts. The procedure is in the Part 4 section above.
+3. With a bus meter, check the session log: the identity reply and the reading commands. These drivers
+   have not run against a real meter yet.
+4. Check the EXT/INT agreement. About +0.05% is expected at 145.00 mV.
+5. Optionally run the Table 2-4 rows. Each should be within the table's limits.
+
+Send back the session logs (`results\*.log`) and the PDFs.

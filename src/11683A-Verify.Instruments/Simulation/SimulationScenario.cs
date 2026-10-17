@@ -68,6 +68,12 @@ public sealed record SimulationScenario
         },
         new()
         {
+            Name = "h01-ext-error",
+            Description = "Option H01 REF EXT path 0.4% high: Part 4's EXT/INT agreement is about +0.45%, outside 0.2%.",
+            ExtTransferError = 0.004,
+        },
+        new()
+        {
             Name = "drifting",
             Description = "Outputs drift 15 ppm per minute, as if the 11683A had not warmed up.",
             DriftPpmPerMinute = 15,
