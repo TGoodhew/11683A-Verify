@@ -17,7 +17,7 @@ C# / .NET 10 (x64), NI-VISA, Spectre.Console, QuestPDF (step 3). MIT licence.
 |---|---|---|
 | 1. DVM drivers, spec tables, simulation | #1–#4 | **Ready for the bench** |
 | 2. Range auto-detection, Part 1 (volts/ratios), Part 2 (4-wire ohms) | #5–#7 | In progress: #5 done |
-| 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | Not started |
+| 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | In progress: #8 done |
 | 4. Part 3 supply-adjustment assist, Part 4 H01 REF EXT check | #13–#15 | Not started |
 
 ## Build and run
@@ -151,6 +151,10 @@ Uncertainty for each point:
   - PASS: value ± U is entirely inside the limits.
   - FAIL: value ± U is entirely outside them.
   - Otherwise INDETERMINATE.
+  - The report also shows simple acceptance (inside the limits or not, ignoring U) alongside each verdict.
+- k, the ratio combination and the TUR threshold are under `uncertainty` in `appsettings.json`.
+- `11683A-Verify spec-table` shows the TUR the DVM's spec alone allows at every test point. With a 34401A
+  on its 1-year spec, the lowest is about 8:1, at 3 µW in Part 2. Every Part 1 ratio is 15:1 or better.
 
 For the 3458A, the spec table includes two footnote adders: the "no MATH NULL, fixed range < 4 min"
 adder and Keysight's factory traceability adder. Both are marked as applied in the data file. The
