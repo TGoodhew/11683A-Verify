@@ -2,6 +2,8 @@ using Spectre.Console;
 using Verify11683A.Calibrator;
 using Verify11683A.Formatting;
 using Verify11683A.Instruments.Dvm;
+using Verify11683A.Instruments.Measurement;
+using Verify11683A.Measurement;
 using Verify11683A.Specs;
 
 namespace Verify11683A.App.Commands;
@@ -24,9 +26,6 @@ public static class DvmCheckCommand
         (DvmFunction.FourWireResistance, 1e3),
         (DvmFunction.FourWireResistance, 1e4),
     ];
-
-    private const int SettleMaxReadings = 10;
-    private const double SettleTolerance = 20e-6;
 
     public static int Run(AppConfig config, CommandLine options)
     {
@@ -138,56 +137,40 @@ public static class DvmCheckCommand
             Prompt("Press Enter when set");
         }
 
-        var configuration = dvm.Configure(DvmFunction.DcVoltage, 1, config.Measurement.Nplc);
-        var readings = new List<double>();
-        var settled = false;
-        AnsiConsole.Progress()
-            .Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new SpinnerColumn())
-            .Start(ctx =>
-            {
-                // A simple wait for the output to settle after the knob was turned: two consecutive readings within
-                // 20 ppm, giving up after 10. The full settling detector replaces this in step 2.
-                var settle = ctx.AddTask("Waiting for the output to settle", maxValue: SettleMaxReadings);
-                double? previous = null;
-                for (var i = 0; i < SettleMaxReadings && !settled; i++)
-                {
-                    var r = dvm.Read();
-                    bench.Log.Write($"1 mW settling reading {i + 1}: {r.Value}{(r.Overload ? " (overload)" : "")}");
-                    settled = !r.Overload && previous is { } p && Math.Abs(r.Value - p) <= SettleTolerance * Math.Abs(r.Value);
-                    previous = r.Overload ? null : r.Value;
-                    settle.Increment(1);
-                }
-                settle.Value = SettleMaxReadings;
-
-                var task = ctx.AddTask($"{count} readings, 1 V range, NPLC {config.Measurement.Nplc}", maxValue: count);
-                for (var i = 0; i < count; i++)
-                {
-                    var r = dvm.Read();
-                    bench.Log.Write($"1 mW reading {i + 1}: {r.Value}{(r.Overload ? " (overload)" : "")}");
-                    if (!r.Overload)
-                        readings.Add(r.Value);
-                    task.Increment(1);
-                }
-            });
-
-        if (!settled)
-            AnsiConsole.MarkupLine("[yellow]The output did not settle to 20 ppm within 10 readings; the readings below may still be moving.[/]");
-        if (readings.Count == 0)
+        // Only the 1 mW point is expected, so any other setting shows up as a warning.
+        var detector = new RangeDetector(DvmFunction.DcVoltage, [new ExpectedValue(point.Range, limits.NominalPart1Volts(point.Range))]);
+        PointAcquisition result = null!;
+        AnsiConsole.Status().Start("Detecting the range", ctx =>
         {
-            AnsiConsole.MarkupLine("[red]✗ Every reading overloaded the 1 V range. Check RANGE is 1 mW and FUNCTION is CALIBRATE.[/]");
+            result = new PointAcquirer(dvm, detector, config.Measurement.Settling(DvmFunction.DcVoltage), config.Measurement.Nplc, count)
+            {
+                Log = m => bench.Log.Write("1 mW " + m),
+                Progress = p => ctx.Status(p.Phase switch
+                {
+                    AcquisitionPhase.Scouting => $"Detecting the range: {Si.Format(p.Reading.Value, "V", 5)}",
+                    AcquisitionPhase.Settling => $"Waiting for the output to settle: reading {p.Done}, {Si.Format(p.Reading.Value, "V", 7)}",
+                    _ => $"Reading {p.Done} of {p.Total}, 1 V range, NPLC {config.Measurement.Nplc}: {Si.Format(p.Reading.Value, "V", 7)}",
+                }),
+            }.Acquire(allowUnsettled: true);
+        });
+
+        if (result.Outcome != AcquisitionOutcome.Measured)
+        {
+            AnsiConsole.MarkupLine($"[red]✗ {Markup.Escape(result.Message)}.[/] Check RANGE is 1 mW and FUNCTION is CALIBRATE.");
             return 1;
         }
+        if (!result.Settled)
+            AnsiConsole.MarkupLine($"[yellow]The output did not settle to ±{config.Measurement.SettlingBandPpm} ppm; the readings below may still be moving.[/]");
 
-        var mean = readings.Average();
-        var sigma = readings.Count > 1
-            ? Math.Sqrt(readings.Sum(v => (v - mean) * (v - mean)) / (readings.Count - 1))
-            : 0;
-        var spec = specs.Limit(DvmFunction.DcVoltage, configuration.Range, mean, config.Dvm.Period, ambientC);
+        var stats = result.Statistics!;
+        var mean = stats.Mean;
+        var sigma = stats.StandardDeviation;
+        var spec = specs.Limit(DvmFunction.DcVoltage, result.Configuration!.Range, mean, config.Dvm.Period, ambientC);
         var inLimits = mean >= point.VoltsMin && mean <= point.VoltsMax;
 
         var grid = new Grid().AddColumn().AddColumn();
         grid.AddRow("[grey]Mean[/]", $"[bold]{Si.Format(mean, "V", 6)}[/]");
-        grid.AddRow("[grey]σ (n = " + readings.Count + ")[/]", $"{Si.Format(sigma, "V", 3)} ({Si.Ppm(sigma / Math.Abs(mean))})");
+        grid.AddRow("[grey]σ (n = " + stats.Count + ")[/]", $"{Si.Format(sigma, "V", 3)} ({Si.Ppm(sigma / Math.Abs(mean))})");
         grid.AddRow($"[grey]{Markup.Escape(specs.Model)} {spec.Period.Key()} spec[/]",
             $"±{Si.Format(spec.Total, "V", 3)} ({Si.Ppm(spec.Relative)})"
             + (spec.TemperatureError > 0 ? $" incl. ±{Si.Format(spec.TemperatureError, "V", 2)} temperature" : ""));

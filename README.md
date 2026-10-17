@@ -16,7 +16,7 @@ C# / .NET 10 (x64), NI-VISA, Spectre.Console, QuestPDF (step 3). MIT licence.
 | Step | Issues | State |
 |---|---|---|
 | 1. DVM drivers, spec tables, simulation | #1–#4 | **Ready for the bench** |
-| 2. Range auto-detection, Part 1 (volts/ratios), Part 2 (4-wire ohms) | #5–#7 | Not started |
+| 2. Range auto-detection, Part 1 (volts/ratios), Part 2 (4-wire ohms) | #5–#7 | In progress: #5 done |
 | 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | Not started |
 | 4. Part 3 supply-adjustment assist, Part 4 H01 REF EXT check | #13–#15 | Not started |
 
@@ -102,6 +102,28 @@ pp. 7–8 (PDF pp. 18–19). All limits are in [`data/limits-11683A.json`](data/
 | 2 | STANDBY | 4-wire ohms from 300 µW down to 3 µW | 3143.3–3157.1 Ω, … , 31.580–31.718 Ω |
 | 3 | 1 mW, CALIBRATE, covers off | Adjust A2R1 for 145.00 ± 2.00 mV | Adjustment, optional |
 | 4 | REF EXT, LINE unplugged | Transfer check against a power meter (E4418B Service Guide, Procedure 2) | Informational |
+
+## How a point is measured
+
+The operator sets the knobs; the app works out which range is selected.
+
+1. **Detect.** Quick scout readings at NPLC 1 start on the highest DVM range the test needs and step down until the
+   reading is on scale. Once they have agreed to 1% for 2 s, the reading is matched to the nearest expected value:
+   a Part 1 voltage or a Part 2 resistance. Within ±10% counts as a match. The ranges are √10 steps apart, so a
+   range that fails its limits is still recognised. Anything else is a **warning, never a result**:
+   - about 0 V: FUNCTION is in STANDBY, or REF is on EXT;
+   - a negative reading: POLARITY is REVERSE (in ohms: the output is live);
+   - not close to any expected value: check RANGE (in ohms: also check FUNCTION is in STANDBY);
+   - overload in ohms: open circuit, so check the cable.
+2. **Range.** The DVM goes to the fixed range for the detected value. It re-detects if a reading lands near either
+   end of that range.
+3. **Settle.** Every reading over the last 10 s, and at least three of them, must be within ±20 ppm of their
+   mean. The band has floors of 2 µV and 2 mΩ. A point that hasn't settled after 2 minutes is reported, and the
+   operator can measure it anyway; it is then flagged as not settled. These defaults are in `measurement` in
+   `appsettings.json`.
+4. **Measure.** N readings are taken (`readingsPerPoint`). If one leaves the band around the readings just
+   before it, the point is abandoned and detected again: a knob was turned. The band widens to 5σ for a point
+   measured unsettled, so noise alone can't abandon it.
 
 **FET Balance Adjustment (not implemented).** The manual's FET Balance Adjustment (para 48–51, p. 8) is
 needed only after the U1 assembly is replaced, or after the A3A1–A3J1 wires have moved. It needs an
