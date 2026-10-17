@@ -18,6 +18,7 @@ public static class Part1Command
         var path = session.Save(run);
         Spectre.Console.AnsiConsole.WriteLine();
         ConsoleReport.Summary(run, path);
+        session.OfferActualsExport(path);
         ConsoleUi.SessionLogLine(session.Log);
         return result.Complete && result.Verdict == Verdict.Pass ? 0 : 1;
     }

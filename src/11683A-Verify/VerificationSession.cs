@@ -244,6 +244,27 @@ public sealed class VerificationSession : IDisposable
         return path;
     }
 
+    /// <summary>
+    /// After a passing run, offers to write 11683A-actuals.json for the power meter app, from the results file exactly
+    /// as saved.
+    /// </summary>
+    public void OfferActualsExport(string resultsPath)
+    {
+        var json = File.ReadAllText(resultsPath);
+        var run = ResultsFile.Deserialize(json);
+        if (CalibratorActuals.WhyNotExportable(run) is { } reason)
+        {
+            Log.Write($"Actuals not offered: {reason}");
+            return;
+        }
+        if (!ConsoleUi.Confirm($"Write the measured values to {CalibratorActuals.FileName} for the power meter app?"))
+            return;
+        var path = CalibratorActuals.From(run, Path.GetFileName(resultsPath), json).Save(Config.ResultsDirectory);
+        Log.Write($"Actuals written to {Path.GetFullPath(path)}");
+        AnsiConsole.MarkupLine($"[grey]Actuals: {Markup.Escape(Path.GetFullPath(path))}"
+            + (run.Conditions.SimulationScenario is null ? "" : " [yellow](marked simulated)[/]") + "[/]");
+    }
+
     private static IReadOnlyList<string> AskNotes()
     {
         if (!ConsoleUi.Interactive)
