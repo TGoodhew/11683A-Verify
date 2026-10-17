@@ -21,6 +21,21 @@ try
         return 0;
     }
 
+    if (options.ExportActuals is { } source)
+    {
+        var text = File.ReadAllText(source);
+        var run = Verify11683A.Results.ResultsFile.Deserialize(text);
+        if (Verify11683A.Results.CalibratorActuals.WhyNotExportable(run) is { } reason)
+        {
+            AnsiConsole.MarkupLine($"[red]Not exported: {Markup.Escape(reason)}[/]");
+            return 1;
+        }
+        var directory = Path.GetDirectoryName(Path.GetFullPath(source))!;
+        var written = Verify11683A.Results.CalibratorActuals.From(run, Path.GetFileName(source), text).Save(directory);
+        AnsiConsole.MarkupLine($"Actuals written: {Markup.Escape(written)}");
+        return 0;
+    }
+
     var config = AppConfig.Load(options.ConfigPath);
     options.ApplyTo(config);
 

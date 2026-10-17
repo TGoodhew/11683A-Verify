@@ -19,6 +19,9 @@ public sealed class CommandLine
     /// <summary>A results file to rebuild the PDF report from (--regen-pdf).</summary>
     public string? RegeneratePdf { get; private set; }
 
+    /// <summary>A results file to write 11683A-actuals.json from (--export-actuals).</summary>
+    public string? ExportActuals { get; private set; }
+
     public bool IsSimulation => SimulateScenario is not null;
 
     public const string Usage = """
@@ -47,6 +50,9 @@ public sealed class CommandLine
                                Asked for at the start of a test if not given.
           --skip-warmup        Don't ask about or time the warm-up (it is then not recorded).
           --regen-pdf <json>   Rebuild the PDF report from a saved results file, beside it, and exit.
+          --export-actuals <json>
+                               Write 11683A-actuals.json (for the power meter app) beside a saved, passing
+                               results file, and exit.
           --config <path>      appsettings.json to use.
           -h, --help           This help.
         """;
@@ -83,6 +89,9 @@ public sealed class CommandLine
                     break;
                 case "--ambient":
                     result.AmbientC = double.Parse(Value(), System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+                case "--export-actuals":
+                    result.ExportActuals = Value();
                     break;
                 case "--regen-pdf":
                     result.RegeneratePdf = Value();

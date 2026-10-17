@@ -37,6 +37,7 @@ public static class VerifyCommand
         var path = session.Save(run);
         AnsiConsole.WriteLine();
         ConsoleReport.Summary(run, path);
+        session.OfferActualsExport(path);
         ConsoleUi.SessionLogLine(session.Log);
         return run.Complete && run.Verdict == Verdict.Pass ? 0 : 1;
     }

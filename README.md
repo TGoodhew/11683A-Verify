@@ -17,7 +17,7 @@ C# / .NET 10 (x64), NI-VISA, Spectre.Console, QuestPDF (step 3). MIT licence.
 |---|---|---|
 | 1. DVM drivers, spec tables, simulation | #1–#4 | Merged; bench check still to do |
 | 2. Range auto-detection, Part 1 (volts/ratios), Part 2 (4-wire ohms) | #5–#7 | **Ready for the bench** |
-| 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | In progress: #8–#11 done |
+| 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | Done |
 | 4. Part 3 supply-adjustment assist, Part 4 H01 REF EXT check | #13–#15 | Not started |
 
 ## Build and run
@@ -153,6 +153,12 @@ same minute gets `-2`. The JSON holds everything the report needs, so a report c
 
 A simulated run is stamped "SIMULATED: not a calibration record". `--regen-pdf <json>` rebuilds the PDF
 from a saved results file alone.
+
+**Actuals for the power meter app.** After a passing run, the app offers to write
+**`results\11683A-actuals.json`**. It holds the measured ratios, voltages and resistances, each with its U and
+its deviation from the manual's nominal, so a power meter test can use the calibrator's actual output
+instead of the nominal one. See [docs/actuals-format.md](docs/actuals-format.md).
+`--export-actuals <json>` writes it from a saved results file.
 
 The format is versioned (`"schema": "11683A-Verify/results/1"`), and a file with an unknown schema is refused.
 
