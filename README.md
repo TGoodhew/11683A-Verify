@@ -17,7 +17,7 @@ C# / .NET 10 (x64), NI-VISA, Spectre.Console, QuestPDF (step 3). MIT licence.
 |---|---|---|
 | 1. DVM drivers, spec tables, simulation | #1–#4 | Merged; bench check still to do |
 | 2. Range auto-detection, Part 1 (volts/ratios), Part 2 (4-wire ohms) | #5–#7 | **Ready for the bench** |
-| 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | In progress: #8 done |
+| 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | In progress: #8, #10 done |
 | 4. Part 3 supply-adjustment assist, Part 4 H01 REF EXT check | #13–#15 | Not started |
 
 ## Build and run
@@ -108,6 +108,23 @@ pp. 7–8 (PDF pp. 18–19). All limits are in [`data/limits-11683A.json`](data/
 | 2 | STANDBY | 4-wire ohms from 300 µW down to 3 µW | 3143.3–3157.1 Ω, … , 31.580–31.718 Ω |
 | 3 | 1 mW, CALIBRATE, covers off | Adjust A2R1 for 145.00 ± 2.00 mV | Adjustment, optional |
 | 4 | REF EXT, LINE unplugged | Transfer check against a power meter (E4418B Service Guide, Procedure 2) | Informational |
+
+## Results files
+
+Each `verify`, `part1` or `part2` run saves **`results\11683A_<serial>_<yyyyMMdd-HHmm>.json`**. A copy of the
+session log, which holds every bus exchange, is saved beside it with the same name. A second run in the
+same minute gets `-2`. The JSON holds everything the report needs, so a report can be rebuilt from it alone:
+
+- the unit, and the DVM: its identity reply, serial, firmware, calibration date and calibration state;
+- the conditions (ambient, warm-up, and the simulation scenario if any) and every measurement and
+  uncertainty setting;
+- the limits file and the DVM spec table: each file's name, its stated source, and the SHA-256 of exactly
+  what was loaded;
+- for every point: each raw reading with its time, the DVM range, NPLC and input resistance, whether it
+  settled, the uncertainty budget, the ratio, the TUR and the verdict;
+- the Part 2 safety-check readings.
+
+The format is versioned (`"schema": "11683A-Verify/results/1"`), and a file with an unknown schema is refused.
 
 ## How a point is measured
 

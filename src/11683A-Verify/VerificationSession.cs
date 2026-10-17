@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Reflection;
 using Spectre.Console;
 using Verify11683A.Calibrator;
 using Verify11683A.Formatting;
@@ -42,6 +43,9 @@ public sealed class VerificationSession : IDisposable
     public UncertaintyConvention Convention { get; }
     public SpecPeriod Period => Config.Dvm.Period;
     public double? AmbientC { get; set; }
+
+    /// <summary>How long the 11683A had been warming up when the test started, if known.</summary>
+    public double? WarmupMinutes { get; set; }
     public DateTimeOffset Started { get; }
     public SessionLog Log => Bench.Log;
 
@@ -155,6 +159,42 @@ public sealed class VerificationSession : IDisposable
         });
         acquirer.Progress = null;
         return result;
+    }
+
+    /// <summary>Everything this session produced, ready to save.</summary>
+    public VerificationRun CreateRun(Part1Result? part1, Part2Result? part2, IReadOnlyList<string>? notes = null)
+    {
+        var m = Config.Measurement;
+        var c = Config.Calibrator;
+        return new VerificationRun
+        {
+            AppVersion = typeof(VerificationSession).Assembly
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "",
+            Started = Started,
+            Finished = Bench.Clock.Now,
+            Company = Config.Company,
+            Operator = Config.Operator,
+            Unit = new UnitUnderTest(c.Model, c.Serial, c.Options),
+            Dvm = new DvmRecord(DvmDetails, Dvm.ResourceName, Identity.Raw, DvmDetails.StateOn(DateOnly.FromDateTime(Started.Date))),
+            Conditions = new TestConditions(AmbientC, WarmupMinutes, Bench.Simulator?.Scenario.Name),
+            Settings = new RunSettings(m.Nplc, m.ReadingsPerPoint, m.LineFrequencyHz, m.SettlingBandPpm, m.SettlingHoldSeconds,
+                m.SettlingTimeoutSeconds, Period, Convention),
+            Limits = DataFileVersion.Of(DataFiles.Resolve(DataFiles.LimitsFileName), Limits.Source),
+            SpecTable = DataFileVersion.Of(DataFiles.Resolve(DataFiles.SpecFileName(Specs.Model)), Specs.Source),
+            Part1 = part1,
+            Part2 = part2,
+            Notes = notes ?? [],
+        };
+    }
+
+    /// <summary>Saves the run as JSON in the results directory, with a copy of the session log beside it.</summary>
+    public string Save(VerificationRun run)
+    {
+        var path = ResultsFile.Save(run, Config.ResultsDirectory);
+        Log.Write($"Results saved to {Path.GetFullPath(path)}");
+        Log.SaveCopy(Path.ChangeExtension(path, ".log"));
+        AnsiConsole.MarkupLine($"[grey]Results: {Markup.Escape(Path.GetFullPath(path))} (and the session log beside it)[/]");
+        return path;
     }
 
     public static MeasuredPoint ToMeasured(DvmFunction function, PointAcquisition a)

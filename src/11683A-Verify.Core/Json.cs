@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -13,6 +14,10 @@ public static class Json
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
         WriteIndented = true,
+        // Results files are read by people, not embedded in HTML: keep "Ω", "µ" and "+" as they are.
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        // A TUR is NaN with no limits and ∞ with U = 0; results files must hold both.
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
         Converters = { new JsonStringEnumConverter() },
     };
 

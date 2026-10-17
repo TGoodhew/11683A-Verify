@@ -21,5 +21,17 @@ public sealed class SessionLog : IDisposable
             _writer.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}  {message}");
     }
 
+    /// <summary>Copies the log so far to <paramref name="path"/>, e.g. next to the results file.</summary>
+    public void SaveCopy(string path)
+    {
+        lock (_lock)
+        {
+            _writer.Flush();
+            using var source = new FileStream(Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var target = File.Create(path);
+            source.CopyTo(target);
+        }
+    }
+
     public void Dispose() => _writer.Dispose();
 }
