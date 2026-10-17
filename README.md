@@ -17,7 +17,7 @@ C# / .NET 10 (x64), NI-VISA, Spectre.Console, QuestPDF (step 3). MIT licence.
 |---|---|---|
 | 1. DVM drivers, spec tables, simulation | #1–#4 | Merged; bench check still to do |
 | 2. Range auto-detection, Part 1 (volts/ratios), Part 2 (4-wire ohms) | #5–#7 | **Ready for the bench** |
-| 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | In progress: #8, #9, #10 done |
+| 3. Uncertainty/TUR, console report, JSON, PDF, export | #8–#12 | In progress: #8–#11 done |
 | 4. Part 3 supply-adjustment assist, Part 4 H01 REF EXT check | #13–#15 | Not started |
 
 ## Build and run
@@ -32,6 +32,7 @@ cd src\11683A-Verify\bin\Debug\net10.0
 11683A-Verify part1                     # Part 1 only: DC voltage and ratio test
 11683A-Verify part2                     # Part 2 only: four-wire resistance test
 11683A-Verify wiring                    # wiring diagram and 4-wire cable rules
+11683A-Verify --regen-pdf results\11683A_SG52060005_20261017-1430.json   # rebuild a PDF report
 11683A-Verify dvm-check --simulate      # no hardware; also --simulate=supply-low, ratio-fail,
                                         # ohms-fail, noisy, drifting
 11683A-Verify --help
@@ -140,6 +141,18 @@ same minute gets `-2`. The JSON holds everything the report needs, so a report c
 - for every point: each raw reading with its time, the DVM range, NPLC and input resistance, whether it
   settled, the uncertainty budget, the ratio, the TUR and the verdict;
 - the Part 2 safety-check readings.
+
+**PDF report.** A PDF report (`.pdf`, same name) is written beside the JSON. It contains:
+
+- a title block in the style of the manual's record: model, serial, tested by, date, procedure, conditions;
+- the test equipment and its traceability;
+- the Part 1 and Part 2 tables, laid out like the manual's (Min. / Actual / Max.) and citing its pages,
+  with σ, U, TUR and the verdicts;
+- the uncertainty method, including the note on the 100 V range's 10 MΩ input;
+- operator notes (asked for at the end of a run) and signature lines.
+
+A simulated run is stamped "SIMULATED: not a calibration record". `--regen-pdf <json>` rebuilds the PDF
+from a saved results file alone.
 
 The format is versioned (`"schema": "11683A-Verify/results/1"`), and a file with an unknown schema is refused.
 
