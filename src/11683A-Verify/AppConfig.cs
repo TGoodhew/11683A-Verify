@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Verify11683A.Measurement;
 using Verify11683A.Specs;
 
 namespace Verify11683A.App;
@@ -38,6 +39,22 @@ public sealed class MeasurementConfig
     public double LineFrequencyHz { get; set; } = 60;
     public double Nplc { get; set; } = 100;
     public int ReadingsPerPoint { get; set; } = 10;
+
+    /// <summary>Stability band half-width, ppm of reading (floors of 2 µV and 2 mΩ apply below it).</summary>
+    public double SettlingBandPpm { get; set; } = SettlingCriteria.DefaultBandPpm;
+
+    /// <summary>How long the readings must stay inside the band.</summary>
+    public double SettlingHoldSeconds { get; set; } = 10;
+
+    /// <summary>How long to wait for a point to settle before asking the operator.</summary>
+    public double SettlingTimeoutSeconds { get; set; } = 120;
+
+    public SettlingCriteria Settling(DvmFunction function) => SettlingCriteria.For(function) with
+    {
+        BandPpm = SettlingBandPpm,
+        HoldTime = TimeSpan.FromSeconds(SettlingHoldSeconds),
+        Timeout = TimeSpan.FromSeconds(SettlingTimeoutSeconds),
+    };
 }
 
 public sealed class AppConfig
