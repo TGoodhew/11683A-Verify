@@ -32,6 +32,7 @@ cd src\11683A-Verify\bin\Debug\net10.0
 11683A-Verify part1                     # Part 1 only: DC voltage and ratio test
 11683A-Verify part2                     # Part 2 only: four-wire resistance test
 11683A-Verify part4                     # Part 4: Option H01 REF EXT check (needs a power meter)
+11683A-Verify meter-test --meter 437B   # power meter performance test (435A/B, 436A, 437B, 438A, E4418B)
 11683A-Verify adjust                    # Part 3: Power Supply Adjustment assist (A2R1), then Part 1
 11683A-Verify wiring                    # wiring diagram and 4-wire cable rules
 11683A-Verify --regen-pdf results\11683A_SG52060005_20261017-1430.json   # rebuild a PDF report
@@ -185,6 +186,44 @@ The operator sets the knobs; the app works out which range is selected.
 4. **Measure.** N readings are taken (`readingsPerPoint`). If one leaves the band around the readings just
    before it, the point is abandoned and detected again: a knob was turned. The band widens to 5σ for a point
    measured unsettled, so noise alone can't abandon it.
+
+## Power meter performance tests
+
+`11683A-Verify meter-test`, or *Power meter performance test* in the menu, tests a power meter with the
+11683A. Pick the meter, or name it with `--meter`. Its tests are loaded from **`data/meters/<model>.json`**:
+one file per meter, transcribed from its own manual, with every row's 11683A setting, meter setting, expected
+reading and min/max limits, and the page each one came from.
+
+| Meter | Tests (from the manual) | Readings |
+|---|---|---|
+| HP 435A | Zero Carryover (power sensor), Instrumentation Accuracy | Bench DVM on the rear RECORDER OUTPUT, mVdc |
+| HP 435B | Zero Carryover (power sensor), Instrumentation Accuracy, Calibration Factor | Bench DVM on the RECORDER OUTPUT, mVdc / Vdc |
+| HP 436A | Zero Carryover, Instrument Accuracy (W, dBm, dB REL), Calibration Factor | HP-IB (`9A+T`) for watts; dBm/dB typed in |
+| HP 437B | Zero Carryover, Instrument Accuracy | HP-IB (`LN`, `TR2`) |
+| HP 438A | Zero Carryover, Instrument Accuracy, on channels A and B | HP-IB (`AP`/`BP`, `LN`, `TR2`); dBm/dB typed in |
+| E4418B | Zero Test, Instrument Accuracy Procedure 1, Procedure 2 (H01 + DC calibrator) | SCPI (`UNIT1:POW?`, `FETC1?`) |
+
+How a run goes:
+
+1. Choose the tests. Procedure 2 is only offered on an H01 calibrator, and is off by default.
+2. Enter the meter's serial number, and choose the channels on a 438A.
+3. For each test, the app shows the manual's equipment and set-up steps.
+4. For each row, it shows what to set on the 11683A and on the meter, then takes the reading:
+   - over the bus, at `powerMeter.resource` or `--meter-resource`;
+   - from the DVM, for the 435s, which the manual reads at the RECORDER OUTPUT;
+   - typed in, for displays the bus can't read and for meters without a bus.
+5. Each reading is checked against the manual's limits. Type S to skip a row or a test.
+6. Results go to `results\<model>_<serial>_<stamp>.json`, with a PDF test record in the manual's
+   Min / Actual / Max layout and the session log beside it.
+7. Tests the 11683A can't do, such as the Power Reference Level tests (432A and thermistor mount), are
+   listed on the record as not run.
+
+Where editions or OCR disagree, each file's `ambiguities` list says which value was used and why. The PDF
+repeats those notes. The format is described in [docs/meter-definitions.md](docs/meter-definitions.md),
+so another meter can be added by writing one file.
+
+In simulation (`meter-test --simulate --meter <model>`), a simulated meter follows the simulated 11683A. Readings
+the simulator can't produce (dBm/dB displays) are entered by a "simulated operator" and marked **s**.
 
 ## Part 3: Power Supply Adjustment assist
 

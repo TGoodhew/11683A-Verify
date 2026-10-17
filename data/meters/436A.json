@@ -1,0 +1,627 @@
+{
+  "model": "436A",
+  "manufacturer": "HP",
+  "title": "HP 436A Power Meter",
+  "manual": "436A.pdf: HP 436A Power Meter Operating and Service Manual, 00436-90053, Edition 1 (errata 1988-03-01), Section IV Performance Tests; HP-IB Section III pp. 3-14 to 3-23",
+  "busDriver": "436A",
+  "defaultResource": "GPIB0::13::INSTR",
+  "channels": [
+    "A"
+  ],
+  "warmupMinutes": 30,
+  "notes": [
+    "Over HP-IB the app sends 9A+T (autorange, watts, cal factor disabled, trigger with settling) and reads the 14-character string (Table 3-3, Table 3-4). For the Calibration Factor test it sends 9A-T so the front-panel CAL FACTOR switch applies.",
+    "dBm and dB readings are typed in from the display.",
+    "Common setup: CAL FACTOR 100%, POWER REF off, MODE WATT, RANGE HOLD off; 11683A in STANDBY for 60 s before zeroing."
+  ],
+  "tests": [
+    {
+      "id": "zero-carryover",
+      "title": "Zero Carryover Test",
+      "source": "436A.pdf, para 4-10, pp. 4-2 to 4-3 (PDF pp. 58-59); Table 4-1 p. 4-3; Test Record Table 4-5 p. 4-10 (PDF p. 66)",
+      "reading": "Operator",
+      "equipment": [
+        "HP 11683A Range Calibrator",
+        "Power sensor cable"
+      ],
+      "setup": [
+        "436A: CAL FACTOR 100%, POWER REF off, MODE WATT, RANGE HOLD off. 11683A: FUNCTION STANDBY, POLARITY NORMAL, RANGE 100 µW (Figure 4-1).",
+        "After 60 s in STANDBY, hold SENSOR ZERO until the readout is stable (0.00 ±0.02, ZERO lamp lit), then release it.",
+        "For each row: set the 11683A RANGE, switch FUNCTION to CALIBRATE and check the 436A autoranges to it, set RANGE HOLD on, switch FUNCTION to STANDBY, read, then RANGE HOLD off."
+      ],
+      "points": [
+        {
+          "label": "10 µW (after zero)",
+          "calibrator": {
+            "range": "100uW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Zeroed on the 10 µW range",
+          "expected": 0.0,
+          "unit": "uW",
+          "min": -0.02,
+          "max": 0.02,
+          "note": "The step-4 zero check; it appears as a row in Test Record Table 4-5."
+        },
+        {
+          "label": "100 µW",
+          "calibrator": {
+            "range": "100uW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE HOLD on the 100 µW range",
+          "expected": 0.0,
+          "unit": "uW",
+          "min": -0.2,
+          "max": 0.2
+        },
+        {
+          "label": "1 mW",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE HOLD on the 1 mW range",
+          "expected": 0.0,
+          "unit": "mW",
+          "min": -0.002,
+          "max": 0.002
+        },
+        {
+          "label": "10 mW",
+          "calibrator": {
+            "range": "10mW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE HOLD on the 10 mW range",
+          "expected": 0.0,
+          "unit": "mW",
+          "min": -0.02,
+          "max": 0.02
+        },
+        {
+          "label": "100 mW",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE HOLD on the 100 mW range",
+          "expected": 0.0,
+          "unit": "mW",
+          "min": -0.2,
+          "max": 0.2
+        }
+      ],
+      "notes": [
+        "Spec: ±0.2% of full scale when zeroed on the most sensitive range; noise and drift are included.",
+        "Typed in: the bus read code selects autorange, which would undo RANGE HOLD."
+      ]
+    },
+    {
+      "id": "instrument-accuracy",
+      "title": "Instrument Accuracy Test (Watt, dBm and dB REL)",
+      "source": "436A.pdf, para 4-11, pp. 4-3 to 4-5 (PDF pp. 59-61); Tables 4-2 and 4-3 p. 4-5; Test Record Table 4-5 p. 4-10",
+      "reading": "Meter",
+      "equipment": [
+        "HP 11683A Range Calibrator",
+        "Power sensor cable"
+      ],
+      "setup": [
+        "436A: CAL FACTOR 100%, POWER REF off, MODE WATT, RANGE HOLD off. 11683A: FUNCTION STANDBY, POLARITY NORMAL, RANGE 1 mW (Figure 4-2).",
+        "After 60 s in STANDBY, hold SENSOR ZERO (0.00 ±0.02), then release it.",
+        "11683A FUNCTION CALIBRATE; check the 436A autoranges to 1 mW; adjust CAL ADJ for 1.000 ±0.002 mW.",
+        "Set the 11683A to 3 µW for a few seconds, then step through the rows: each range in WATT, then in dBm, then back to WATT.",
+        "For the dB REL rows: 11683A at -10 dBm (100 µW), press dB [REF], then step to -20, -5 and +10 dBm."
+      ],
+      "points": [
+        {
+          "label": "10 µW (W)",
+          "calibrator": {
+            "range": "10uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE WATT, autorange",
+          "expected": 10.0,
+          "unit": "uW",
+          "min": 9.95,
+          "max": 10.05
+        },
+        {
+          "label": "10 µW (-20 dBm)",
+          "calibrator": {
+            "range": "10uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE dBm",
+          "expected": -20.0,
+          "unit": "dBm",
+          "min": -20.02,
+          "max": -19.98,
+          "reading": "Operator"
+        },
+        {
+          "label": "100 µW (W)",
+          "calibrator": {
+            "range": "100uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE WATT, autorange",
+          "expected": 100.0,
+          "unit": "uW",
+          "min": 99.5,
+          "max": 100.5
+        },
+        {
+          "label": "100 µW (-10 dBm)",
+          "calibrator": {
+            "range": "100uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE dBm",
+          "expected": -10.0,
+          "unit": "dBm",
+          "min": -10.02,
+          "max": -9.98,
+          "reading": "Operator"
+        },
+        {
+          "label": "1 mW (W)",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE WATT, autorange",
+          "expected": 1.0,
+          "unit": "mW",
+          "min": 0.995,
+          "max": 1.005
+        },
+        {
+          "label": "1 mW (+0 dBm)",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE dBm",
+          "expected": 0.0,
+          "unit": "dBm",
+          "min": -0.02,
+          "max": 0.02,
+          "reading": "Operator"
+        },
+        {
+          "label": "3 mW (W)",
+          "calibrator": {
+            "range": "3mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE WATT, autorange",
+          "expected": 3.16,
+          "unit": "mW",
+          "min": 3.14,
+          "max": 3.18,
+          "note": "Row from Table 4-2 (P/O Errata); not in the Test Record."
+        },
+        {
+          "label": "3 mW (+5 dBm)",
+          "calibrator": {
+            "range": "3mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE dBm",
+          "expected": 5.0,
+          "unit": "dBm",
+          "min": 4.98,
+          "max": 5.02,
+          "reading": "Operator"
+        },
+        {
+          "label": "10 mW (W)",
+          "calibrator": {
+            "range": "10mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE WATT, autorange",
+          "expected": 10.0,
+          "unit": "mW",
+          "min": 9.95,
+          "max": 10.05
+        },
+        {
+          "label": "10 mW (+10 dBm)",
+          "calibrator": {
+            "range": "10mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE dBm",
+          "expected": 10.0,
+          "unit": "dBm",
+          "min": 9.98,
+          "max": 10.02,
+          "reading": "Operator"
+        },
+        {
+          "label": "100 mW (W)",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE WATT, autorange",
+          "expected": 100.0,
+          "unit": "mW",
+          "min": 99.5,
+          "max": 100.5
+        },
+        {
+          "label": "100 mW (+20 dBm)",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE dBm",
+          "expected": 20.0,
+          "unit": "dBm",
+          "min": 19.98,
+          "max": 20.02,
+          "reading": "Operator"
+        },
+        {
+          "label": "dB REF at -10 dBm",
+          "calibrator": {
+            "range": "100uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE dB [REF] pressed at -10 dBm",
+          "expected": 0.0,
+          "unit": "dB",
+          "min": -0.01,
+          "max": 0.01,
+          "reading": "Operator"
+        },
+        {
+          "label": "-20 dBm (dB REL)",
+          "calibrator": {
+            "range": "10uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE dB (REL), autorange",
+          "expected": -10.0,
+          "unit": "dB",
+          "min": -10.04,
+          "max": -9.96,
+          "reading": "Operator",
+          "note": "Printed with min/max reversed (-9.96 / -10.04); the Test Record prints the unit as dBm."
+        },
+        {
+          "label": "-5 dBm (dB REL)",
+          "calibrator": {
+            "range": "300uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE dB (REL), autorange",
+          "expected": 5.0,
+          "unit": "dB",
+          "min": 4.96,
+          "max": 5.04,
+          "reading": "Operator"
+        },
+        {
+          "label": "+10 dBm (dB REL)",
+          "calibrator": {
+            "range": "10mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MODE dB (REL), autorange",
+          "expected": 20.0,
+          "unit": "dB",
+          "min": 19.96,
+          "max": 20.04,
+          "reading": "Operator"
+        }
+      ],
+      "notes": [
+        "Spec: WATT ±0.5%, dBm and dB REL ±0.02 dB ±0.001 dB/°C within range (Ranges 1-5).",
+        "The 11683A legends 3 µW, 30 µW, 300 µW, 3 mW and 30 mW are approximations: the true outputs are 3.16, 31.6, 316 µW, 3.16 and 31.6 mW."
+      ]
+    },
+    {
+      "id": "calibration-factor",
+      "title": "Calibration Factor Test",
+      "source": "436A.pdf, para 4-12, pp. 4-6 to 4-7 (PDF pp. 62-63); Table 4-4 p. 4-7; Test Record Table 4-5",
+      "reading": "Meter",
+      "equipment": [
+        "HP 11683A Range Calibrator",
+        "Power sensor cable"
+      ],
+      "setup": [
+        "436A: CAL FACTOR 100%, POWER REF off, MODE WATT, RANGE HOLD off. 11683A: FUNCTION STANDBY, POLARITY NORMAL, RANGE 1 mW (Figure 4-3).",
+        "After 60 s in STANDBY, hold SENSOR ZERO (0.00 ±0.02), then release it.",
+        "11683A FUNCTION CALIBRATE; adjust CAL ADJ for 1.000 ±0.002 mW.",
+        "Turn the CAL FACTOR % switch to each position in turn (the switch cannot be set over the bus). Return it to 100% afterwards."
+      ],
+      "points": [
+        {
+          "label": "CAL FACTOR 100%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 100%",
+          "expected": 1.0,
+          "unit": "mW",
+          "min": 0.994,
+          "max": 1.006,
+          "calFactorPercent": 100,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 99%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 99%",
+          "expected": 1.010101,
+          "unit": "mW",
+          "min": 1.004,
+          "max": 1.016,
+          "calFactorPercent": 99,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 98%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 98%",
+          "expected": 1.020408,
+          "unit": "mW",
+          "min": 1.014,
+          "max": 1.026,
+          "calFactorPercent": 98,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 97%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 97%",
+          "expected": 1.030928,
+          "unit": "mW",
+          "min": 1.025,
+          "max": 1.037,
+          "calFactorPercent": 97,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 96%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 96%",
+          "expected": 1.041667,
+          "unit": "mW",
+          "min": 1.036,
+          "max": 1.048,
+          "calFactorPercent": 96,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 95%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 95%",
+          "expected": 1.052632,
+          "unit": "mW",
+          "min": 1.047,
+          "max": 1.059,
+          "calFactorPercent": 95,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 94%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 94%",
+          "expected": 1.06383,
+          "unit": "mW",
+          "min": 1.058,
+          "max": 1.07,
+          "calFactorPercent": 94,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 93%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 93%",
+          "expected": 1.075269,
+          "unit": "mW",
+          "min": 1.069,
+          "max": 1.081,
+          "calFactorPercent": 93,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 92%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 92%",
+          "expected": 1.086957,
+          "unit": "mW",
+          "min": 1.081,
+          "max": 1.093,
+          "calFactorPercent": 92,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 91%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 91%",
+          "expected": 1.098901,
+          "unit": "mW",
+          "min": 1.093,
+          "max": 1.105,
+          "calFactorPercent": 91,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 90%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 90%",
+          "expected": 1.111111,
+          "unit": "mW",
+          "min": 1.105,
+          "max": 1.117,
+          "calFactorPercent": 90,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 89%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 89%",
+          "expected": 1.123596,
+          "unit": "mW",
+          "min": 1.118,
+          "max": 1.13,
+          "calFactorPercent": 89,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 88%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 88%",
+          "expected": 1.136364,
+          "unit": "mW",
+          "min": 1.13,
+          "max": 1.142,
+          "calFactorPercent": 88,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 87%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 87%",
+          "expected": 1.149425,
+          "unit": "mW",
+          "min": 1.143,
+          "max": 1.155,
+          "calFactorPercent": 87,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 86%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 86%",
+          "expected": 1.162791,
+          "unit": "mW",
+          "min": 1.157,
+          "max": 1.169,
+          "calFactorPercent": 86,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 85%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 85%",
+          "expected": 1.176471,
+          "unit": "mW",
+          "min": 1.17,
+          "max": 1.182,
+          "calFactorPercent": 85,
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        }
+      ],
+      "notes": [
+        "Spec: 16-position switch, 85% to 100% in 1% steps."
+      ]
+    }
+  ],
+  "notCovered": [
+    {
+      "title": "Power Reference Level Test (0.988-1.012 mW)",
+      "source": "436A.pdf, para 4-13, pp. 4-7 to 4-9 (PDF pp. 63-65)",
+      "equipment": [
+        "HP 432A power meter",
+        "HP 478A-H75/H76 thermistor mount",
+        "HP 3456A DVM"
+      ]
+    }
+  ],
+  "ambiguities": [
+    "The Test Record omits Table 4-2's 3 mW / +5 dBm rows (Table 4-2 is marked P/O Errata); they are included here.",
+    "dB REL -20 dBm row printed with min/max reversed; the dB REL rows print the unit as dBm in the Test Record although they are relative.",
+    "The dB REL calibrator settings are printed as dBm labels; they map to the 11683A positions 10 µW (-20), 300 µW (-5), 10 mW (+10) and 100 µW (-10).",
+    "The HP-IB read string 9A+T is assembled from Table 3-3; the manual's printed examples are 9D+V and 9D+T (dBm)."
+  ]
+}

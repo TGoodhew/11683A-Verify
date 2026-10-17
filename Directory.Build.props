@@ -17,6 +17,10 @@
     <None Include="$(MSBuildThisFileDirectory)data\*.json"
           Link="data\%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" />
+    <!-- Power meter definitions, one per meter, transcribed from each meter's manual. -->
+    <None Include="$(MSBuildThisFileDirectory)data\meters\*.json"
+          Link="data\meters\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

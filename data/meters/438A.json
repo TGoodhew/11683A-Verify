@@ -1,0 +1,350 @@
+{
+  "model": "438A",
+  "manufacturer": "HP",
+  "title": "HP 438A Power Meter",
+  "manual": "438A.pdf: HP 438A Power Meter Operating and Service Manual, 00438-90028 (1986-04-01), Section IV; cross-checked against 438A-OSM.pdf",
+  "busDriver": "438A",
+  "defaultResource": "GPIB0::13::INSTR",
+  "channels": [
+    "A",
+    "B"
+  ],
+  "warmupMinutes": 60,
+  "notes": [
+    "Over HP-IB the app sends AP or BP (sensor), LN (watts), TR2 (one settled reading) and TR3 (free run).",
+    "One-hour warm-up (para 4-1). dBm and dB REL readings are typed in."
+  ],
+  "tests": [
+    {
+      "id": "zero-carryover",
+      "title": "Zero Carryover Test",
+      "perChannel": true,
+      "source": "438A.pdf, para 4-8, pp. 4-3 to 4-4 (PDF pp. 121-122); Table 4-1 p. 4-11 (PDF p. 129)",
+      "reading": "Meter",
+      "equipment": [
+        "HP 11683A Range Calibrator",
+        "HP 11730A power sensor cable"
+      ],
+      "setup": [
+        "Connect the 11683A to the channel under test (Figure 4-1). 438A LINE ON, PRESET; select the sensor (A or B).",
+        "11683A: FUNCTION STANDBY, LINE ON.",
+        "Press ZERO and wait 15-17 s; the reading should be 0.00 ±0.06 (range 1).",
+        "For each row press MNL RANGE, the range number, ENTER."
+      ],
+      "points": [
+        {
+          "label": "After ZERO",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Zeroed (range 1)",
+          "expected": 0.0,
+          "unit": "uW",
+          "min": -0.06,
+          "max": 0.06
+        },
+        {
+          "label": "Range 1",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MNL RANGE 1 ENTER",
+          "expected": 0.0,
+          "unit": "uW",
+          "min": -0.06,
+          "max": 0.06
+        },
+        {
+          "label": "Range 2",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MNL RANGE 2 ENTER",
+          "expected": 0.0,
+          "unit": "uW",
+          "min": -0.1,
+          "max": 0.1
+        },
+        {
+          "label": "Range 3",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MNL RANGE 3 ENTER",
+          "expected": 0.0,
+          "unit": "mW",
+          "min": -0.001,
+          "max": 0.001
+        },
+        {
+          "label": "Range 4",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MNL RANGE 4 ENTER",
+          "expected": 0.0,
+          "unit": "mW",
+          "min": -0.01,
+          "max": 0.01
+        },
+        {
+          "label": "Range 5",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "MNL RANGE 5 ENTER",
+          "expected": 0.0,
+          "unit": "mW",
+          "min": -0.1,
+          "max": 0.1
+        }
+      ],
+      "notes": [
+        "Spec: ±0.5% of full scale on the most sensitive range, a tenth of that on each higher range, ±1 count.",
+        "Repeat for channel B, and for the Option 002 rear inputs if fitted.",
+        "No 11683A RANGE is given for this test; 1 mW is used (STANDBY grounds the output)."
+      ]
+    },
+    {
+      "id": "instrument-accuracy",
+      "title": "Instrument Accuracy Test",
+      "perChannel": true,
+      "source": "438A.pdf, para 4-9, pp. 4-5 to 4-7 (PDF pp. 123-125); Table 4-1 p. 4-11 (PDF p. 129)",
+      "reading": "Meter",
+      "equipment": [
+        "HP 11683A Range Calibrator",
+        "HP 11730A power sensor cable"
+      ],
+      "setup": [
+        "Connect as Figure 4-2. 438A LINE ON, select the sensor, PRESET. 11683A: FUNCTION STANDBY, POLARITY NORMAL, RANGE 1 mW, LINE ON.",
+        "Press ZERO; the reading should be 0.00 ±0.06 µW.",
+        "11683A FUNCTION CALIBRATE. Press CAL ADJ, ± (minus sign: external reference), 100, ENTER. The display should read 1.000 ±0.006 mW.",
+        "Set the 11683A RANGE to each row; check the meter autoranges.",
+        "Then (once): dBm/WATT to dBm at 100 mW (20.00 ±0.04 dBm), 11683A to -10 dBm (-10.00 ±0.04 dBm), press REL (0.00 ±0.01 dB)."
+      ],
+      "points": [
+        {
+          "label": "1 mW after CAL ADJ",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "After CAL ADJ -100 ENTER",
+          "expected": 1.0,
+          "unit": "mW",
+          "min": 0.994,
+          "max": 1.006
+        },
+        {
+          "label": "3 µW",
+          "calibrator": {
+            "range": "3uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 3.16,
+          "unit": "uW",
+          "min": 3.13,
+          "max": 3.19
+        },
+        {
+          "label": "10 µW",
+          "calibrator": {
+            "range": "10uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 10.0,
+          "unit": "uW",
+          "min": 9.9,
+          "max": 10.1
+        },
+        {
+          "label": "30 µW",
+          "calibrator": {
+            "range": "30uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 31.6,
+          "unit": "uW",
+          "min": 31.3,
+          "max": 31.9
+        },
+        {
+          "label": "100 µW",
+          "calibrator": {
+            "range": "100uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 100.0,
+          "unit": "uW",
+          "min": 99.0,
+          "max": 101.0
+        },
+        {
+          "label": "300 µW",
+          "calibrator": {
+            "range": "300uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 0.316,
+          "unit": "mW",
+          "min": 0.314,
+          "max": 0.318
+        },
+        {
+          "label": "1 mW",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 1.0,
+          "unit": "mW",
+          "min": 0.995,
+          "max": 1.005
+        },
+        {
+          "label": "3 mW",
+          "calibrator": {
+            "range": "3mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 3.16,
+          "unit": "mW",
+          "min": 3.13,
+          "max": 3.19
+        },
+        {
+          "label": "10 mW",
+          "calibrator": {
+            "range": "10mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 10.0,
+          "unit": "mW",
+          "min": 9.9,
+          "max": 10.1
+        },
+        {
+          "label": "30 mW",
+          "calibrator": {
+            "range": "30mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 31.6,
+          "unit": "mW",
+          "min": 31.3,
+          "max": 31.9
+        },
+        {
+          "label": "100 mW",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 100.0,
+          "unit": "mW",
+          "min": 99.0,
+          "max": 101.0
+        },
+        {
+          "label": "20 dBm",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "dBm mode",
+          "expected": 20.0,
+          "unit": "dBm",
+          "min": 19.96,
+          "max": 20.04,
+          "reading": "Operator",
+          "note": "The 100 mW setting is implied (20 dBm); the procedure does not state it."
+        },
+        {
+          "label": "-10 dBm",
+          "calibrator": {
+            "range": "100uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "dBm mode",
+          "expected": -10.0,
+          "unit": "dBm",
+          "min": -10.04,
+          "max": -9.96,
+          "reading": "Operator",
+          "note": "Printed with min/max reversed."
+        },
+        {
+          "label": "REL at -10 dBm",
+          "calibrator": {
+            "range": "100uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "dBm mode, REL pressed",
+          "expected": 0.0,
+          "unit": "dB",
+          "min": -0.01,
+          "max": 0.01,
+          "reading": "Operator"
+        }
+      ],
+      "notes": [
+        "Spec: ±0.02 dB within the calibration range, plus ±0.02 dB outside it (Table 1-1).",
+        "The 3 µW, 30 µW, 300 µW, 3 mW and 30 mW legends are approximations: the true outputs are 3.16, 31.6, 316 µW, 3.16 and 31.6 mW.",
+        "The manual repeats only the zero and CAL ADJ steps on channel B; the app offers the whole table on each channel."
+      ]
+    }
+  ],
+  "notCovered": [
+    {
+      "title": "Power Reference Level Test (0.988-1.012 mW)",
+      "source": "438A.pdf, para 4-10, pp. 4-8 to 4-10 (PDF pp. 126-128)",
+      "equipment": [
+        "HP 432A test power meter",
+        "HP 478A-H75/H76 thermistor mount",
+        "HP 3456A DVM"
+      ]
+    }
+  ],
+  "ambiguities": [
+    "300 µW limits: 0.314/0.318 mW in both procedure tables (used here) but 0.313/0.319 mW in the 438A.pdf Test Record.",
+    "-10 dBm row printed with min/max reversed; corrected here.",
+    "Instrument accuracy spec reads ±0.2% on the 438A.pdf test page but ±0.02 dB in Table 1-1 and the OSM.",
+    "Step 9 says 'RANGE switch to STANDBY'; FUNCTION STANDBY is meant."
+  ]
+}

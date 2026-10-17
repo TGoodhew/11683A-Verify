@@ -50,6 +50,7 @@ try
         "part2" => Part2Command.Run(config, options),
         "adjust" => AdjustCommand.Run(config, options),
         "part4" => Part4Command.Run(config, options),
+        "meter-test" => MeterTestCommand.Run(config, options),
         "exit" => 0,
         _ => throw new ArgumentException($"Unknown command '{command}'."),
     };
@@ -85,6 +86,7 @@ static string ChooseFromMenu(CommandLine options)
         ["Part 1: DC voltage and ratio test"] = "part1",
         ["Part 2: four-wire resistance test"] = "part2",
         ["Part 4: Option H01 REF EXT check (power meter)"] = "part4",
+        ["Power meter performance test (435A, 435B, 436A, 437B, 438A, E4418B)"] = "meter-test",
         ["Adjust: Power Supply Adjustment (A2R1), then Part 1"] = "adjust",
         ["DVM spec table and test-point limits"] = "spec-table",
         ["Wiring diagram"] = "wiring",
