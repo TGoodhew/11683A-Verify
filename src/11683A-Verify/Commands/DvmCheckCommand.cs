@@ -1,0 +1,221 @@
+using Spectre.Console;
+using Verify11683A.Calibrator;
+using Verify11683A.Formatting;
+using Verify11683A.Instruments.Dvm;
+using Verify11683A.Specs;
+
+namespace Verify11683A.App.Commands;
+
+/// <summary>
+/// Step 1 bench check. Identifies the DVM, then configures every range the verification uses and reads each
+/// setting back, so a wrong command, a rejected range or an input impedance that did not take shows up here
+/// and not partway through a test. Finally, optionally, it reads the 11683A at 1 mW.
+/// </summary>
+public static class DvmCheckCommand
+{
+    /// <summary>The fixed ranges Parts 1 and 2 use: Part 1 needs 100 mV to 100 V, Part 2 needs 100 Ω to 10 kΩ.</summary>
+    private static readonly (DvmFunction Function, double Range)[] RangesUsed =
+    [
+        (DvmFunction.DcVoltage, 0.1),
+        (DvmFunction.DcVoltage, 1),
+        (DvmFunction.DcVoltage, 10),
+        (DvmFunction.DcVoltage, 100),
+        (DvmFunction.FourWireResistance, 100),
+        (DvmFunction.FourWireResistance, 1e3),
+        (DvmFunction.FourWireResistance, 1e4),
+    ];
+
+    private const int SettleMaxReadings = 10;
+    private const double SettleTolerance = 20e-6;
+
+    public static int Run(AppConfig config, CommandLine options)
+    {
+        using var bench = Bench.Open(config, options, "dvm-check");
+        var dvm = bench.Dvm;
+        var specs = DvmSpecTable.LoadForModel(dvm.Model);
+        var limits = CalibratorLimits.LoadDefault();
+        var failures = 0;
+
+        AnsiConsole.Write(new Rule($"[bold]DVM check[/] — {Markup.Escape(dvm.Model)} at {Markup.Escape(dvm.ResourceName)}"
+            + (bench.IsSimulation ? $" [yellow](simulated: {Markup.Escape(bench.Simulator!.Scenario.Name)})[/]" : "")).LeftJustified());
+
+        // 1. Identity
+        var identity = dvm.Identify();
+        bench.Log.Write($"Identity: {identity.Raw}");
+        var grid = new Grid().AddColumn().AddColumn();
+        grid.AddRow("[grey]Identity[/]", Markup.Escape(identity.Raw));
+        grid.AddRow("[grey]Firmware[/]", Markup.Escape(identity.Firmware));
+        grid.AddRow("[grey]Serial (config)[/]", config.Dvm.Serial == ""
+            ? "[yellow]not set: add dvm.serial to appsettings.local.json[/]"
+            : Markup.Escape(config.Dvm.Serial));
+        grid.AddRow("[grey]Cal date (config)[/]", CalDateText(config.Dvm));
+        grid.AddRow("[grey]Spec table[/]", Markup.Escape(specs.Source));
+        AnsiConsole.Write(grid);
+        if (identity.Serial is "" or "0")
+            AnsiConsole.MarkupLine($"[grey]The {Markup.Escape(dvm.Model)} does not report its serial over the bus, so the report uses dvm.serial from config.[/]");
+        AnsiConsole.WriteLine();
+
+        // 2. Reset and an empty error queue
+        dvm.Reset();
+        AnsiConsole.MarkupLine("[green]✓[/] Reset; error queue empty.");
+
+        // 3. Before any ohms range is configured, make sure the 11683A output is not live.
+        AnsiConsole.MarkupLine("This check configures the 4-wire ohms ranges, so the 11683A output must not be live.");
+        AnsiConsole.MarkupLine("Set the 11683A [bold]FUNCTION[/] switch to [bold]STANDBY[/] (or disconnect the DVM).");
+        if (bench.Simulator is { } sim)
+            sim.SetFunction(FunctionSwitch.Standby);
+        else
+            Prompt("Press Enter when FUNCTION is in STANDBY");
+
+        var safety = OhmsSafety.Check(dvm);
+        bench.Log.Write($"Ohms safety: {safety.Reading.Value} V, safe={safety.Safe}");
+        var ohmsAllowed = safety.Safe;
+        AnsiConsole.MarkupLine(safety.Safe
+            ? $"[green]✓[/] Output reads {Si.Format(safety.Reading.Value, "V", 3)}: {safety.Explanation}."
+            : $"[red]✗[/] Output reads {(safety.Reading.Overload ? "overload" : Si.Format(safety.Reading.Value, "V", 4))}: {safety.Explanation}. [red]Ohms ranges skipped.[/]");
+        AnsiConsole.WriteLine();
+
+        // 4. Configure every range used and read it back
+        var table = new Table().Border(TableBorder.Rounded).Title("[bold]Ranges used by the verification[/]")
+            .AddColumn("Function").AddColumn("Range").AddColumn("Result").AddColumn("Input").AddColumn("Read back");
+        foreach (var (function, range) in RangesUsed)
+        {
+            var rangeText = Si.Range(range, function.Unit());
+            if (function == DvmFunction.FourWireResistance && !ohmsAllowed)
+            {
+                table.AddRow(function.DisplayName(), rangeText, "[yellow]skipped[/]", "", "output live");
+                continue;
+            }
+            try
+            {
+                var applied = dvm.Configure(function, range, config.Measurement.Nplc);
+                var readBack = dvm.ReadBackSettings();
+                bench.Log.Write($"{function} {range}: OK; " + string.Join("; ", readBack.Select(kv => $"{kv.Key} {kv.Value}")));
+                table.AddRow(function.DisplayName(), rangeText, "[green]OK[/]", Markup.Escape(applied.InputResistance),
+                    Markup.Escape(string.Join("\n", readBack.Select(kv => $"{kv.Key} {kv.Value}"))));
+            }
+            catch (DvmException ex)
+            {
+                failures++;
+                bench.Log.Write($"{function} {range}: FAIL: {ex.Message}");
+                table.AddRow(function.DisplayName(), rangeText, "[red]FAIL[/]", "", Markup.Escape(ex.Message));
+            }
+        }
+        AnsiConsole.Write(table);
+        AnsiConsole.MarkupLine("[grey]Every DCV range up to 10 V must show the >10 GΩ input: the 11683A needs at least 100 MΩ. "
+            + "The 100 V range is 10 MΩ, as was the manual's 3455A.[/]");
+        AnsiConsole.WriteLine();
+
+        // 5. Optional: readings of the 11683A at 1 mW
+        if (Confirm("Take readings of the 11683A at RANGE 1 mW?"))
+            failures += ReadOneMilliwatt(bench, config, specs, limits, options.AmbientC);
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine(failures == 0
+            ? "[green bold]DVM check passed.[/]"
+            : $"[red bold]DVM check: {failures} problem(s).[/] See above.");
+        AnsiConsole.MarkupLine($"[grey]Session log: {Markup.Escape(Path.GetFullPath(bench.Log.Path))}[/]");
+        return failures == 0 ? 0 : 1;
+    }
+
+    private static int ReadOneMilliwatt(Bench bench, AppConfig config, DvmSpecTable specs, CalibratorLimits limits, double? ambientC)
+    {
+        var dvm = bench.Dvm;
+        var point = limits.Part1.Point(limits.SupplyAdjustment.Range);
+        const int count = 5;
+
+        AnsiConsole.MarkupLine("Set the 11683A: REF switch [bold]INT[/], POLARITY [bold]NORMAL[/], RANGE [bold]1 mW[/], FUNCTION [bold]CALIBRATE[/].");
+        AnsiConsole.MarkupLine("[grey]DVM on the rear DC REFERENCE OUTPUT BNC.[/]");
+        if (bench.Simulator is { } sim)
+        {
+            sim.SetReference(ReferenceSwitch.Int);
+            sim.SetPolarity(PolaritySwitch.Normal);
+            sim.SetRange(point.Range);
+            sim.SetFunction(FunctionSwitch.Calibrate);
+        }
+        else
+        {
+            Prompt("Press Enter when set");
+        }
+
+        var configuration = dvm.Configure(DvmFunction.DcVoltage, 1, config.Measurement.Nplc);
+        var readings = new List<double>();
+        var settled = false;
+        AnsiConsole.Progress()
+            .Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new SpinnerColumn())
+            .Start(ctx =>
+            {
+                // A simple wait for the output to settle after the knob was turned: two consecutive readings within
+                // 20 ppm, giving up after 10. The full settling detector replaces this in step 2.
+                var settle = ctx.AddTask("Waiting for the output to settle", maxValue: SettleMaxReadings);
+                double? previous = null;
+                for (var i = 0; i < SettleMaxReadings && !settled; i++)
+                {
+                    var r = dvm.Read();
+                    bench.Log.Write($"1 mW settling reading {i + 1}: {r.Value}{(r.Overload ? " (overload)" : "")}");
+                    settled = !r.Overload && previous is { } p && Math.Abs(r.Value - p) <= SettleTolerance * Math.Abs(r.Value);
+                    previous = r.Overload ? null : r.Value;
+                    settle.Increment(1);
+                }
+                settle.Value = SettleMaxReadings;
+
+                var task = ctx.AddTask($"{count} readings, 1 V range, NPLC {config.Measurement.Nplc}", maxValue: count);
+                for (var i = 0; i < count; i++)
+                {
+                    var r = dvm.Read();
+                    bench.Log.Write($"1 mW reading {i + 1}: {r.Value}{(r.Overload ? " (overload)" : "")}");
+                    if (!r.Overload)
+                        readings.Add(r.Value);
+                    task.Increment(1);
+                }
+            });
+
+        if (!settled)
+            AnsiConsole.MarkupLine("[yellow]The output did not settle to 20 ppm within 10 readings; the readings below may still be moving.[/]");
+        if (readings.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[red]✗ Every reading overloaded the 1 V range. Check RANGE is 1 mW and FUNCTION is CALIBRATE.[/]");
+            return 1;
+        }
+
+        var mean = readings.Average();
+        var sigma = readings.Count > 1
+            ? Math.Sqrt(readings.Sum(v => (v - mean) * (v - mean)) / (readings.Count - 1))
+            : 0;
+        var spec = specs.Limit(DvmFunction.DcVoltage, configuration.Range, mean, config.Dvm.Period, ambientC);
+        var inLimits = mean >= point.VoltsMin && mean <= point.VoltsMax;
+
+        var grid = new Grid().AddColumn().AddColumn();
+        grid.AddRow("[grey]Mean[/]", $"[bold]{Si.Format(mean, "V", 6)}[/]");
+        grid.AddRow("[grey]σ (n = " + readings.Count + ")[/]", $"{Si.Format(sigma, "V", 3)} ({Si.Ppm(sigma / Math.Abs(mean))})");
+        grid.AddRow($"[grey]{Markup.Escape(specs.Model)} {spec.Period.Key()} spec[/]",
+            $"±{Si.Format(spec.Total, "V", 3)} ({Si.Ppm(spec.Relative)})"
+            + (spec.TemperatureError > 0 ? $" incl. ±{Si.Format(spec.TemperatureError, "V", 2)} temperature" : ""));
+        grid.AddRow("[grey]Manual limit[/]", $"{Si.Format(point.VoltsMin!.Value, "V", 5)} to {Si.Format(point.VoltsMax!.Value, "V", 5)}  [grey]({Markup.Escape(limits.Part1.Source)})[/]");
+        grid.AddRow("[grey]Indication[/]", inLimits
+            ? "[green]inside the 1 mW limits[/] [grey](a preview: the full Part 1 test comes in step 2)[/]"
+            : "[yellow]outside the 1 mW limits: the Power Supply Adjustment (A2R1) would be recommended[/]");
+        AnsiConsole.Write(new Panel(grid).Header("11683A DC REFERENCE OUTPUT, RANGE 1 mW"));
+        return 0;
+    }
+
+    private static string CalDateText(DvmConfig dvm)
+    {
+        if (dvm.CalibrationDate is not { } date)
+            return "[yellow]not set: add dvm.calibrationDate to appsettings.local.json[/]";
+        var due = date.AddMonths(dvm.CalibrationIntervalMonths);
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        return due < today
+            ? $"{date:yyyy-MM-dd} [red](due {due:yyyy-MM-dd}: PAST DUE)[/]"
+            : $"{date:yyyy-MM-dd} [grey](due {due:yyyy-MM-dd})[/]";
+    }
+
+    private static void Prompt(string message)
+    {
+        AnsiConsole.Markup($"[blue]{Markup.Escape(message)}[/] ");
+        Console.ReadLine();
+    }
+
+    private static bool Confirm(string question) =>
+        Console.IsInputRedirected || AnsiConsole.Confirm(question);
+}

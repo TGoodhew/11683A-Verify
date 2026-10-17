@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- VISA session wrapper, IDvm and its drivers, and the simulated bench. -->
+  <PropertyGroup>
+    <AssemblyName>11683A-Verify.Instruments</AssemblyName>
+    <RootNamespace>Verify11683A.Instruments</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- VISA.NET shared components. At runtime GlobalResourceManager loads the installed vendor
+         implementation (NI-VISA's .NET 6+ assembly under
+         C:\Program Files\IVI Foundation\VISA\Microsoft.NET\VendorAssemblies). -->
+    <PackageReference Include="IviFoundation.Visa" Version="8.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\11683A-Verify.Core\11683A-Verify.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="11683A-Verify.Tests" />
+  </ItemGroup>
+
+</Project>

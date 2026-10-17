@@ -1,0 +1,72 @@
+{
+  "model": "3458A",
+  "source": "HP 3458A Multimeter User's Guide, Appendix A Specifications: DC Voltage p. 284 (PDF p. 286), Resistance pp. 285-286 (PDF pp. 287-288).",
+  "units": "ppm",
+  "calibrationBandC": [ 18.0, 28.0 ],
+  "warmupMinutes": 240,
+  "notes": [
+    "Accuracy is +/-(ppm of reading + ppm of range). Standard instrument; Option 002 (high stability) reading terms are smaller and are not used here.",
+    "DCV specifications are for PRESET, NPLC 100 [3]. Ohms specifications are for PRESET, NPLC 100, OCOMP ON, OHMF [1].",
+    "90-day, 1-year and 2-year specifications require operation within 24 hours and +/-1 C of the last ACAL, and Tcal +/-5 C. Run ACAL before testing.",
+    "Temperature coefficient (with ACAL) is per C, applied for each degree outside Tcal +/-5 C (taken as 18-28 C).",
+    "Input resistance: 100 mV, 1 V and 10 V ranges >10 GOhm (FIXEDZ OFF); 100 V and 1000 V ranges 10 MOhm +/-1%.",
+    "Transfer accuracy/linearity specifications assume a 4-hour warm-up."
+  ],
+  "functions": [
+    {
+      "function": "DcVoltage",
+      "ranges": [
+        { "range": 0.1,    "inputResistance": ">10 GOhm", "highImpedanceAvailable": true,
+          "accuracy": { "24h": { "reading": 2.5, "range": 3 }, "90d": { "reading": 5.0, "range": 3 }, "1y": { "reading": 9, "range": 3 }, "2y": { "reading": 14, "range": 3 } },
+          "tempcoPerC": { "reading": 0.15, "range": 1 } },
+        { "range": 1.0,    "inputResistance": ">10 GOhm", "highImpedanceAvailable": true,
+          "accuracy": { "24h": { "reading": 1.5, "range": 0.3 }, "90d": { "reading": 4.6, "range": 0.3 }, "1y": { "reading": 8, "range": 0.3 }, "2y": { "reading": 14, "range": 0.3 } },
+          "tempcoPerC": { "reading": 0.15, "range": 0.1 } },
+        { "range": 10.0,   "inputResistance": ">10 GOhm", "highImpedanceAvailable": true,
+          "accuracy": { "24h": { "reading": 0.5, "range": 0.05 }, "90d": { "reading": 4.1, "range": 0.05 }, "1y": { "reading": 8, "range": 0.05 }, "2y": { "reading": 14, "range": 0.05 } },
+          "tempcoPerC": { "reading": 0.15, "range": 0.01 } },
+        { "range": 100.0,  "inputResistance": "10 MOhm +/-1%", "highImpedanceAvailable": false,
+          "accuracy": { "24h": { "reading": 2.5, "range": 0.3 }, "90d": { "reading": 6.0, "range": 0.3 }, "1y": { "reading": 10, "range": 0.3 }, "2y": { "reading": 14, "range": 0.3 } },
+          "tempcoPerC": { "reading": 0.15, "range": 0.1 } },
+        { "range": 1000.0, "inputResistance": "10 MOhm +/-1%", "highImpedanceAvailable": false,
+          "accuracy": { "24h": { "reading": 2.5, "range": 0.1 }, "90d": { "reading": 6.0, "range": 0.1 }, "1y": { "reading": 10, "range": 0.1 }, "2y": { "reading": 14, "range": 0.1 } },
+          "tempcoPerC": { "reading": 0.15, "range": 0.01 } }
+      ],
+      "adders": [
+        { "description": "Without MATH NULL and fixed range < 4 minutes (footnote 5)", "range": 0.1,  "term": { "reading": 0, "range": 17 },   "applied": true },
+        { "description": "Without MATH NULL and fixed range < 4 minutes (footnote 5)", "range": 1.0,  "term": { "reading": 0, "range": 1.7 },  "applied": true },
+        { "description": "Without MATH NULL and fixed range < 4 minutes (footnote 5)", "range": 10.0, "term": { "reading": 0, "range": 0.25 }, "applied": true },
+        { "description": "Keysight factory traceability to US NIST (footnote 5)", "term": { "reading": 2, "range": 0 }, "applied": true }
+      ]
+    },
+    {
+      "function": "FourWireResistance",
+      "ranges": [
+        { "range": 10.0,  "testCurrent": "10 mA",
+          "accuracy": { "24h": { "reading": 5, "range": 3 }, "90d": { "reading": 15, "range": 5 }, "1y": { "reading": 15, "range": 5 }, "2y": { "reading": 20, "range": 10 } },
+          "tempcoPerC": { "reading": 1, "range": 1 } },
+        { "range": 100.0, "testCurrent": "1 mA",
+          "accuracy": { "24h": { "reading": 3, "range": 3 }, "90d": { "reading": 10, "range": 5 }, "1y": { "reading": 12, "range": 5 }, "2y": { "reading": 20, "range": 10 } },
+          "tempcoPerC": { "reading": 1, "range": 1 } },
+        { "range": 1.0e3, "testCurrent": "1 mA",
+          "accuracy": { "24h": { "reading": 2, "range": 0.2 }, "90d": { "reading": 8, "range": 0.5 }, "1y": { "reading": 10, "range": 0.5 }, "2y": { "reading": 15, "range": 1 } },
+          "tempcoPerC": { "reading": 1, "range": 0.1 } },
+        { "range": 1.0e4, "testCurrent": "100 uA",
+          "accuracy": { "24h": { "reading": 2, "range": 0.2 }, "90d": { "reading": 8, "range": 0.5 }, "1y": { "reading": 10, "range": 0.5 }, "2y": { "reading": 15, "range": 1 } },
+          "tempcoPerC": { "reading": 1, "range": 0.1 } },
+        { "range": 1.0e5, "testCurrent": "50 uA",
+          "accuracy": { "24h": { "reading": 2, "range": 0.2 }, "90d": { "reading": 8, "range": 0.5 }, "1y": { "reading": 10, "range": 0.5 }, "2y": { "reading": 15, "range": 1 } },
+          "tempcoPerC": { "reading": 1, "range": 0.1 } },
+        { "range": 1.0e6, "testCurrent": "5 uA",
+          "accuracy": { "24h": { "reading": 10, "range": 1 }, "90d": { "reading": 12, "range": 2 }, "1y": { "reading": 15, "range": 2 }, "2y": { "reading": 20, "range": 4 } },
+          "tempcoPerC": { "reading": 1, "range": 1 } },
+        { "range": 1.0e7, "testCurrent": "500 nA",
+          "accuracy": { "24h": { "reading": 50, "range": 5 }, "90d": { "reading": 50, "range": 10 }, "1y": { "reading": 50, "range": 10 }, "2y": { "reading": 75, "range": 10 } },
+          "tempcoPerC": { "reading": 5, "range": 2 } }
+      ],
+      "adders": [
+        { "description": "Keysight factory traceability of 10 kOhm to US NIST (footnote 3)", "term": { "reading": 3, "range": 0 }, "applied": true }
+      ]
+    }
+  ]
+}

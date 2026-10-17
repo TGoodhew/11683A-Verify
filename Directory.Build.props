@@ -1,0 +1,22 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- NI's modern-.NET VISA implementation (VendorAssemblies\ni\8.0) is 64-bit. -->
+    <PlatformTarget>x64</PlatformTarget>
+    <Company>The Schnauzer Group LLC</Company>
+    <Product>11683A-Verify</Product>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <!-- Limits and DVM spec tables live in data/ at the repo root; every runnable project gets a copy. -->
+  <ItemGroup Condition="'$(CopyVerifyData)' == 'true'">
+    <None Include="$(MSBuildThisFileDirectory)data\*.json"
+          Link="data\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

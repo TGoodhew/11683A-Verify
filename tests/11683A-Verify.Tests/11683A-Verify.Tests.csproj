@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>11683A-Verify.Tests</AssemblyName>
+    <RootNamespace>Verify11683A.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <CopyVerifyData>true</CopyVerifyData>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\11683A-Verify.Core\11683A-Verify.Core.csproj" />
+    <ProjectReference Include="..\..\src\11683A-Verify.Instruments\11683A-Verify.Instruments.csproj" />
+  </ItemGroup>
+
+</Project>
