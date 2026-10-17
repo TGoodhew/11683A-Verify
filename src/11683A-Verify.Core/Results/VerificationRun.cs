@@ -65,6 +65,9 @@ public sealed record VerificationRun
     public required DataFileVersion SpecTable { get; init; }
     public Part1Result? Part1 { get; init; }
     public Part2Result? Part2 { get; init; }
+
+    /// <summary>The Option H01 REF EXT check, if run. Informational: not part of the verdict or completeness.</summary>
+    public Part4Result? Part4 { get; init; }
     public IReadOnlyList<string> Notes { get; init; } = [];
 
     /// <summary>Both parts run and every range in each measured.</summary>

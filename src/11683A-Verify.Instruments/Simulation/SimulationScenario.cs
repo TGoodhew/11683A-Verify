@@ -27,6 +27,9 @@ public sealed record SimulationScenario
     /// <summary>Size of the thermal tail after a knob is turned, ppm of the new value.</summary>
     public double SettlingTailPpm { get; init; } = 300;
 
+    /// <summary>Fractional error of the Option H01 REF EXT path against Table 2-4 (Part 4).</summary>
+    public double ExtTransferError { get; init; }
+
     /// <summary>Time constant of that tail. At NPLC 100 it falls below 20 ppm after about five readings.</summary>
     public double SettlingTauSeconds { get; init; } = 5.0;
 

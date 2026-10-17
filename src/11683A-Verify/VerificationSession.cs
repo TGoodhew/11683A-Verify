@@ -98,6 +98,8 @@ public sealed class VerificationSession : IDisposable
         Log.Write($"Unit {c.Model} s/n {c.Serial} {c.Options}; DVM {DvmDetails}; spec {Specs.Model} {Period.Key()}; ambient {AmbientC?.ToString(CultureInfo.InvariantCulture) ?? "n/a"}");
     }
 
+    public Instruments.PowerMeter.IPowerMeter OpenPowerMeter() => Bench.OpenPowerMeter(Config.PowerMeter);
+
     public PointAcquirer Acquirer(RangeDetector detector, Func<string?>? interlock = null) =>
         new(Dvm, detector, Config.Measurement.Settling(detector.Function), Config.Measurement.Nplc, Config.Measurement.ReadingsPerPoint)
         {
@@ -194,7 +196,7 @@ public sealed class VerificationSession : IDisposable
     } + (p.Attempt > 1 ? $" (attempt {p.Attempt})" : "");
 
     /// <summary>Everything this session produced, ready to save.</summary>
-    public VerificationRun CreateRun(Part1Result? part1, Part2Result? part2, IReadOnlyList<string>? notes = null)
+    public VerificationRun CreateRun(Part1Result? part1, Part2Result? part2, IReadOnlyList<string>? notes = null, Part4Result? part4 = null)
     {
         var m = Config.Measurement;
         var c = Config.Calibrator;
@@ -215,6 +217,7 @@ public sealed class VerificationSession : IDisposable
             SpecTable = DataFileVersion.Of(DataFiles.Resolve(DataFiles.SpecFileName(Specs.Model)), Specs.Source),
             Part1 = part1,
             Part2 = part2,
+            Part4 = part4,
             Notes = notes ?? [],
         };
     }

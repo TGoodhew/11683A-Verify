@@ -1,5 +1,6 @@
 using Verify11683A.Calibrator;
 using Verify11683A.Instruments.Dvm;
+using Verify11683A.Instruments.PowerMeter;
 using Verify11683A.Instruments.Simulation;
 using Verify11683A.Instruments.Visa;
 
@@ -60,6 +61,18 @@ public sealed class Bench : IDisposable
             log.Dispose();
             throw;
         }
+    }
+
+    /// <summary>The Part 4 power meter: simulated, typed in by the operator, or on the bus.</summary>
+    public IPowerMeter OpenPowerMeter(PowerMeterConfig config)
+    {
+        if (Simulator is { } sim)
+            return new SimulatedPowerMeter(sim);
+        if (config.Model.Equals("manual", StringComparison.OrdinalIgnoreCase))
+            return new TypedPowerMeter(config.Model);
+        Log.Write($"Opening power meter {config.Model} at {config.Resource}, timeout {config.TimeoutMs} ms");
+        var visa = VisaSession.Open(config.Resource, config.TimeoutMs);
+        return PowerMeters.Open(config.Model, new LoggingVisaSession(visa, Log.Write), config.Channel);
     }
 
     public void Dispose()

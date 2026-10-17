@@ -80,6 +80,19 @@ public sealed class UncertaintyConfig
     };
 }
 
+public sealed class PowerMeterConfig
+{
+    /// <summary>"manual" (readings typed in), or a model with a bus driver: E4418B, E4419B, 437B, 438A.</summary>
+    public string Model { get; set; } = "manual";
+
+    public string Resource { get; set; } = "GPIB0::13::INSTR";
+
+    /// <summary>Channel (E4419B) to read.</summary>
+    public int Channel { get; set; } = 1;
+
+    public int TimeoutMs { get; set; } = 20000;
+}
+
 public sealed class WarmupConfig
 {
     /// <summary>Minutes the 11683A must be on before testing. The DVM's figure comes from its spec table.</summary>
@@ -95,6 +108,7 @@ public sealed class AppConfig
     public MeasurementConfig Measurement { get; set; } = new();
     public UncertaintyConfig Uncertainty { get; set; } = new();
     public WarmupConfig Warmup { get; set; } = new();
+    public PowerMeterConfig PowerMeter { get; set; } = new();
     public string ResultsDirectory { get; set; } = "results";
 
     /// <summary>

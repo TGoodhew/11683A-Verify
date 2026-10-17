@@ -32,8 +32,21 @@ public static class VerifyCommand
             ConsoleReport.Part2(part2, session.Limits, session.Convention);
         }
 
+        Part4Result? part4 = null;
+        if (config.Calibrator.Options.Contains("H01", StringComparison.OrdinalIgnoreCase)
+            && (options.Part4 || ConsoleUi.Confirm("Run Part 4, the Option H01 REF EXT check? It needs a power meter.", defaultValue: false)))
+        {
+            AnsiConsole.WriteLine();
+            part4 = Part4Procedure.Run(session, part1.Point("1mW")?.Volts);
+            if (part4 is not null)
+            {
+                AnsiConsole.WriteLine();
+                ConsoleReport.Part4(part4);
+            }
+        }
+
         AnsiConsole.WriteLine();
-        var run = session.CreateRun(part1, part2);
+        var run = session.CreateRun(part1, part2, part4: part4);
         var path = session.Save(run);
         AnsiConsole.WriteLine();
         ConsoleReport.Summary(run, path);

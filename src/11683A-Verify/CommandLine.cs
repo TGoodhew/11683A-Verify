@@ -16,6 +16,9 @@ public sealed class CommandLine
     public double? AmbientC { get; private set; }
     public bool SkipWarmup { get; private set; }
 
+    /// <summary>verify: run Part 4 without asking.</summary>
+    public bool Part4 { get; private set; }
+
     /// <summary>A results file to rebuild the PDF report from (--regen-pdf).</summary>
     public string? RegeneratePdf { get; private set; }
 
@@ -36,6 +39,8 @@ public sealed class CommandLine
                                100 mW, with uncertainty, TUR and verdicts.
           part2                Part 2: four-wire ohms from 300 uW to 3 uW with FUNCTION in STANDBY. No ohms
                                current unless a DC reading first shows the output is grounded.
+          part4                Part 4: Option H01 REF EXT transfer check against a power meter
+                               (informational; E4418B Service Guide procedure 2).
           adjust               Part 3: Power Supply Adjustment assist. Live reading of the 1 mW output while
                                A2R1 is set to 145.00 +/- 2.00 mV, then an offer to rerun Part 1.
                                (In simulation, the arrow keys turn the simulated A2R1.)
@@ -51,6 +56,7 @@ public sealed class CommandLine
           --period <p>         Spec column: 24h, 90d, 1y or 2y (overrides dvm.specPeriod).
           --ambient <degC>     Ambient temperature, for the temperature coefficient outside 18-28 C.
                                Asked for at the start of a test if not given.
+          --part4              verify: also run Part 4 without asking.
           --skip-warmup        Don't ask about or time the warm-up (it is then not recorded).
           --regen-pdf <json>   Rebuild the PDF report from a saved results file, beside it, and exit.
           --export-actuals <json>
@@ -98,6 +104,9 @@ public sealed class CommandLine
                     break;
                 case "--regen-pdf":
                     result.RegeneratePdf = Value();
+                    break;
+                case "--part4":
+                    result.Part4 = true;
                     break;
                 case "--skip-warmup":
                     result.SkipWarmup = true;

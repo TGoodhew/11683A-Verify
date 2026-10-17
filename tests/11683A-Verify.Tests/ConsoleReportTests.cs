@@ -79,6 +79,18 @@ public class ConsoleReportTests
     }
 
     [Fact]
+    public void Part4_table_shows_the_transfer_and_the_table_rows()
+    {
+        var console = new TestConsole().Width(200);
+        Spectre.Console.AnsiConsole.Console = console;
+        ConsoleReport.Part4(ResultsFileTests.SamplePart4());
+        Assert.Contains("EXT, 1 mW voltage", console.Output);
+        Assert.Contains("±0.2%", console.Output);
+        Assert.Contains("99.540 mW–100.46 mW", console.Output);
+        Assert.Contains("within", console.Output);
+    }
+
+    [Fact]
     public void Wiring_diagram_names_both_bncs()
     {
         Assert.Contains("DC REFERENCE OUTPUT", Wiring.Diagram);
