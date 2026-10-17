@@ -1,0 +1,602 @@
+{
+  "model": "435B",
+  "manufacturer": "HP",
+  "title": "HP 435B Power Meter",
+  "manual": "435B.pdf: Operating and Service Manual, HP 435B Power Meter (incl. Options 001-004), 00435-90055 (1980-1991), Chapter 4 Performance Tests; cross-checked against 435B-OSM.pdf (00435-90040, Feb 1984)",
+  "busDriver": null,
+  "channels": [
+    "A"
+  ],
+  "warmupMinutes": 30,
+  "notes": [
+    "No bus. Every 435B performance test reads a DVM on the rear-panel RECORDER OUTPUT (+1.00 Vdc = full scale, 1 kOhm): the app reads it with the bench DVM.",
+    "Half-hour warm-up; line voltage within +5% / -10% of nominal."
+  ],
+  "tests": [
+    {
+      "id": "zero-carryover",
+      "title": "Zero Carryover Test",
+      "source": "435B.pdf, Ch. 4, pp. 4-5 to 4-6 (PDF pp. 45-46); Table 4-1 pp. 4-11 to 4-12 (PDF pp. 51-52)",
+      "reading": "Recorder",
+      "equipment": [
+        "Power sensor 8481A/H or 8482A/H (no RF applied)",
+        "DVM on the 435B rear-panel RECORDER OUTPUT"
+      ],
+      "setup": [
+        "Connect a power sensor to the 435B POWER INPUT (no RF applied); this test does not use the 11683A (Figure 4-2).",
+        "Connect the DVM to the 435B rear-panel RECORDER OUTPUT.",
+        "Set the 435B: CAL FACTOR 100%, RANGE fully ccw, POWER REF (rear panel) OFF.",
+        "Press ZERO and wait for the pointer to stabilise. The DVM should read 0 ±1.0 mVdc. Release ZERO.",
+        "Step RANGE through each position without re-zeroing."
+      ],
+      "points": [
+        {
+          "label": "3 µW",
+          "calibrator": null,
+          "meterSetting": "RANGE fully ccw (3 µW)",
+          "expected": 0,
+          "unit": "mV",
+          "min": -15,
+          "max": 15,
+          "meterRange": "3uW"
+        },
+        {
+          "label": "10 µW",
+          "calibrator": null,
+          "meterSetting": "RANGE 1 step cw (10 µW)",
+          "expected": 0,
+          "unit": "mV",
+          "min": -17,
+          "max": 17,
+          "meterRange": "10uW"
+        },
+        {
+          "label": "30 µW",
+          "calibrator": null,
+          "meterSetting": "RANGE 2 steps cw (30 µW)",
+          "expected": 0,
+          "unit": "mV",
+          "min": -14,
+          "max": 14,
+          "meterRange": "30uW"
+        },
+        {
+          "label": "100 µW",
+          "calibrator": null,
+          "meterSetting": "RANGE 3 steps cw (100 µW)",
+          "expected": 0,
+          "unit": "mV",
+          "min": -11,
+          "max": 11,
+          "meterRange": "100uW"
+        },
+        {
+          "label": "300 µW",
+          "calibrator": null,
+          "meterSetting": "RANGE 4 steps cw (300 µW)",
+          "expected": 0,
+          "unit": "mV",
+          "min": -8,
+          "max": 8,
+          "meterRange": "300uW"
+        },
+        {
+          "label": "1 mW",
+          "calibrator": null,
+          "meterSetting": "RANGE 5 steps cw (1 mW)",
+          "expected": 0,
+          "unit": "mV",
+          "min": -5,
+          "max": 5,
+          "meterRange": "1mW"
+        },
+        {
+          "label": "3 mW",
+          "calibrator": null,
+          "meterSetting": "RANGE 6 steps cw (3 mW)",
+          "expected": 0,
+          "unit": "mV",
+          "min": -5,
+          "max": 5,
+          "meterRange": "3mW"
+        },
+        {
+          "label": "10 mW",
+          "calibrator": null,
+          "meterSetting": "RANGE 7 steps cw (10 mW)",
+          "expected": 0,
+          "unit": "mV",
+          "min": -5,
+          "max": 5,
+          "meterRange": "10mW"
+        },
+        {
+          "label": "30 mW",
+          "calibrator": null,
+          "meterSetting": "RANGE 8 steps cw (30 mW)",
+          "expected": 0,
+          "unit": "mV",
+          "min": -5,
+          "max": 5,
+          "meterRange": "30mW"
+        },
+        {
+          "label": "100 mW",
+          "calibrator": null,
+          "meterSetting": "RANGE fully cw (100 mW)",
+          "expected": 0,
+          "unit": "mV",
+          "min": -5,
+          "max": 5,
+          "meterRange": "100mW"
+        }
+      ],
+      "notes": [
+        "Spec: ±0.5% of full scale when zeroed on the most sensitive range.",
+        "1 step cw is printed ±17 mVdc, wider than fully ccw (±15), in both editions."
+      ]
+    },
+    {
+      "id": "instrumentation-accuracy",
+      "title": "Instrumentation Accuracy Test with Calibrator",
+      "source": "435B.pdf, Ch. 4, pp. 4-7 to 4-8 (PDF pp. 47-48); Table 4-1 (PDF pp. 51-52)",
+      "reading": "Recorder",
+      "equipment": [
+        "HP 11683A Range Calibrator",
+        "Power sensor cable",
+        "DVM on the 435B rear-panel RECORDER OUTPUT"
+      ],
+      "setup": [
+        "Connect the 11683A to the 435B POWER INPUT with the sensor cable, and the DVM to the 435B RECORDER OUTPUT (Figure 4-3).",
+        "11683A: RANGE 1 mW, FUNCTION CALIBRATE, POLARITY NORMAL. 435B: RANGE 5 steps from fully ccw (1 mW), CAL FACTOR 100%.",
+        "Adjust the 435B CAL ADJ for 1000 ±2 mVdc on the DVM.",
+        "CAUTION: set the 11683A FUNCTION to STANDBY while changing RANGE on either instrument, then back to CALIBRATE to read.",
+        "For each row set the 435B RANGE and the 11683A RANGE to the same position."
+      ],
+      "points": [
+        {
+          "label": "3 µW",
+          "calibrator": {
+            "range": "3uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE fully ccw (3 µW)",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 975,
+          "max": 1025,
+          "meterRange": "3uW"
+        },
+        {
+          "label": "10 µW",
+          "calibrator": {
+            "range": "10uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 step cw (10 µW)",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 978,
+          "max": 1022,
+          "meterRange": "10uW"
+        },
+        {
+          "label": "30 µW",
+          "calibrator": {
+            "range": "30uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 2 steps cw (30 µW)",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 981,
+          "max": 1019,
+          "meterRange": "30uW"
+        },
+        {
+          "label": "100 µW",
+          "calibrator": {
+            "range": "100uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 3 steps cw (100 µW)",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 984,
+          "max": 1016,
+          "meterRange": "100uW"
+        },
+        {
+          "label": "300 µW",
+          "calibrator": {
+            "range": "300uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 4 steps cw (300 µW)",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 987,
+          "max": 1013,
+          "meterRange": "300uW"
+        },
+        {
+          "label": "1 mW",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 5 steps cw (1 mW)",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 998,
+          "max": 1002,
+          "meterRange": "1mW",
+          "note": "Reference range: CAL ADJ set here."
+        },
+        {
+          "label": "3 mW",
+          "calibrator": {
+            "range": "3mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 6 steps cw (3 mW)",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 990,
+          "max": 1010,
+          "meterRange": "3mW"
+        },
+        {
+          "label": "10 mW",
+          "calibrator": {
+            "range": "10mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 7 steps cw (10 mW)",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 990,
+          "max": 1010,
+          "meterRange": "10mW"
+        },
+        {
+          "label": "30 mW",
+          "calibrator": {
+            "range": "30mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 8 steps cw (30 mW)",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 990,
+          "max": 1010,
+          "meterRange": "30mW",
+          "note": "The 1984 edition (435B-OSM) prints max 1015."
+        },
+        {
+          "label": "100 mW",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE fully cw (100 mW)",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 990,
+          "max": 1010,
+          "meterRange": "100mW",
+          "note": "The 1984 edition (435B-OSM) prints max 1015."
+        }
+      ],
+      "notes": [
+        "Spec: ±1% of full scale on all ranges (Table 1-1); the limits include noise and drift.",
+        "Response time (0-99%): range 1 <10 s, range 2 <3.8 s, range 3 <1.3 s, others <500 ms."
+      ]
+    },
+    {
+      "id": "calibration-factor",
+      "title": "Calibration Factor Test",
+      "source": "435B.pdf, Ch. 4, pp. 4-9 to 4-10 (PDF pp. 49-50); Table 4-1 (PDF pp. 51-52)",
+      "reading": "Recorder",
+      "equipment": [
+        "HP 11683A Range Calibrator",
+        "Power sensor cable",
+        "DVM on the 435B rear-panel RECORDER OUTPUT"
+      ],
+      "setup": [
+        "Connect as for the accuracy test (Figure 4-4). 11683A: RANGE 1 mW, FUNCTION CALIBRATE, POLARITY NORMAL. 435B: RANGE 1 mW.",
+        "With CAL FACTOR 100%, set CAL ADJ for 1000 ±2 mVdc on the DVM.",
+        "Set the CAL FACTOR switch to each position in turn. Return it to 100% afterwards."
+      ],
+      "points": [
+        {
+          "label": "CAL FACTOR 100%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 100%",
+          "expected": 1.0,
+          "unit": "V",
+          "min": 0.994,
+          "max": 1.006,
+          "calFactorPercent": 100,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 99%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 99%",
+          "expected": 1.010101,
+          "unit": "V",
+          "min": 1.004,
+          "max": 1.016,
+          "calFactorPercent": 99,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 98%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 98%",
+          "expected": 1.020408,
+          "unit": "V",
+          "min": 1.014,
+          "max": 1.026,
+          "calFactorPercent": 98,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 97%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 97%",
+          "expected": 1.030928,
+          "unit": "V",
+          "min": 1.025,
+          "max": 1.037,
+          "calFactorPercent": 97,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 96%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 96%",
+          "expected": 1.041667,
+          "unit": "V",
+          "min": 1.036,
+          "max": 1.048,
+          "calFactorPercent": 96,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 95%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 95%",
+          "expected": 1.052632,
+          "unit": "V",
+          "min": 1.047,
+          "max": 1.059,
+          "calFactorPercent": 95,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 94%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 94%",
+          "expected": 1.06383,
+          "unit": "V",
+          "min": 1.058,
+          "max": 1.07,
+          "calFactorPercent": 94,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 93%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 93%",
+          "expected": 1.075269,
+          "unit": "V",
+          "min": 1.069,
+          "max": 1.081,
+          "calFactorPercent": 93,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 92%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 92%",
+          "expected": 1.086957,
+          "unit": "V",
+          "min": 1.081,
+          "max": 1.093,
+          "calFactorPercent": 92,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 91%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 91%",
+          "expected": 1.098901,
+          "unit": "V",
+          "min": 1.093,
+          "max": 1.105,
+          "calFactorPercent": 91,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 90%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 90%",
+          "expected": 1.111111,
+          "unit": "V",
+          "min": 1.105,
+          "max": 1.117,
+          "calFactorPercent": 90,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 89%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 89%",
+          "expected": 1.123596,
+          "unit": "V",
+          "min": 1.118,
+          "max": 1.13,
+          "calFactorPercent": 89,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 88%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 88%",
+          "expected": 1.136364,
+          "unit": "V",
+          "min": 1.13,
+          "max": 1.142,
+          "calFactorPercent": 88,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 87%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 87%",
+          "expected": 1.149425,
+          "unit": "V",
+          "min": 1.143,
+          "max": 1.155,
+          "calFactorPercent": 87,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 86%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 86%",
+          "expected": 1.162791,
+          "unit": "V",
+          "min": 1.157,
+          "max": 1.169,
+          "calFactorPercent": 86,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        },
+        {
+          "label": "CAL FACTOR 85%",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW; CAL FACTOR 85%",
+          "expected": 1.176471,
+          "unit": "V",
+          "min": 1.17,
+          "max": 1.182,
+          "calFactorPercent": 85,
+          "meterRange": "1mW",
+          "note": "Expected = 1/CF (computed; the manual prints only the limits)."
+        }
+      ],
+      "notes": [
+        "Spec: 16-position switch, 85% to 100% in 1% steps. Each window is ±0.006 V around 1/CF.",
+        "Readings above 1 V are past the needle's full scale; the DVM reads them."
+      ]
+    }
+  ],
+  "notCovered": [
+    {
+      "title": "Power Reference Level Test (0.988-1.012 mW)",
+      "source": "435B.pdf p. 4-2 to 4-4 (PDF pp. 42-44)",
+      "equipment": [
+        "HP 432A power meter",
+        "HP 478A-H75/H76 thermistor mount",
+        "DVM (resistance and microvolts)"
+      ]
+    }
+  ],
+  "ambiguities": [
+    "Accuracy test, 30 mW and 100 mW: max 1010 mVdc in 435B.pdf (newer, used here) vs 1015 mVdc in 435B-OSM.pdf (1984).",
+    "Zero check before carryover: 0 ±1.0 mVdc (435B.pdf) vs 0 ±0.9 mVdc (OSM).",
+    "The 11683A range for each step is not printed ('set the range calibrator RANGE switch to the same position'); it is mapped from the 1-3-10 sequence.",
+    "Neither 11683A test has an explicit ZERO step; CAL FACTOR 100% is assumed for the accuracy test."
+  ]
+}

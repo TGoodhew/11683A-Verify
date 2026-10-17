@@ -1,0 +1,433 @@
+{
+  "model": "E4418B",
+  "manufacturer": "Agilent/Keysight",
+  "title": "Agilent E4418B Power Meter",
+  "manual": "E4418B Service.pdf: Keysight E4418B/E4419B Service Guide, Chapter 2 Performance Tests; cross-checked against E4418-90064.pdf (Agilent edition)",
+  "busDriver": "E4418B",
+  "defaultResource": "GPIB0::13::INSTR",
+  "channels": [
+    "A"
+  ],
+  "warmupMinutes": 30,
+  "notes": [
+    "Over SCPI the app reads UNIT1:POW? and FETC1? without changing the meter's set-up.",
+    "For an E4419B, run each test again on channel B (the procedures say to repeat the key presses on both channels)."
+  ],
+  "tests": [
+    {
+      "id": "zero-test",
+      "title": "Zero Test",
+      "source": "E4418B Service Guide, pp. 2-5 to 2-6 (PDF pp. 45-46), Table 2-2",
+      "reading": "Meter",
+      "equipment": [
+        "HP 11683A Range Calibrator",
+        "HP 11730A power sensor cable"
+      ],
+      "setup": [
+        "Connect the 11683A to channel A with the 11730A (Figure 2-1). Press Local, Preset, Confirm; dBm/W, W.",
+        "11683A: RANGE 3 µW, POLARITY NORMAL, FUNCTION STANDBY, LINE ON. Wait for the downward drift to stop (typically under 60 s).",
+        "System, Inputs, Input Settings, More, Filter: On, Mode Man, Length 512, Enter.",
+        "Zero/Cal, Zero; wait about 10 s, then 30 s more before reading."
+      ],
+      "points": [
+        {
+          "label": "Zero, filter 512",
+          "calibrator": {
+            "range": "3uW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "W, filter 512, after Zero (no Cal)",
+          "expected": 0.0,
+          "unit": "nW",
+          "min": -76.4,
+          "max": 76.4,
+          "note": "Table 2-2 limits ±76.40 nW; step 8 text says ±0.05 µW."
+        }
+      ],
+      "notes": [
+        "Spec: zero set ±0.0764 µW (range calibrator zero set ±0.05 µW plus noise at 512 averages)."
+      ]
+    },
+    {
+      "id": "instrument-accuracy-procedure-1",
+      "title": "Instrument Accuracy Test, Procedure 1 (standard 11683A; for indication)",
+      "source": "E4418B Service Guide, pp. 2-7 to 2-10 (PDF pp. 47-50), Table 2-3",
+      "reading": "Meter",
+      "equipment": [
+        "HP 11683A Range Calibrator",
+        "HP 11730A power sensor cable"
+      ],
+      "setup": [
+        "Connect as Figure 2-2. Local, Preset, Confirm; dBm/W, W.",
+        "11683A: RANGE 3 µW, POLARITY NORMAL, FUNCTION STANDBY, LINE ON. Wait for the drift to stop.",
+        "Filter: On, Mode Man, Length 512, Enter. Zero/Cal, Zero; the display should read 0 ±0.05 µW.",
+        "11683A FUNCTION CALIBRATE, RANGE 1 mW; press Cal.",
+        "Set the 11683A RANGE to each row."
+      ],
+      "points": [
+        {
+          "label": "3 µW",
+          "calibrator": {
+            "range": "3uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "W, filter 512",
+          "expected": 3.16,
+          "unit": "uW",
+          "min": 3.1,
+          "max": 3.23
+        },
+        {
+          "label": "10 µW",
+          "calibrator": {
+            "range": "10uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "W, filter 512",
+          "expected": 10.0,
+          "unit": "uW",
+          "min": 9.9,
+          "max": 10.1
+        },
+        {
+          "label": "30 µW",
+          "calibrator": {
+            "range": "30uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "W, filter 512",
+          "expected": 31.6,
+          "unit": "uW",
+          "min": 31.4,
+          "max": 31.8
+        },
+        {
+          "label": "100 µW",
+          "calibrator": {
+            "range": "100uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "W, filter 512",
+          "expected": 100.0,
+          "unit": "uW",
+          "min": 99.5,
+          "max": 100.5
+        },
+        {
+          "label": "300 µW",
+          "calibrator": {
+            "range": "300uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "W, filter 512",
+          "expected": 316.0,
+          "unit": "uW",
+          "min": 314.4,
+          "max": 317.0,
+          "note": "Keysight edition limits; the Agilent edition prints 314.00/318.00 µW."
+        },
+        {
+          "label": "1 mW",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "W, filter 512",
+          "expected": 1.0,
+          "unit": "mW",
+          "min": 0.995,
+          "max": 1.005
+        },
+        {
+          "label": "3 mW",
+          "calibrator": {
+            "range": "3mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "W, filter 512",
+          "expected": 3.156,
+          "unit": "mW",
+          "min": 3.141,
+          "max": 3.171
+        },
+        {
+          "label": "10 mW",
+          "calibrator": {
+            "range": "10mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "W, filter 512",
+          "expected": 10.034,
+          "unit": "mW",
+          "min": 9.984,
+          "max": 10.08
+        },
+        {
+          "label": "30 mW",
+          "calibrator": {
+            "range": "30mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "W, filter 512",
+          "expected": 31.785,
+          "unit": "mW",
+          "min": 31.63,
+          "max": 31.94
+        },
+        {
+          "label": "100 mW",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "W, filter 512",
+          "expected": 101.3,
+          "unit": "mW",
+          "min": 100.9,
+          "max": 101.8
+        }
+      ],
+      "notes": [
+        "Spec: ±0.5% or ±0.02 dB (excludes sensor linearity). Table 2-3 is titled 'For Indication Only': uncertainty is relatively high at 30 µW and below.",
+        "Expected values are the 11683A outputs as seen by the meter after Cal on 1 mW (note under Table 2-3), e.g. 10.034 mW and 101.3 mW."
+      ]
+    },
+    {
+      "id": "instrument-accuracy-procedure-2",
+      "title": "Instrument Accuracy Test, Procedure 2 (11683A Option H01 + DC calibrator)",
+      "source": "E4418B Service Guide, pp. 2-11 to 2-14 (PDF pp. 51-54), Table 2-4",
+      "reading": "Meter",
+      "equipment": [
+        "HP 11683A Option H01",
+        "HP 11730A power sensor cable",
+        "DC calibrator with floating Guard and LO (Datron 4000A or Fluke 5720A)"
+      ],
+      "setup": [
+        "Connect as Figure 2-3: DC calibrator HI/LO to the 11683A REF EXT input. Unplug the 11683A's power cord (H01 ground loop); keep the power meter connected (risk of mild shock otherwise). The calibrator's Guard and LO must float.",
+        "Power meter: Local, Preset, Confirm; dBm/W, W; Meas Setup, Resolution 4.",
+        "11683A: RANGE 100 mW, POLARITY NORMAL, FUNCTION STANDBY, REF SWITCH EXT, LINE OFF. Wait for the drift to stop.",
+        "DC calibrator: 0 V, DC, output OFF. Meter filter 512; Zero; the display should read 0 ±0.05 µW.",
+        "DC calibrator 144.93 mV, output '+'; 11683A FUNCTION CALIBRATE; press Cal.",
+        "Set the DC calibrator to each row's voltage and the meter filter to the row's value."
+      ],
+      "points": [
+        {
+          "label": "0.00045831 V",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal",
+            "reference": "Ext",
+            "externalVolts": 0.00045831
+          },
+          "meterSetting": "W, filter 256, resolution 4",
+          "expected": 3.1623,
+          "unit": "uW",
+          "min": 3.0977,
+          "max": 3.2269,
+          "note": "Measurement uncertainty 0.028 µW (Table 2-4)."
+        },
+        {
+          "label": "0.0014493 V",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal",
+            "reference": "Ext",
+            "externalVolts": 0.0014493
+          },
+          "meterSetting": "W, filter 256, resolution 4",
+          "expected": 10.0,
+          "unit": "uW",
+          "min": 9.904,
+          "max": 10.096,
+          "note": "Measurement uncertainty 0.027 µW (Table 2-4)."
+        },
+        {
+          "label": "0.0045831 V",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal",
+            "reference": "Ext",
+            "externalVolts": 0.0045831
+          },
+          "meterSetting": "W, filter 256, resolution 4",
+          "expected": 31.6228,
+          "unit": "uW",
+          "min": 31.428,
+          "max": 31.819,
+          "note": "Measurement uncertainty 0.027 µW (Table 2-4)."
+        },
+        {
+          "label": "0.014493 V",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal",
+            "reference": "Ext",
+            "externalVolts": 0.014493
+          },
+          "meterSetting": "W, filter 64, resolution 4",
+          "expected": 100.0,
+          "unit": "uW",
+          "min": 99.49,
+          "max": 100.51,
+          "note": "Measurement uncertainty 0.073 µW (Table 2-4)."
+        },
+        {
+          "label": "0.045831 V",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal",
+            "reference": "Ext",
+            "externalVolts": 0.045831
+          },
+          "meterSetting": "W, filter 64, resolution 4",
+          "expected": 316.2278,
+          "unit": "uW",
+          "min": 314.72,
+          "max": 317.74,
+          "note": "Measurement uncertainty 0.104 µW (Table 2-4)."
+        },
+        {
+          "label": "0.14493 V",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal",
+            "reference": "Ext",
+            "externalVolts": 0.14493
+          },
+          "meterSetting": "W, filter 16, resolution 4",
+          "expected": 1.0,
+          "unit": "mW",
+          "min": 0.9954,
+          "max": 1.0047,
+          "note": "Measurement uncertainty 0.2 µW (Table 2-4)."
+        },
+        {
+          "label": "0.45912 V",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal",
+            "reference": "Ext",
+            "externalVolts": 0.45912
+          },
+          "meterSetting": "W, filter 16, resolution 4",
+          "expected": 3.1623,
+          "unit": "mW",
+          "min": 3.1477,
+          "max": 3.1769,
+          "note": "Measurement uncertainty 0.9 µW (Table 2-4)."
+        },
+        {
+          "label": "1.4588 V",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal",
+            "reference": "Ext",
+            "externalVolts": 1.4588
+          },
+          "meterSetting": "W, filter 16, resolution 4",
+          "expected": 10.0,
+          "unit": "mW",
+          "min": 9.954,
+          "max": 10.046,
+          "note": "Measurement uncertainty 1.6 µW (Table 2-4)."
+        },
+        {
+          "label": "4.6872 V",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal",
+            "reference": "Ext",
+            "externalVolts": 4.6872
+          },
+          "meterSetting": "W, filter 16, resolution 4",
+          "expected": 31.6228,
+          "unit": "mW",
+          "min": 31.477,
+          "max": 31.769,
+          "note": "Measurement uncertainty 4.8 µW (Table 2-4)."
+        },
+        {
+          "label": "15.588 V",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal",
+            "reference": "Ext",
+            "externalVolts": 15.588
+          },
+          "meterSetting": "W, filter 16, resolution 4",
+          "expected": 100.0,
+          "unit": "mW",
+          "min": 99.54,
+          "max": 100.46,
+          "note": "Measurement uncertainty 18.5 µW (Table 2-4)."
+        }
+      ],
+      "notes": [
+        "The limits do not include the measurement uncertainty (note under Table 2-4).",
+        "The rows are not linear in power above 1 mW: use them as printed."
+      ]
+    }
+  ],
+  "notCovered": [
+    {
+      "title": "Power Reference Level Test (0.991-1.009 mW)",
+      "source": "E4418B Service Guide, pp. 2-15 to 2-18 (PDF pp. 55-58)",
+      "equipment": [
+        "HP 432A",
+        "HP 478A Opt H75/H76 or 8478B Opt H01 thermistor mount",
+        "HP 3458A DVM"
+      ]
+    },
+    {
+      "title": "E-Series Power Sensor and Interface Test",
+      "source": "E4418B Service Guide, p. 2-19 (PDF p. 59)",
+      "equipment": [
+        "E-series power sensor"
+      ]
+    },
+    {
+      "title": "E-Series Power Sensor Functional Test",
+      "source": "E4418B Service Guide, pp. 2-20 to 2-22 (PDF pp. 60-62)",
+      "equipment": [
+        "E-series power sensor",
+        "11730A",
+        "11708A 30 dB attenuator"
+      ]
+    },
+    {
+      "title": "Output SWR Test",
+      "source": "E4418B Service Guide, pp. 2-23 to 2-28 (PDF pp. 63-68)",
+      "equipment": [
+        "HP 432A",
+        "HP 478A Opt H75/H76",
+        "HP 3458A DVM"
+      ]
+    }
+  ],
+  "ambiguities": [
+    "Table 2-3 300 µW: Keysight edition 314.40/317.00 µW (used here) vs Agilent edition 314.00/318.00 µW; 317.00 is below 316 µW +0.5% and may be a typo.",
+    "Table 2-3 nominal outputs for 10 µW, 100 µW and 1 mW are not printed; 10, 100 µW and 1 mW are used.",
+    "The Performance Test Record (Table 2-8) uses the Procedure 2 limits for instrument accuracy, not Procedure 1's."
+  ]
+}

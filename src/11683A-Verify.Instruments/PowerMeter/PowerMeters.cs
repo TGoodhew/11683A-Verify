@@ -89,8 +89,8 @@ public sealed class Hp437BPowerMeter(IVisaSession session) : IPowerMeter
     public void Dispose() => session.Dispose();
 }
 
-/// <summary>HP 438A, sensor A, over its HP-IB codes: AP, LN (watts), TR2 for one settled reading, TR3 back to free run.</summary>
-public sealed class Hp438APowerMeter(IVisaSession session) : IPowerMeter
+/// <summary>HP 438A over its HP-IB codes: AP or BP (sensor), LN (watts), TR2 for one settled reading, TR3 back to free run.</summary>
+public sealed class Hp438APowerMeter(IVisaSession session, char sensor = 'A') : IPowerMeter
 {
     public string Description { get; private set; } = "HP 438A";
     public bool OverBus => true;
@@ -101,12 +101,12 @@ public sealed class Hp438APowerMeter(IVisaSession session) : IPowerMeter
         var raw = session.Query("?ID").Trim();
         if (!raw.Contains("438A", StringComparison.OrdinalIgnoreCase))
             throw new PowerMeterException($"{session.ResourceName}: expected an HP 438A, but ?ID returned '{raw}'.");
-        Description = "HP 438A sensor A" + (raw.Contains(',') ? $", {raw[(raw.IndexOf(',') + 1)..].Trim()}" : "");
+        Description = $"HP 438A sensor {sensor}" + (raw.Contains(',') ? $", {raw[(raw.IndexOf(',') + 1)..].Trim()}" : "");
     }
 
     public double ReadWatts()
     {
-        session.Write("AP");
+        session.Write(sensor == 'B' ? "BP" : "AP");
         session.Write("LN");
         var value = ScpiNumber.Parse(session.Query("TR2"), "a power reading");
         session.Write("TR3");
@@ -116,16 +116,59 @@ public sealed class Hp438APowerMeter(IVisaSession session) : IPowerMeter
     public void Dispose() => session.Dispose();
 }
 
+/// <summary>
+/// HP 436A over its HP-IB codes (436A manual Section III): 9A+T selects autorange, watts, cal factor disabled and a
+/// triggered reading with settling time; the meter answers with a 14-character string (Table 3-4) such as
+/// "PKA 1000E-06" = +1000 × 10⁻⁶ W. With <see cref="UseCalFactorSwitch"/> it sends 9A-T so the front-panel CAL FACTOR
+/// switch applies.
+/// </summary>
+public sealed partial class Hp436APowerMeter(IVisaSession session) : IPowerMeter
+{
+    public string Description => "HP 436A";
+    public bool OverBus => true;
+
+    /// <summary>Send '-' (cal factor enable) instead of '+', for the Calibration Factor test.</summary>
+    public bool UseCalFactorSwitch { get; set; }
+
+    /// <summary>The 436A has no identity query; a reading that parses is the check.</summary>
+    public void Identify() => ReadWatts();
+
+    public double ReadWatts() => Parse(session.Query(UseCalFactorSwitch ? "9A-T" : "9A+T"));
+
+    [GeneratedRegex(@"^([P-V])([I-M])([A-D])([ +-])(\d{4})E-(\d{2})")]
+    private static partial Regex Format();
+
+    /// <summary>Decodes the output string: status, range, mode, sign, four digits, E, -, two-digit exponent.</summary>
+    internal static double Parse(string reply)
+    {
+        var m = Format().Match(reply.TrimEnd('\r', '\n'));
+        if (!m.Success)
+            throw new PowerMeterException($"Could not read the 436A reply '{reply}'.");
+        var status = m.Groups[1].Value[0];
+        if (status is 'R' or 'V')
+            throw new PowerMeterException(status == 'R' ? "436A over range." : "436A over range while zeroing: power is applied to the sensor.");
+        if (m.Groups[3].Value != "A")
+            throw new PowerMeterException($"436A is not in watt mode ('{reply}').");
+        var digits = int.Parse(m.Groups[5].Value, System.Globalization.CultureInfo.InvariantCulture);
+        var exponent = int.Parse(m.Groups[6].Value, System.Globalization.CultureInfo.InvariantCulture);
+        return (m.Groups[4].Value == "-" ? -1 : 1) * digits * Math.Pow(10, -exponent);
+    }
+
+    public void Dispose() => session.Dispose();
+}
+
 public static class PowerMeters
 {
     /// <summary>The models with a bus driver. "manual" means the operator types the readings in.</summary>
-    public static readonly IReadOnlyList<string> BusModels = ["E4418B", "E4419B", "437B", "438A"];
+    public static readonly IReadOnlyList<string> BusModels = ["E4418B", "E4419B", "437B", "438A", "436A"];
 
+    /// <param name="channel">1 or 2 (E4419B), or the 438A sensor (1 = A, 2 = B).</param>
     public static IPowerMeter Open(string model, IVisaSession session, int channel) => model.ToUpperInvariant() switch
     {
         "E4418B" or "E4419B" or "E4416A" or "E4417A" => new E441xPowerMeter(session, channel),
         "437B" => new Hp437BPowerMeter(session),
-        "438A" => new Hp438APowerMeter(session),
+        "438A" => new Hp438APowerMeter(session, channel == 2 ? 'B' : 'A'),
+        "436A" => new Hp436APowerMeter(session),
         _ => throw new ArgumentException($"No bus driver for power meter '{model}'. Use {string.Join(", ", BusModels)} or manual."),
     };
 }

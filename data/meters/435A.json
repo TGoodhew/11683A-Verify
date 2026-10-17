@@ -1,0 +1,330 @@
+{
+  "model": "435A",
+  "manufacturer": "HP",
+  "title": "HP 435A Power Meter",
+  "manual": "435A-OSM.pdf: HP Model 435A Power Meter Operating and Service Manual, 00435-90011 (July 1974), Section IV Performance Tests",
+  "busDriver": null,
+  "channels": [
+    "A"
+  ],
+  "warmupMinutes": 30,
+  "notes": [
+    "No bus. Every 435A performance test reads a DVM on the rear-panel RECORDER OUTPUT (+1.00 Vdc = full scale, 1 kOhm): the app reads it with the bench DVM.",
+    "Half-hour warm-up; line voltage within +5% / -10% of nominal (para 4-8, p. 4-1).",
+    "Perform the tests in the order given and record on Table 4-1 (p. 4-6)."
+  ],
+  "tests": [
+    {
+      "id": "zero-carryover",
+      "title": "Zero Carryover Test",
+      "source": "435A-OSM, para 4-11, pp. 4-2 to 4-3 (PDF pp. 30-31); Table 4-1 p. 4-6 (PDF p. 34)",
+      "reading": "Recorder",
+      "equipment": [
+        "Power sensor (no RF applied)",
+        "DVM on the 435A rear-panel RECORDER OUTPUT"
+      ],
+      "setup": [
+        "Connect a power sensor to the 435A input (no RF applied); this test does not use the 11683A (Figure 4-1).",
+        "Connect the DVM to the 435A rear-panel RECORDER OUTPUT.",
+        "Set the 435A: CAL FACTOR 100%, RANGE 3 µW, POWER REF (rear panel) OFF.",
+        "Press the front-panel ZERO switch and wait for the pointer to stabilise. The DVM should read 0 ±0.9 mVdc. Release ZERO.",
+        "Step RANGE through each position without re-zeroing; record the RECORDER OUTPUT on each."
+      ],
+      "points": [
+        {
+          "label": "3 µW",
+          "calibrator": null,
+          "meterSetting": "RANGE 3 µW",
+          "expected": 0,
+          "unit": "mV",
+          "min": -15,
+          "max": 15,
+          "meterRange": "3uW"
+        },
+        {
+          "label": "10 µW",
+          "calibrator": null,
+          "meterSetting": "RANGE 10 µW",
+          "expected": 0,
+          "unit": "mV",
+          "min": -17,
+          "max": 17,
+          "meterRange": "10uW"
+        },
+        {
+          "label": "30 µW",
+          "calibrator": null,
+          "meterSetting": "RANGE 30 µW",
+          "expected": 0,
+          "unit": "mV",
+          "min": -14,
+          "max": 14,
+          "meterRange": "30uW"
+        },
+        {
+          "label": "100 µW",
+          "calibrator": null,
+          "meterSetting": "RANGE 100 µW",
+          "expected": 0,
+          "unit": "mV",
+          "min": -11,
+          "max": 11,
+          "meterRange": "100uW"
+        },
+        {
+          "label": "300 µW",
+          "calibrator": null,
+          "meterSetting": "RANGE 300 µW",
+          "expected": 0,
+          "unit": "mV",
+          "min": -8,
+          "max": 8,
+          "meterRange": "300uW"
+        },
+        {
+          "label": "1 mW",
+          "calibrator": null,
+          "meterSetting": "RANGE 1 mW",
+          "expected": 0,
+          "unit": "mV",
+          "min": -5,
+          "max": 5,
+          "meterRange": "1mW"
+        },
+        {
+          "label": "3 mW",
+          "calibrator": null,
+          "meterSetting": "RANGE 3 mW",
+          "expected": 0,
+          "unit": "mV",
+          "min": -5,
+          "max": 5,
+          "meterRange": "3mW"
+        },
+        {
+          "label": "10 mW",
+          "calibrator": null,
+          "meterSetting": "RANGE 10 mW",
+          "expected": 0,
+          "unit": "mV",
+          "min": -5,
+          "max": 5,
+          "meterRange": "10mW"
+        },
+        {
+          "label": "30 mW",
+          "calibrator": null,
+          "meterSetting": "RANGE 30 mW",
+          "expected": 0,
+          "unit": "mV",
+          "min": -5,
+          "max": 5,
+          "meterRange": "30mW"
+        },
+        {
+          "label": "100 mW",
+          "calibrator": null,
+          "meterSetting": "RANGE 100 mW",
+          "expected": 0,
+          "unit": "mV",
+          "min": -5,
+          "max": 5,
+          "meterRange": "100mW"
+        }
+      ],
+      "notes": [
+        "Spec: ±0.5% of full scale (0 ±5 mVdc) when zeroed on the most sensitive range; the µW limits allow for noise and drift.",
+        "10 µW is printed ±17 mVdc, wider than 3 µW (±15), in both the procedure and Table 4-1."
+      ]
+    },
+    {
+      "id": "instrumentation-accuracy",
+      "title": "Instrumentation Accuracy Test With Calibrator",
+      "source": "435A-OSM, para 4-13, pp. 4-5 to 4-6 (PDF pp. 33-34); Table 4-1 p. 4-6 (PDF p. 34)",
+      "reading": "Recorder",
+      "equipment": [
+        "HP 11683A Range Calibrator",
+        "Power sensor cable",
+        "DVM on the 435A rear-panel RECORDER OUTPUT"
+      ],
+      "setup": [
+        "Connect the 11683A POWER METER output to the 435A input with the sensor cable, and the DVM to the 435A RECORDER OUTPUT (Figure 4-3).",
+        "11683A: RANGE 1 mW, FUNCTION CALIBRATE, POLARITY NORMAL. 435A: RANGE 1 mW, CAL FACTOR 100%.",
+        "Adjust the 435A front-panel CAL ADJ for 1000 ±2 mVdc on the DVM.",
+        "CAUTION: set the 11683A FUNCTION to STANDBY while changing RANGE on either instrument, then back to CALIBRATE to read.",
+        "For each row set both RANGE switches to the same position."
+      ],
+      "points": [
+        {
+          "label": "3 µW",
+          "calibrator": {
+            "range": "3uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 3 µW",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 975,
+          "max": 1025,
+          "meterRange": "3uW"
+        },
+        {
+          "label": "10 µW",
+          "calibrator": {
+            "range": "10uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 10 µW",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 978,
+          "max": 1022,
+          "meterRange": "10uW"
+        },
+        {
+          "label": "30 µW",
+          "calibrator": {
+            "range": "30uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 30 µW",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 981,
+          "max": 1019,
+          "meterRange": "30uW"
+        },
+        {
+          "label": "100 µW",
+          "calibrator": {
+            "range": "100uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 100 µW",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 984,
+          "max": 1016,
+          "meterRange": "100uW"
+        },
+        {
+          "label": "300 µW",
+          "calibrator": {
+            "range": "300uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 300 µW",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 987,
+          "max": 1013,
+          "meterRange": "300uW"
+        },
+        {
+          "label": "1 mW",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 1 mW",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 998,
+          "max": 1002,
+          "meterRange": "1mW",
+          "note": "Reference range: CAL ADJ set here."
+        },
+        {
+          "label": "3 mW",
+          "calibrator": {
+            "range": "3mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 3 mW",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 990,
+          "max": 1010,
+          "meterRange": "3mW"
+        },
+        {
+          "label": "10 mW",
+          "calibrator": {
+            "range": "10mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 10 mW",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 990,
+          "max": 1010,
+          "meterRange": "10mW"
+        },
+        {
+          "label": "30 mW",
+          "calibrator": {
+            "range": "30mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 30 mW",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 990,
+          "max": 1010,
+          "meterRange": "30mW"
+        },
+        {
+          "label": "100 mW",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "RANGE 100 mW",
+          "expected": 1000,
+          "unit": "mV",
+          "min": 990,
+          "max": 1010,
+          "meterRange": "100mW"
+        }
+      ],
+      "notes": [
+        "Spec: ±1% of full scale on all ranges (Table 1-1); the limits include noise and drift.",
+        "Response time: 2 s on 3 µW, 0.75 s on 10 µW, 0.4 s on 30 µW, 100 ms otherwise (Table 1-1)."
+      ]
+    }
+  ],
+  "notCovered": [
+    {
+      "title": "Power Reference Output Test (1 mW ±0.7%)",
+      "source": "435A-OSM, para 4-10, p. 4-1 (PDF p. 29)",
+      "equipment": [
+        "A power measurement system traceable to NBS with <=0.7% total error"
+      ]
+    },
+    {
+      "title": "Instrumentation Accuracy Test Without Calibrator",
+      "source": "435A-OSM, para 4-12, pp. 4-3 to 4-4 (PDF pp. 31-32)",
+      "equipment": [
+        "HP 6204B power supply",
+        "Voltage divider network (Figure 1-2)",
+        "DVM",
+        "Power sensor with its cover removed"
+      ]
+    }
+  ],
+  "ambiguities": [
+    "Para 4-13 does not say to set CAL FACTOR 100% or to zero first; 100% is assumed.",
+    "The DVM range is given as 1000 mVdc while the 3 µW limit reaches 1025 mVdc (overrange).",
+    "The zero-carryover test uses a power sensor, not the 11683A; using the 11683A in STANDBY instead is not stated in the manual."
+  ]
+}

@@ -8,6 +8,9 @@ public enum DvmPoint
 {
     DcReferenceOutput,
     RefExtTee,
+
+    /// <summary>Somewhere else on the bench, e.g. a power meter's RECORDER OUTPUT: see <see cref="Simulated11683A.ExternalDvmSource"/>.</summary>
+    External,
 }
 
 /// <summary>
@@ -62,6 +65,9 @@ public sealed class Simulated11683A
 
     /// <summary>Where the DVM is connected. Part 4 moves it to a tee on REF EXT to monitor the DC calibrator.</summary>
     public DvmPoint DvmAt { get; set; }
+
+    /// <summary>What the DVM reads when it is connected elsewhere (<see cref="DvmPoint.External"/>).</summary>
+    public Func<double>? ExternalDvmSource { get; set; }
 
     /// <summary>The DC calibrator's output into REF EXT (Part 4); 0 when it is off.</summary>
     public double ExternalSourceVolts { get; set; }
@@ -123,6 +129,11 @@ public sealed class Simulated11683A
     {
         if (DvmAt == DvmPoint.RefExtTee)
             return ExternalSourceVolts + Noise(ExternalSourceVolts, Scenario.NoiseFloorVolts);
+        if (DvmAt == DvmPoint.External)
+        {
+            var v = ExternalDvmSource?.Invoke() ?? 0;
+            return v + Noise(v, Scenario.NoiseFloorVolts);
+        }
         var value = Blend(OutputVolts(_previous), OutputVolts(_state));
         return value * Drift() + Noise(value, Scenario.NoiseFloorVolts);
     }

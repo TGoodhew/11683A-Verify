@@ -16,6 +16,12 @@ public sealed class CommandLine
     public double? AmbientC { get; private set; }
     public bool SkipWarmup { get; private set; }
 
+    /// <summary>meter-test: the meter model (a data/meters/&lt;model&gt;.json definition).</summary>
+    public string? Meter { get; private set; }
+
+    /// <summary>meter-test: the power meter's VISA resource (overrides powerMeter.resource).</summary>
+    public string? MeterResource { get; private set; }
+
     /// <summary>verify: run Part 4 without asking.</summary>
     public bool Part4 { get; private set; }
 
@@ -41,6 +47,8 @@ public sealed class CommandLine
                                current unless a DC reading first shows the output is grounded.
           part4                Part 4: Option H01 REF EXT transfer check against a power meter
                                (informational; E4418B Service Guide procedure 2).
+          meter-test           Power meter performance tests with the 11683A: 435A, 435B, 436A, 437B, 438A,
+                               E4418B (definitions in data/meters). Menu choice, or --meter <model>.
           adjust               Part 3: Power Supply Adjustment assist. Live reading of the 1 mW output while
                                A2R1 is set to 145.00 +/- 2.00 mV, then an offer to rerun Part 1.
                                (In simulation, the arrow keys turn the simulated A2R1.)
@@ -58,6 +66,8 @@ public sealed class CommandLine
           --ambient <degC>     Ambient temperature, for the temperature coefficient outside 18-28 C.
                                Asked for at the start of a test if not given.
           --part4              verify: also run Part 4 without asking.
+          --meter <model>      meter-test: the power meter, e.g. 437B.
+          --meter-resource <r> meter-test: its VISA resource (overrides powerMeter.resource).
           --skip-warmup        Don't ask about or time the warm-up (it is then not recorded).
           --regen-pdf <json>   Rebuild the PDF report from a saved results file, beside it, and exit.
           --export-actuals <json>
@@ -105,6 +115,12 @@ public sealed class CommandLine
                     break;
                 case "--regen-pdf":
                     result.RegeneratePdf = Value();
+                    break;
+                case "--meter":
+                    result.Meter = Value();
+                    break;
+                case "--meter-resource":
+                    result.MeterResource = Value();
                     break;
                 case "--part4":
                     result.Part4 = true;

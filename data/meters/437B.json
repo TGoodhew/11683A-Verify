@@ -1,0 +1,275 @@
+{
+  "model": "437B",
+  "manufacturer": "HP",
+  "title": "HP 437B Power Meter",
+  "manual": "437B-UM.pdf: Operating Manual, 437B Power Meter, 00437-90047 (Jan 1997), Section 4 Performance Tests (the Service Manual 00437-90016 has none)",
+  "busDriver": "437B",
+  "defaultResource": "GPIB0::13::INSTR",
+  "channels": [
+    "A"
+  ],
+  "warmupMinutes": 30,
+  "notes": [
+    "Over HP-IB the app sends LN (watts), TR2 (one settled reading) and TR3 (free run again).",
+    "Half-hour warm-up (p. 4-1). Perform the tests in the order given; record on Table 4-1 (p. 4-12)."
+  ],
+  "tests": [
+    {
+      "id": "zero-carryover",
+      "title": "Zero Carryover Test",
+      "source": "437B-UM.pdf, para 4-7, pp. 4-3 to 4-4 (PDF pp. 141-142); Table 4-1 p. 4-12 (PDF p. 150)",
+      "reading": "Meter",
+      "equipment": [
+        "HP 11683A Range Calibrator",
+        "HP 11730A power sensor cable"
+      ],
+      "setup": [
+        "Connect the 11683A to the 437B with the 11730A cable (Figure 4-1). 437B LINE ON, PRESET/LOCAL then ENTER, dBm/W for watts.",
+        "11683A: RANGE 3 µW, FUNCTION STANDBY, LINE ON.",
+        "Press ZERO and wait about 15 s for ZEROING to clear; the display should read 0.00 ±0.06 µW.",
+        "For each row press SET RANGE, choose RNG n with the arrow keys and press ENTER."
+      ],
+      "points": [
+        {
+          "label": "RNG 1",
+          "calibrator": {
+            "range": "3uW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "SET RANGE: RNG 1",
+          "expected": 0.0,
+          "unit": "uW",
+          "min": -0.05,
+          "max": 0.05
+        },
+        {
+          "label": "RNG 2",
+          "calibrator": {
+            "range": "3uW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "SET RANGE: RNG 2",
+          "expected": 0.0,
+          "unit": "uW",
+          "min": -0.1,
+          "max": 0.1
+        },
+        {
+          "label": "RNG 3",
+          "calibrator": {
+            "range": "3uW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "SET RANGE: RNG 3",
+          "expected": 0.0,
+          "unit": "mW",
+          "min": -0.001,
+          "max": 0.001
+        },
+        {
+          "label": "RNG 4",
+          "calibrator": {
+            "range": "3uW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "SET RANGE: RNG 4",
+          "expected": 0.0,
+          "unit": "mW",
+          "min": -0.01,
+          "max": 0.01
+        },
+        {
+          "label": "RNG 5",
+          "calibrator": {
+            "range": "3uW",
+            "function": "Standby",
+            "polarity": "Normal"
+          },
+          "meterSetting": "SET RANGE: RNG 5",
+          "expected": 0.0,
+          "unit": "mW",
+          "min": -0.1,
+          "max": 0.1
+        }
+      ],
+      "notes": [
+        "Spec: ±0.5% of full scale on the most sensitive range, a tenth of that on each higher range, ±1 count. Drift and noise are included."
+      ]
+    },
+    {
+      "id": "instrument-accuracy",
+      "title": "Instrument Accuracy Test",
+      "source": "437B-UM.pdf, para 4-8, pp. 4-5 to 4-7 (PDF pp. 143-145); Table 4-1 p. 4-12 (PDF p. 150)",
+      "reading": "Meter",
+      "equipment": [
+        "HP 11683A Range Calibrator",
+        "HP 11730A power sensor cable"
+      ],
+      "setup": [
+        "Connect as Figure 4-2. 437B LINE ON, PRESET/LOCAL then ENTER, dBm/W for watts.",
+        "11683A: FUNCTION STANDBY, POLARITY NORMAL, RANGE 3 µW, LINE ON. Wait for the downward drift to stop (typically under 60 s).",
+        "Press ZERO; the display should read 0.00 ±0.05 µW.",
+        "11683A FUNCTION CALIBRATE, RANGE 1 mW. Press CAL (SHIFT ZERO), set REF CF 100.0%, ENTER (CAL*** shows).",
+        "Press CAL FAC (SHIFT FREQ), set 100.0%, ENTER. The display should read 1.000 ±0.001 mW.",
+        "Set the 11683A RANGE to each row."
+      ],
+      "points": [
+        {
+          "label": "3 µW",
+          "calibrator": {
+            "range": "3uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 3.16,
+          "unit": "uW",
+          "min": 3.1,
+          "max": 3.23
+        },
+        {
+          "label": "10 µW",
+          "calibrator": {
+            "range": "10uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 10.0,
+          "unit": "uW",
+          "min": 9.9,
+          "max": 10.1
+        },
+        {
+          "label": "30 µW",
+          "calibrator": {
+            "range": "30uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 31.6,
+          "unit": "uW",
+          "min": 31.4,
+          "max": 31.8
+        },
+        {
+          "label": "100 µW",
+          "calibrator": {
+            "range": "100uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 100.0,
+          "unit": "uW",
+          "min": 99.5,
+          "max": 100.5
+        },
+        {
+          "label": "300 µW",
+          "calibrator": {
+            "range": "300uW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 0.316,
+          "unit": "mW",
+          "min": 0.314,
+          "max": 0.318
+        },
+        {
+          "label": "1 mW",
+          "calibrator": {
+            "range": "1mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 1.0,
+          "unit": "mW",
+          "min": 0.995,
+          "max": 1.005
+        },
+        {
+          "label": "3 mW",
+          "calibrator": {
+            "range": "3mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 3.16,
+          "unit": "mW",
+          "min": 3.14,
+          "max": 3.18
+        },
+        {
+          "label": "10 mW",
+          "calibrator": {
+            "range": "10mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 10.0,
+          "unit": "mW",
+          "min": 9.95,
+          "max": 10.05
+        },
+        {
+          "label": "30 mW",
+          "calibrator": {
+            "range": "30mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 31.6,
+          "unit": "mW",
+          "min": 31.4,
+          "max": 31.8
+        },
+        {
+          "label": "100 mW",
+          "calibrator": {
+            "range": "100mW",
+            "function": "Calibrate",
+            "polarity": "Normal"
+          },
+          "meterSetting": "Watts, autorange",
+          "expected": 100.0,
+          "unit": "mW",
+          "min": 99.5,
+          "max": 100.5
+        }
+      ],
+      "notes": [
+        "Spec: ±0.5% or ±0.02 dB within the calibration range; in ranges 4 and 5 add the sensor linearity.",
+        "The 3 µW, 30 µW, 300 µW, 3 mW and 30 mW legends are approximations: the true outputs are 3.16, 31.6, 316 µW, 3.16 and 31.6 mW (p. 4-7).",
+        "Not necessary to check accuracy in dBm (same circuitry)."
+      ]
+    }
+  ],
+  "notCovered": [
+    {
+      "title": "Power Reference Level Test (0.981-1.019 mW)",
+      "source": "437B-UM.pdf, para 4-9, pp. 4-8 to 4-11 (PDF pp. 146-149)",
+      "equipment": [
+        "HP 432A test power meter",
+        "HP 478A-H75/H76 thermistor mount",
+        "HP 3456A DVM"
+      ]
+    }
+  ],
+  "ambiguities": [
+    "Zero carryover post-zero check prints as '0.0[1 ±06 µW' (OCR); read as 0.00 ±0.06 µW.",
+    "REF CF and CAL FAC values print as OCR garbage; read as 100.0% (the Service Manual says REF CF 100.0%).",
+    "3 µW limits 3.10 / 3.23 µW are asymmetric about 3.16 µW; encoded as printed."
+  ]
+}
