@@ -358,7 +358,7 @@ public static class PdfReport
     });
 
     private static string Percent(double fraction, bool signed = true) =>
-        (fraction * 100).ToString(signed ? "+0.000;-0.000" : "0.0##", CultureInfo.InvariantCulture) + "%";
+        (fraction * 100).ToString(signed ? "+0.000;-0.000;0.000" : "0.0##", CultureInfo.InvariantCulture) + "%";
 
     private static void UncertaintyNotes(IContainer container, VerificationRun run) => container.Column(c =>
     {
