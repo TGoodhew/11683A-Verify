@@ -257,6 +257,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             {
                 _dvmIdentity = dvm.Identify();
                 dvm.Reset();
+                bench.CheckTerminals();
             }
             var span = Math.Max(Math.Abs(point.Min), Math.Abs(point.Max));
             var volts = point.Unit == "mV" ? span * 1e-3 : span;

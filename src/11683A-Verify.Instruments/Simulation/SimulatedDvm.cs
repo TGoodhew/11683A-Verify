@@ -30,6 +30,12 @@ public sealed class SimulatedDvm(Simulated11683A source, IClock clock, double li
 
     public Simulated11683A Source => source;
 
+    /// <summary>The front-panel Front/Rear switch, from the scenario (Front unless it says otherwise).</summary>
+    public DvmTerminals Terminals { get; set; } = source.Scenario.DvmTerminals;
+
+    /// <summary>What the open rear input reads on DC volts: about 11 mV, as seen on the bench.</summary>
+    public const double FloatingVolts = 11e-3;
+
     /// <summary>Uses the 34401A's spec table.</summary>
     public string Model => "34401A";
 
@@ -73,9 +79,12 @@ public sealed class SimulatedDvm(Simulated11683A source, IClock clock, double li
         if (Pacing > TimeSpan.Zero)
             Thread.Sleep(Pacing);
 
-        var value = config.Function == DvmFunction.DcVoltage
-            ? source.MeasureVolts()
-            : source.MeasureFourWireOhms(TestCurrent[config.Range]);
+        // On the rear terminals the cable is not connected: a floating input reads some millivolts and ohms overload.
+        var value = Terminals != DvmTerminals.Front
+            ? config.Function == DvmFunction.DcVoltage ? FloatingVolts : double.PositiveInfinity
+            : config.Function == DvmFunction.DcVoltage
+                ? source.MeasureVolts()
+                : source.MeasureFourWireOhms(TestCurrent[config.Range]);
 
         if (Math.Abs(value) > config.Range * Overrange)
             return new DvmReading(Math.Sign(value) * OverloadValue, Overload: true, clock.Now);
@@ -101,9 +110,11 @@ public sealed class SimulatedDvm(Simulated11683A source, IClock clock, double li
             new("NPLC?", c.Nplc.ToString(CultureInfo.InvariantCulture)),
             new("ZERO:AUTO?", "1"),
             new("INP:IMP:AUTO?", c.HighImpedance ? "1" : "0"),
-            new("ROUT:TERM?", "FRON"),
+            new("ROUT:TERM?", Terminals == DvmTerminals.Front ? "FRON" : "REAR"),
         ];
     }
+
+    public DvmTerminals ReadTerminals() => Terminals;
 
     public void Dispose() { }
 

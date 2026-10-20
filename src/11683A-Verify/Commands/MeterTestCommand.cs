@@ -28,6 +28,8 @@ public static class MeterTestCommand
             return 1;
         }
 
+        foreach (var line in ResultLog.Meter(run))
+            bench.Log.Write(line);
         var path = run.Save(config.ResultsDirectory);
         bench.Log.Write($"Meter results saved to {Path.GetFullPath(path)}");
         try

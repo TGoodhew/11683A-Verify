@@ -1,5 +1,6 @@
 using System.Globalization;
 using Spectre.Console;
+using Verify11683A.App.Reports;
 using Verify11683A.Calibrator;
 using Verify11683A.Formatting;
 using Verify11683A.H01;
@@ -150,7 +151,9 @@ public static class Part4Procedure
             + "Table 2-4's limits do not include measurement uncertainty.");
         if (!meter.OverBus)
             notes.Add("Power meter readings were entered by the operator.");
-        return new Part4Result(table.Source, meter.Description, meter.OverBus, transfer, points, notes);
+        var result = new Part4Result(table.Source, meter.Description, meter.OverBus, transfer, points, notes);
+        session.Log.Write(ResultLog.Part4(result));
+        return result;
     }
 
     /// <summary>Measures the 1 mW DC REFERENCE OUTPUT voltage with REF INT, as Part 1 would.</summary>

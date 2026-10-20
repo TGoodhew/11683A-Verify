@@ -1,3 +1,4 @@
+using Spectre.Console;
 using Verify11683A.Calibrator;
 using Verify11683A.Instruments.Dvm;
 using Verify11683A.Instruments.PowerMeter;
@@ -42,6 +43,36 @@ public sealed class Bench : IDisposable
             ConsoleUi.Prompt(Walkthrough ? $"{prompt} [simulator: Enter sets it]" : prompt);
         if (Simulator is { } sim)
             simulate?.Invoke(sim);
+    }
+
+    /// <summary>
+    /// Before the first measurement: the DVM must be on its FRONT terminals (<see cref="TerminalsCheck"/>). Until it is,
+    /// the operator is told and the switch is read again after Enter; in simulation, Enter presses the simulated button.
+    /// Each reading of the switch goes to the session log.
+    /// </summary>
+    /// <exception cref="DvmException">On the REAR terminals with no operator at the console to wait for.</exception>
+    public DvmTerminals CheckTerminals()
+    {
+        var terminals = TerminalsCheck.Ensure(Dvm, problem =>
+        {
+            AnsiConsole.MarkupLine($"[red]✗ {Markup.Escape(problem)}[/]");
+            if (!IsSimulation && Console.IsInputRedirected)
+                throw new DvmException($"{problem} No operator at the console to wait for.");
+            Step("Press Enter when FRONT is selected", _ =>
+            {
+                if (Dvm is not SimulatedDvm simulated)
+                    return;
+                simulated.Terminals = DvmTerminals.Front;
+                if (!Walkthrough)
+                    AnsiConsole.MarkupLine("[grey]Simulator: Front/Rear → FRONT[/]");
+            });
+            return true;
+        }, Log.Write);
+
+        AnsiConsole.MarkupLine(terminals == DvmTerminals.Front
+            ? $"[green]✓[/] The {Markup.Escape(Dvm.Model)} is reading its FRONT terminals."
+            : $"[yellow]⚠ {Markup.Escape(TerminalsCheck.Problem(Dvm.Model, terminals)!)}[/]");
+        return terminals;
     }
 
     public static Bench Open(AppConfig config, CommandLine options, string sessionName)

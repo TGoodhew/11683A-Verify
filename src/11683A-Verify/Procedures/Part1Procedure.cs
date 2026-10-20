@@ -86,6 +86,9 @@ public static class Part1Procedure
 
         if (ConsoleUi.Interactive)
             AnsiConsole.Clear();
-        return Evaluate();
+        var result = Evaluate();
+        foreach (var line in ResultLog.Part1(result, session.Specs.Model))
+            session.Log.Write(line);
+        return result;
     }
 }

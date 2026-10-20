@@ -65,6 +65,8 @@ public sealed class VerificationSession : IDisposable
             bench.Dvm.Reset();
             var session = new VerificationSession(bench, config, options, identity);
             session.WriteHeader(name);
+            bench.CheckTerminals();
+            AnsiConsole.WriteLine();
             return session;
         }
         catch
@@ -246,6 +248,7 @@ public sealed class VerificationSession : IDisposable
     public string Save(VerificationRun run)
     {
         run = run with { Notes = [.. run.Notes, .. AskNotes()] };
+        Log.Write(ResultLog.Run(run));
         var path = ResultsFile.Save(run, Config.ResultsDirectory);
         Log.Write($"Results saved to {Path.GetFullPath(path)}");
         try

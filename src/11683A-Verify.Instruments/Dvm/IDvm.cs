@@ -19,6 +19,20 @@ public sealed record DvmConfiguration(
     bool HighImpedance,
     string InputResistance);
 
+/// <summary>
+/// Which input terminals the DVM's front-panel switch selects. Neither DVM can set it over the bus, and the wiring
+/// uses the front terminals. <see cref="Unknown"/> is a reply the driver could not read.
+/// </summary>
+public enum DvmTerminals
+{
+    Unknown,
+    Front,
+    Rear,
+
+    /// <summary>The 3458A's TERM OPEN (numeric 0). Its manual says TERM? reports only FRONT or REAR.</summary>
+    Open,
+}
+
 /// <summary>A DVM failure: unexpected identity, rejected command, or a configuration that did not read back.</summary>
 public sealed class DvmException(string message) : Exception(message);
 
@@ -55,6 +69,9 @@ public interface IDvm : IDisposable
 
     /// <summary>Reads and clears the instrument's error queue. Empty when there are no errors.</summary>
     IReadOnlyList<string> ReadErrors();
+
+    /// <summary>Queries the front-panel Front/Rear terminals switch. It cannot be set over the bus.</summary>
+    DvmTerminals ReadTerminals();
 
     /// <summary>The instrument's own report of its present settings, for the bench check.</summary>
     IReadOnlyList<KeyValuePair<string, string>> ReadBackSettings();
