@@ -54,13 +54,14 @@ public static class MeterReport
     public static string WriteBeside(MeterRun run, string resultsPath)
     {
         var path = Path.ChangeExtension(resultsPath, ".pdf");
-        Document(run, Path.GetFileName(resultsPath)).GeneratePdf(path);
+        Build(run, Path.GetFileName(resultsPath)).GeneratePdf(path);
         return path;
     }
 
-    public static byte[] Generate(MeterRun run) => Document(run, null).GeneratePdf();
+    public static byte[] Generate(MeterRun run) => Build(run, null).GeneratePdf();
 
-    private static Document Document(MeterRun run, string? sourceFile) => QuestPDF.Fluent.Document.Create(doc => doc.Page(page =>
+    /// <summary>The test record as a document: written as the PDF, or printed (<see cref="ReportPrinter"/>).</summary>
+    public static Document Build(MeterRun run, string? sourceFile) => QuestPDF.Fluent.Document.Create(doc => doc.Page(page =>
     {
         page.Size(PageSizes.Letter);
         page.Margin(0.6f, Unit.Inch);

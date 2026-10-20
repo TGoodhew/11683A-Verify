@@ -36,6 +36,7 @@ cd src\11683A-Verify\bin\Debug\net10.0
 11683A-Verify adjust                    # Part 3: Power Supply Adjustment assist (A2R1), then Part 1
 11683A-Verify wiring                    # wiring diagram and 4-wire cable rules
 11683A-Verify --regen-pdf results\11683A_SG52060005_20261017-1430.json   # rebuild a PDF report
+11683A-Verify --print results\11683A_SG52060005_20261017-1430.json       # print a saved report
 11683A-Verify dvm-check --simulate      # no hardware; also --simulate=supply-low, ratio-fail,
                                         # ohms-fail, noisy, drifting, rear-terminals
 11683A-Verify --help
@@ -141,6 +142,10 @@ pp. 7–8 (PDF pp. 18–19). All limits are in [`data/limits-11683A.json`](data/
   colour-coded: PASS green, FAIL red, INDETERMINATE yellow, INFO blue.
 - **Summary.** At the end, a summary panel gives each part's verdict and counts, any TUR below 4:1, the
   conditions, any supply-adjustment recommendation and the path of the results file.
+- **Printing.** After the summary, the app asks "Print the report?" (default No). It then lists every
+  installed printer, with the Windows default first and marked, plus *Don't print*. The printout is the same
+  report as the PDF. Each page is rendered at 300 dpi and printed at its own size, or shrunk to fit A4, so no
+  PDF reader is needed. `meter-test` offers the same for its test record.
 
 ## Results files
 
@@ -168,6 +173,11 @@ same minute gets `-2`. The JSON holds everything the report needs, so a report c
 
 A simulated run is stamped "SIMULATED: not a calibration record". `--regen-pdf <json>` rebuilds the PDF
 from a saved results file alone.
+
+**Printing a saved report.** Use *Print a saved report* in the menu: it lists the newest 20 results files,
+11683A and power meter runs alike. Or use `--print <json>`. At a console you choose the printer. Add
+`--printer "<name>"` to name one, e.g. `--printer "Brother MFC-9340CDW Printer"`. Redirected, it uses the
+Windows default printer. Each print is noted in the session log.
 
 **Actuals for the power meter app.** After a passing run, the app offers to write
 **`results\11683A-actuals.json`**. It holds the measured ratios, voltages and resistances, each with its U and

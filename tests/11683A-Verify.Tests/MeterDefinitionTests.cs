@@ -174,7 +174,7 @@ public class Hp436ADriverTests
 
 public class MeterRunTests
 {
-    private static MeterRun Sample(double? reading = 10.01)
+    internal static MeterRun Sample(double? reading = 10.01)
     {
         var d = MeterDefinition.LoadModel("437B");
         var test = d.Tests.Single(t => t.Id == "instrument-accuracy");

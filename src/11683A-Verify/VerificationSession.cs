@@ -293,6 +293,7 @@ public sealed class VerificationSession : IDisposable
         Screens.Finish();
         AnsiConsole.WriteLine();
         ConsoleReport.Summary(run, path);
+        Printing.Offer(() => PdfReport.Build(ResultsFile.Load(path), Path.GetFileName(path)), Path.GetFileNameWithoutExtension(path), Log);
         if (offerActuals)
             OfferActualsExport(path);
         ConsoleUi.SessionLogLine(Log);

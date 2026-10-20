@@ -28,6 +28,12 @@ public sealed class CommandLine
     /// <summary>A results file to rebuild the PDF report from (--regen-pdf).</summary>
     public string? RegeneratePdf { get; private set; }
 
+    /// <summary>A results file whose report to print (--print).</summary>
+    public string? Print { get; private set; }
+
+    /// <summary>The printer for --print; the Windows default (or a choice, at a console) if not given.</summary>
+    public string? Printer { get; private set; }
+
     /// <summary>A results file to write 11683A-actuals.json from (--export-actuals).</summary>
     public string? ExportActuals { get; private set; }
 
@@ -70,6 +76,9 @@ public sealed class CommandLine
           --meter-resource <r> meter-test: its VISA resource (overrides powerMeter.resource).
           --skip-warmup        Don't ask about or time the warm-up (it is then not recorded).
           --regen-pdf <json>   Rebuild the PDF report from a saved results file, beside it, and exit.
+          --print <json>       Print the report of a saved results file (11683A or power meter), and exit.
+          --printer <name>     The printer for --print (default: choose at a console, else the Windows
+                               default printer). Runs also offer to print at the end.
           --export-actuals <json>
                                Write 11683A-actuals.json (for the power meter app) beside a saved, passing
                                results file, and exit.
@@ -112,6 +121,12 @@ public sealed class CommandLine
                     break;
                 case "--export-actuals":
                     result.ExportActuals = Value();
+                    break;
+                case "--print":
+                    result.Print = Value();
+                    break;
+                case "--printer":
+                    result.Printer = Value();
                     break;
                 case "--regen-pdf":
                     result.RegeneratePdf = Value();
