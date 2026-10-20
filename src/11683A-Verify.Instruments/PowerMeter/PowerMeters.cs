@@ -113,8 +113,10 @@ public sealed class E441xPowerMeter(IVisaSession session, int channel = 1) : IPo
         _filter = 4;
         // Single triggered readings: READ? starts one and returns it once the filter is full.
         session.Write($"INIT{channel}:CONT OFF;:TRIG{channel}:SOUR IMM;:TRIG{channel}:DEL:AUTO ON");
-        // Preset leaves a sensor table selected, and with one the cal factor cannot be set (pp. 330–332).
-        session.Write($"SENS{channel}:CORR:CSET1:STAT OFF");
+        // With a sensor table active the cal factor cannot be set (pp. 330–332), so one is turned off. Only if one is
+        // on: with no table selected, STAT OFF gives -221 "Settings conflict" (seen on an E4419B, A2.09.01).
+        if (session.Query($"SENS{channel}:CORR:CSET1:STAT?").Trim() is "1" or "ON")
+            session.Write($"SENS{channel}:CORR:CSET1:STAT OFF");
         session.Write($"UNIT{channel}:POW W");
         CheckError();
     }
