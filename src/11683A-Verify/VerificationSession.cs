@@ -20,9 +20,10 @@ namespace Verify11683A.App;
 /// </summary>
 public sealed class VerificationSession : IDisposable
 {
-    private VerificationSession(Bench bench, AppConfig config, CommandLine options, DvmIdentity identity)
+    private VerificationSession(Bench bench, AppConfig config, CommandLine options, DvmIdentity identity, Screens screens)
     {
         Bench = bench;
+        Screens = screens;
         Config = config;
         Options = options;
         Identity = identity;
@@ -35,6 +36,9 @@ public sealed class VerificationSession : IDisposable
     }
 
     public Bench Bench { get; }
+
+    /// <summary>The run's screens: one per step, under a header with the step tracker.</summary>
+    public Screens Screens { get; }
     public AppConfig Config { get; }
     public CommandLine Options { get; }
     public IDvm Dvm => Bench.Dvm;
@@ -55,31 +59,42 @@ public sealed class VerificationSession : IDisposable
     public DateTimeOffset Started { get; }
     public SessionLog Log => Bench.Log;
 
-    public static VerificationSession Start(AppConfig config, CommandLine options, string name)
+    /// <summary>
+    /// Opens the bench, identifies and resets the DVM, and starts the first screen, Setup: the instruments, the
+    /// conditions and the DVM's terminals.
+    /// </summary>
+    /// <param name="steps">The steps after Setup, as the tracker shows them.</param>
+    public static VerificationSession Start(AppConfig config, CommandLine options, string name, params string[] steps)
     {
         var bench = Bench.Open(config, options, name);
+        Screens? screens = null;
         try
         {
             var identity = bench.Dvm.Identify();
             bench.Log.Write($"Identity: {identity.Raw}");
             bench.Dvm.Reset();
-            var session = new VerificationSession(bench, config, options, identity);
-            session.WriteHeader(name);
+            var c = config.Calibrator;
+            screens = new Screens($"11683A verification — {name}" + (bench.IsSimulation ? $" (simulated: {bench.Simulator!.Scenario.Name})" : ""),
+                ["Setup", .. steps])
+            {
+                Identity = $"{c.Model} s/n {c.Serial}{(c.Options == "" ? "" : " " + c.Options)} · {bench.Dvm.Model} at {bench.Dvm.ResourceName}",
+            };
+            var session = new VerificationSession(bench, config, options, identity, screens);
+            screens.Begin("Setup", "Setup: instruments and conditions");
+            session.WriteHeader();
             bench.CheckTerminals();
-            AnsiConsole.WriteLine();
             return session;
         }
         catch
         {
+            screens?.Dispose();
             bench.Dispose();
             throw;
         }
     }
 
-    private void WriteHeader(string name)
+    private void WriteHeader()
     {
-        AnsiConsole.Write(new Rule($"[bold]11683A verification[/] — {Markup.Escape(name)}"
-            + (Bench.IsSimulation ? $" [yellow](simulated: {Markup.Escape(Bench.Simulator!.Scenario.Name)})[/]" : "")).LeftJustified());
         var grid = new Grid().AddColumn().AddColumn();
         var c = Config.Calibrator;
         grid.AddRow("[grey]Unit[/]", Markup.Escape($"{c.Model} s/n {c.Serial}" + (c.Options == "" ? "" : $", option {c.Options}")));
@@ -268,6 +283,23 @@ public sealed class VerificationSession : IDisposable
     }
 
     /// <summary>
+    /// The Results step: operator notes and saving on the last screen, then back on the normal screen the results
+    /// kept along the way, the summary and where everything went.
+    /// </summary>
+    public string SaveAndSummarise(VerificationRun run, bool offerActuals = true)
+    {
+        Screens.Begin("Results", "Results: notes and saving");
+        var path = Save(run);
+        Screens.Finish();
+        AnsiConsole.WriteLine();
+        ConsoleReport.Summary(run, path);
+        if (offerActuals)
+            OfferActualsExport(path);
+        ConsoleUi.SessionLogLine(Log);
+        return path;
+    }
+
+    /// <summary>
     /// After a passing run, offers to write 11683A-actuals.json for the power meter app, from the results file exactly
     /// as saved.
     /// </summary>
@@ -305,5 +337,9 @@ public sealed class VerificationSession : IDisposable
 
     private static string Capitalise(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
 
-    public void Dispose() => Bench.Dispose();
+    public void Dispose()
+    {
+        Screens.Dispose();
+        Bench.Dispose();
+    }
 }

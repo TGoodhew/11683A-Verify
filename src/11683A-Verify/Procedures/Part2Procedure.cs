@@ -23,9 +23,12 @@ public static class Part2Procedure
         var sim = session.Bench.Simulator;
         var dvm = session.Dvm;
 
-        AnsiConsole.Write(new Rule("[bold]Part 2: four-wire resistance[/]").LeftJustified());
+        var screens = session.Screens;
+        const string Heading = "Part 2: four-wire resistance";
+        screens.Begin("Part 2", Heading);
         AnsiConsole.MarkupLine($"[grey]{Markup.Escape(part.Source)}[/]");
-        AnsiConsole.MarkupLine("Set the 11683A FUNCTION switch to [bold]STANDBY[/]. Leave the 4-wire cable on DC REFERENCE OUTPUT.");
+        AnsiConsole.Write(ConsoleUi.Settings("Set the 11683A",
+            ("FUNCTION", "STANDBY"), ("DVM", "leave the 4-wire cable on DC REFERENCE OUTPUT")));
         AnsiConsole.MarkupLine("[grey]Before ohms current is applied, the DVM reads the output on its 100 mV DC range: it must be grounded, "
             + $"within {Si.Format(OhmsSafety.DefaultThresholdVolts, "V", 2)} of zero.[/]");
         session.Bench.Step("Press Enter when FUNCTION is in STANDBY", s => s.SetFunction(FunctionSwitch.Standby));
@@ -41,6 +44,7 @@ public static class Part2Procedure
         var acquirer = session.Acquirer(new RangeDetector(DvmFunction.FourWireResistance, candidates), interlock);
         var measured = new Dictionary<string, MeasuredPoint>();
         double? lastRange = null;
+        string? lastLine = null;
         Part2Result Evaluate() => Part2Evaluator.Evaluate(limits, measured.Values, checks, session.Specs, session.Period, session.AmbientC, session.Convention);
 
         try
@@ -51,10 +55,12 @@ public static class Part2Procedure
                 var current = Evaluate();
                 IRenderable View(string status, ExpectedValue? at) =>
                     ConsoleReport.Live(ConsoleReport.Part2Table(current, limits, session.Convention, at?.RangeId), status);
-                if (ConsoleUi.Interactive)
+                if (screens.Clearing)
                 {
-                    AnsiConsole.Clear();
+                    screens.Begin("Part 2", Heading);
                     AnsiConsole.Write(ConsoleReport.Part2Table(current, limits, session.Convention));
+                    if (lastLine is not null)
+                        AnsiConsole.MarkupLine(lastLine);
                 }
                 AnsiConsole.WriteLine();
                 if (session.Bench.Walkthrough)
@@ -71,6 +77,7 @@ public static class Part2Procedure
                     ConsoleUi.Prompt($"Set RANGE to any of {string.Join(", ", remaining.Select(r => RangeSwitch.Get(r).Label))}, then press Enter");
                 }
 
+                screens.Redraw();
                 var point = session.MeasureNext(acquirer, lastRange, View);
                 if (point is null)
                 {
@@ -86,9 +93,11 @@ public static class Part2Procedure
                 measured[point.RangeId] = point;
                 session.Log.Write($"Part 2 {point.RangeId}: mean {point.Statistics.Mean} Ω, s {point.Statistics.StandardDeviation} Ω, n {point.Statistics.Count}, "
                     + $"DVM {point.DvmRange} Ω, settled {point.Settled} after {point.SettlingSeconds:0} s, attempts {point.Attempts}");
-                AnsiConsole.MarkupLine($"[green]✓[/] [bold]{Markup.Escape(label)}[/]: {Si.Format(point.Statistics.Mean, "Ω", 7)}, "
+                lastLine = $"[green]✓[/] [bold]{Markup.Escape(label)}[/]: {Si.Format(point.Statistics.Mean, "Ω", 7)}, "
                     + $"σ {Si.Format(point.Statistics.StandardDeviation, "Ω", 2)} (n = {point.Statistics.Count}) on the {Si.Range(point.DvmRange, "Ω")} range"
-                    + (point.Settled ? "" : " [yellow](not settled)[/]"));
+                    + (point.Settled ? "" : " [yellow](not settled)[/]");
+                if (!screens.Clearing)
+                    AnsiConsole.MarkupLine(lastLine);
             }
         }
         finally
@@ -105,8 +114,6 @@ public static class Part2Procedure
             }
         }
 
-        if (ConsoleUi.Interactive)
-            AnsiConsole.Clear();
         var result = Evaluate();
         foreach (var line in ResultLog.Part2(result, session.Specs.Model))
             session.Log.Write(line);

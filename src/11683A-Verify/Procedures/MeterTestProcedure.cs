@@ -20,7 +20,7 @@ namespace Verify11683A.App.Procedures;
 /// 11683A as the source. Each row tells the operator what to set on the 11683A and on the meter, then reads the meter
 /// (over the bus, from the DVM on its recorder output, or typed in) and checks it against the manual's limits.
 /// </summary>
-public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Bench bench, MeterDefinition definition)
+public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Bench bench, MeterDefinition definition, Screens screens)
 {
     private const int BusReadings = 3;
     private const int DvmReadings = 5;
@@ -41,6 +41,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         var channels = ChooseChannels(tests);
         var useBus = definition.BusDriver is not null && (Sim is not null
             || ConsoleUi.Confirm($"Read the {definition.Model} over the bus at {Resource}?", defaultValue: true));
+        screens.SetSteps([.. tests.SelectMany(t => (t.PerChannel ? channels : [channels[0]]).Select(c => StepName(t, c))), "Results"]);
 
         var results = new List<MeterTestResult>();
         var identity = "";
@@ -51,12 +52,14 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             meter.Identify();
             identity = meter.Description;
             bench.Log.Write($"Meter test {test.Id} channel {channel}: {meter.Description}");
+            screens.Begin(StepName(test, channel), test.Title + (test.PerChannel ? $" — channel {channel}" : ""));
             var result = RunTest(test, channel, meter);
             if (result is null)
                 break;
             results.Add(result);
-            AnsiConsole.Write(MeterReport.Table(result));
             AnsiConsole.WriteLine();
+            screens.Report(() => AnsiConsole.Write(MeterReport.Table(result)));
+            screens.Pause();
         }
 
         var recorderUsed = results.Any(r => r.Points.Any(p => p.Source == ReadingSource.Recorder));
@@ -84,14 +87,17 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         };
     }
 
+    /// <summary>The test's name in the step tracker, with the channel when it is run on each.</summary>
+    private string StepName(MeterTest test, string channel) =>
+        test.Title + (test.PerChannel && definition.Channels.Count > 1 ? $" {channel}" : "");
+
     private string Resource => options.MeterResource ?? (config.PowerMeter.Model.Equals("manual", StringComparison.OrdinalIgnoreCase)
         ? definition.DefaultResource
         : config.PowerMeter.Resource);
 
     private void Header()
     {
-        AnsiConsole.Write(new Rule($"[bold]{Markup.Escape(definition.Title)} performance test[/]"
-            + (Sim is not null ? $" [yellow](simulated: {Markup.Escape(Sim.Scenario.Name)})[/]" : "")).LeftJustified());
+        screens.Begin("Setup", "Setup: the meter and the tests to run");
         AnsiConsole.MarkupLine($"[grey]{Markup.Escape(definition.Manual)}[/]");
         AnsiConsole.MarkupLine($"Range calibrator: {Markup.Escape($"{config.Calibrator.Model} s/n {config.Calibrator.Serial}")}"
             + (config.Calibrator.Options == "" ? "" : Markup.Escape($", option {config.Calibrator.Options}")));
@@ -173,7 +179,6 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
 
     private MeterTestResult? RunTest(MeterTest test, string channel, IPowerMeter meter)
     {
-        AnsiConsole.Write(new Rule($"[bold]{Markup.Escape(test.Title)}[/]" + (test.PerChannel ? $" — channel {Markup.Escape(channel)}" : "")).LeftJustified());
         AnsiConsole.MarkupLine($"[grey]{Markup.Escape(test.Source)}[/]");
         AnsiConsole.MarkupLine($"Equipment: {Markup.Escape(string.Join("; ", test.Equipment))}");
         for (var i = 0; i < test.Setup.Count; i++)

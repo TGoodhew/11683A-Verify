@@ -34,7 +34,8 @@ public static class Part4Procedure
         var table = H01Table.LoadDefault();
         var sim = session.Bench.Simulator;
 
-        AnsiConsole.Write(new Rule("[bold]Part 4: Option H01 REF EXT transfer check (informational)[/]").LeftJustified());
+        var screens = session.Screens;
+        screens.Begin("Part 4", "Part 4: Option H01 REF EXT transfer check (informational)");
         AnsiConsole.MarkupLine($"[grey]{Markup.Escape(table.Source)}[/]");
         AnsiConsole.MarkupLine("Needs a power meter on the 11683A's front-panel POWER METER output with an 11730A cable, a DC calibrator "
             + "whose Guard and LO can float, and a BNC tee. The result is an indication under the power meter's own uncertainty.");
@@ -56,10 +57,13 @@ public static class Part4Procedure
             notes.Add($"The 1 mW voltage ({Si.Format(v1.Value, "V", 7)}) was measured at the start of Part 4, not taken from Part 1.");
 
         // Step 1: REF INT.
-        AnsiConsole.WriteLine();
-        AnsiConsole.Write(new Rule("Step 1: REF INT, RANGE 1 mW").LeftJustified());
-        AnsiConsole.MarkupLine("Connect the power meter to the POWER METER output with the 11730A cable. Power cord in, LINE on, "
-            + "REF [bold]INT[/], RANGE [bold]1 mW[/], POLARITY [bold]NORMAL[/].");
+        var context = $"[grey]Power meter {Markup.Escape(meter.Description)}; 1 mW DC REFERENCE OUTPUT {Si.Format(v1.Value, "V", 7)}[/]";
+        screens.Begin("Part 4", "Part 4 · Step 1: REF INT, RANGE 1 mW");
+        if (screens.Clearing)
+            AnsiConsole.MarkupLine(context);
+        AnsiConsole.Write(ConsoleUi.Settings("Set the 11683A",
+            ("POWER METER", "power meter connected with the 11730A cable"), ("LINE", "power cord in, LINE on"),
+            ("REF", "INT"), ("RANGE", "1 mW"), ("POLARITY", "NORMAL")));
         AnsiConsole.MarkupLine("Set FUNCTION to [bold]STANDBY[/]. Wait for the meter's downward drift to stop (typically under 60 s), then [bold]ZERO[/] it.");
         session.Bench.Step("Press Enter when the meter is zeroed", s =>
         {
@@ -78,8 +82,9 @@ public static class Part4Procedure
         var intWatts = ReadPower(session, meter, "REF INT, 1 mW");
 
         // Step 2: REF EXT.
-        AnsiConsole.WriteLine();
-        AnsiConsole.Write(new Rule($"Step 2: REF EXT, RANGE {RangeSwitch.Get(table.RangeSetting)}").LeftJustified());
+        screens.Begin("Part 4", $"Part 4 · Step 2: REF EXT, RANGE {RangeSwitch.Get(table.RangeSetting)}");
+        if (screens.Clearing)
+            AnsiConsole.MarkupLine(context + $"[grey]; REF INT reading {Si.Format(intWatts, "W", 6)}[/]");
         AnsiConsole.Write(new Panel(new Markup(
                 "[bold red]WARNING[/] There is a small risk of mild electrical shock from the chassis of the 11683A option H01 "
                 + "unless the power meter is connected. [grey](E4418B Service Guide p. 2-12)[/]\n"
@@ -107,8 +112,7 @@ public static class Part4Procedure
         var points = new List<H01PointResult>();
         if (ConsoleUi.Confirm("Also step through the E4418B Table 2-4 voltages (about 10 points)?", defaultValue: sim is not null))
         {
-            AnsiConsole.WriteLine();
-            AnsiConsole.Write(new Rule("Step 3: Table 2-4 (E4418B Service Guide steps 9–14)").LeftJustified());
+            screens.Begin("Part 4", "Part 4 · Step 3: Table 2-4 (E4418B Service Guide steps 9–14)");
             AnsiConsole.MarkupLine("FUNCTION [bold]STANDBY[/]; DC calibrator to 0 V, output off; meter filter 512; then [bold]ZERO[/] the meter.");
             session.Bench.Step("Press Enter when the meter is zeroed", s =>
             {
@@ -139,6 +143,7 @@ public static class Part4Procedure
         // Put the unit back as it was.
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine("Done. Turn the DC calibrator off, set REF to [bold]INT[/], plug the power cord back in, and move the DVM back to DC REFERENCE OUTPUT.");
+        screens.Pause("Press Enter when the bench is back as it was");
         if (sim is not null)
         {
             sim.ExternalSourceVolts = 0;

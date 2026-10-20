@@ -1,4 +1,3 @@
-using Spectre.Console;
 using Verify11683A.App.Procedures;
 using Verify11683A.App.Reports;
 
@@ -9,17 +8,14 @@ public static class Part4Command
 {
     public static int Run(AppConfig config, CommandLine options)
     {
-        using var session = VerificationSession.Start(config, options, "part4");
+        using var session = VerificationSession.Start(config, options, "part4", "Part 4", "Results");
         var result = Part4Procedure.Run(session, oneMilliwattVolts: null);
         if (result is null)
             return 1;
-        AnsiConsole.WriteLine();
-        ConsoleReport.Part4(result);
-        var run = session.CreateRun(null, null, part4: result);
-        var path = session.Save(run);
-        AnsiConsole.WriteLine();
-        ConsoleReport.Summary(run, path);
-        ConsoleUi.SessionLogLine(session.Log);
+        session.Screens.Begin("Part 4", "Part 4 results");
+        session.Screens.Report(() => ConsoleReport.Part4(result));
+        session.Screens.Pause();
+        session.SaveAndSummarise(session.CreateRun(null, null, part4: result), offerActuals: false);
         return result.AllWithin ? 0 : 1;
     }
 }

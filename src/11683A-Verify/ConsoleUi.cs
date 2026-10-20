@@ -29,6 +29,15 @@ public static class ConsoleUi
             ? whenRedirected
             : AnsiConsole.Prompt(new SelectionPrompt<string>().Title(Markup.Escape(title)).AddChoices(choices));
 
+    /// <summary>What to set before a step, as a panel: one knob or connection per row, so it can be checked at a glance.</summary>
+    public static Panel Settings(string header, params (string Name, string Value)[] rows)
+    {
+        var grid = new Grid().AddColumn(new GridColumn().PadRight(3)).AddColumn();
+        foreach (var (name, value) in rows)
+            grid.AddRow($"[grey]{Markup.Escape(name)}[/]", $"[bold]{Markup.Escape(value)}[/]");
+        return new Panel(grid).Header($" {Markup.Escape(header)} ").Border(BoxBorder.Rounded).BorderColor(Color.Blue);
+    }
+
     public static void SessionLogLine(SessionLog log) =>
         AnsiConsole.MarkupLine($"[grey]Session log: {Markup.Escape(Path.GetFullPath(log.Path))}[/]");
 

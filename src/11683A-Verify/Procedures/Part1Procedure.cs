@@ -20,10 +20,13 @@ public static class Part1Procedure
         var part = limits.Part1;
         var sim = session.Bench.Simulator;
 
-        AnsiConsole.Write(new Rule("[bold]Part 1: DC voltage and ratio[/]").LeftJustified());
+        var screens = session.Screens;
+        const string Heading = "Part 1: DC voltage and ratio";
+        screens.Begin("Part 1", Heading);
         AnsiConsole.MarkupLine($"[grey]{Markup.Escape(part.Source)}[/]");
-        AnsiConsole.MarkupLine("DVM on the rear [bold]DC REFERENCE OUTPUT[/] BNC (the lower one), 4-wire cable direct to the BNC.");
-        AnsiConsole.MarkupLine("Set the 11683A: REF switch [bold]INT[/], POLARITY [bold]NORMAL[/], FUNCTION [bold]CALIBRATE[/].");
+        AnsiConsole.Write(ConsoleUi.Settings("Set the 11683A",
+            ("REF", "INT"), ("POLARITY", "NORMAL"), ("FUNCTION", "CALIBRATE"),
+            ("DVM", "rear DC REFERENCE OUTPUT (the lower BNC), 4-wire direct")));
         AnsiConsole.MarkupLine("[grey]The manual starts from RANGE 100 mW with FUNCTION in STANDBY; switch to CALIBRATE now.[/]");
         session.Bench.Step("Press Enter when set", s =>
         {
@@ -36,6 +39,7 @@ public static class Part1Procedure
         var acquirer = session.Acquirer(new RangeDetector(DvmFunction.DcVoltage, candidates));
         var measured = new Dictionary<string, MeasuredPoint>();
         double? lastRange = null;
+        string? lastLine = null;
         Part1Result Evaluate() => Part1Evaluator.Evaluate(limits, measured.Values, session.Specs, session.Period, session.AmbientC, session.Convention);
 
         while (measured.Count < part.Points.Count)
@@ -44,10 +48,12 @@ public static class Part1Procedure
             var current = Evaluate();
             IRenderable View(string status, ExpectedValue? at) =>
                 ConsoleReport.Live(ConsoleReport.Part1Table(current, limits, session.Convention, at?.RangeId), status);
-            if (ConsoleUi.Interactive)
+            if (screens.Clearing)
             {
-                AnsiConsole.Clear();
+                screens.Begin("Part 1", Heading);
                 AnsiConsole.Write(ConsoleReport.Part1Table(current, limits, session.Convention));
+                if (lastLine is not null)
+                    AnsiConsole.MarkupLine(lastLine);
             }
             AnsiConsole.WriteLine();
             if (session.Bench.Walkthrough)
@@ -64,6 +70,8 @@ public static class Part1Procedure
                 ConsoleUi.Prompt($"Set RANGE to any of {string.Join(", ", remaining.Select(r => RangeSwitch.Get(r).Label))}, then press Enter");
             }
 
+            // While measuring, the live view is the table with the range highlighted and a status line under it.
+            screens.Redraw();
             var point = session.MeasureNext(acquirer, lastRange, View);
             if (point is null)
             {
@@ -79,13 +87,13 @@ public static class Part1Procedure
             measured[point.RangeId] = point;
             session.Log.Write($"Part 1 {point.RangeId}: mean {point.Statistics.Mean} V, s {point.Statistics.StandardDeviation} V, n {point.Statistics.Count}, "
                 + $"DVM {point.DvmRange} V, settled {point.Settled} after {point.SettlingSeconds:0} s, attempts {point.Attempts}");
-            AnsiConsole.MarkupLine($"[green]✓[/] [bold]{Markup.Escape(label)}[/]: {Si.Format(point.Statistics.Mean, "V", 7)}, "
+            lastLine = $"[green]✓[/] [bold]{Markup.Escape(label)}[/]: {Si.Format(point.Statistics.Mean, "V", 7)}, "
                 + $"σ {Si.Format(point.Statistics.StandardDeviation, "V", 2)} (n = {point.Statistics.Count}) on the {Si.Range(point.DvmRange, "V")} range"
-                + (point.Settled ? "" : " [yellow](not settled)[/]"));
+                + (point.Settled ? "" : " [yellow](not settled)[/]");
+            if (!screens.Clearing)
+                AnsiConsole.MarkupLine(lastLine);
         }
 
-        if (ConsoleUi.Interactive)
-            AnsiConsole.Clear();
         var result = Evaluate();
         foreach (var line in ResultLog.Part1(result, session.Specs.Model))
             session.Log.Write(line);
