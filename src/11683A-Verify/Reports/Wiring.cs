@@ -10,7 +10,7 @@ public static class Wiring
          ┌────────────────────┐                      ┌───────────────────────────────┐
          │  HI        ───┐    │                      │  REF EXT ◎   (H01 input,      │
          │  HI Sense  ───┤    │                      │               Part 4 only)    │
-         │               ├────┼──── 4-wire cable ────┼─► DC REFERENCE OUTPUT ◎        │
+         │               ├────┼──── 4-wire cable ────┼─► DC REFERENCE OUTPUT ◎       │
          │  LO        ───┤    │     ≤ 5 ft, pairs    │      centre: HI + HI Sense    │
          │  LO Sense  ───┘    │     joined at the    │      shell:  LO + LO Sense    │
          └────────────────────┘     BNC plug         │   100 MEG LOAD MIN            │
@@ -31,7 +31,8 @@ public static class Wiring
     public static void Write()
     {
         AnsiConsole.Write(new Rule("[bold]Wiring[/]").LeftJustified());
-        AnsiConsole.Write(new Text(Diagram));
+        // The raw string has no final newline, so end the diagram's last line before the rules.
+        AnsiConsole.Write(new Text(Diagram + "\n"));
         foreach (var rule in Rules)
             AnsiConsole.MarkupLine($"[grey]•[/] {Markup.Escape(rule)}");
         AnsiConsole.WriteLine();
