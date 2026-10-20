@@ -12,7 +12,22 @@ public class PowerMeterControlTests
     private static ScriptedVisaSession E441x(string model = "E4418B") => new ScriptedVisaSession()
         .Answer("*IDN?", $"Agilent Technologies,{model},GB12345678,A1.06.00")
         .Answer("SYST:ERR?", "+0,\"No error\"")
-        .Answer("*OPC?", "1");
+        .Answer("*OPC?", "1")
+        .Answer("SENS1:CORR:CSET1:STAT?", "0")
+        .Answer("SENS2:CORR:CSET1:STAT?", "0");
+
+    [Fact]
+    public void E441x_turns_a_sensor_table_off_only_when_one_is_on()
+    {
+        // With none selected, STAT OFF is refused with -221 "Settings conflict" (E4419B A2.09.01 on the bench).
+        var none = E441x();
+        new E441xPowerMeter(none).Preset();
+        Assert.DoesNotContain("SENS1:CORR:CSET1:STAT OFF", none.Sent);
+
+        var active = E441x().Answer("SENS1:CORR:CSET1:STAT?", "1");
+        new E441xPowerMeter(active).Preset();
+        Assert.Contains("SENS1:CORR:CSET1:STAT OFF", active.Sent);
+    }
 
     [Fact]
     public void E441x_presets_to_single_settled_readings_then_zeroes_and_CALs_on_the_sensor_input()
@@ -27,7 +42,7 @@ public class PowerMeterControlTests
         Assert.Equal(3.162e-6, meter.Read(), 12);
 
         Assert.Equal([
-            "SYST:PRES", "*CLS", "INIT1:CONT OFF;:TRIG1:SOUR IMM;:TRIG1:DEL:AUTO ON", "SENS1:CORR:CSET1:STAT OFF", "UNIT1:POW W",
+            "SYST:PRES", "*CLS", "INIT1:CONT OFF;:TRIG1:SOUR IMM;:TRIG1:DEL:AUTO ON", "UNIT1:POW W",
             "UNIT1:POW W", "SENS1:AVER:STAT ON;:SENS1:AVER:COUN:AUTO OFF;:SENS1:AVER:COUN 512", "DISP:WIND1:RES 4", "SENS1:CORR:CFAC 100",
             "CAL1:ZERO:AUTO ONCE",
             "CAL1:RCF 100", "CAL1:AUTO ONCE",
