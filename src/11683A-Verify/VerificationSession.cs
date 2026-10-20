@@ -117,6 +117,8 @@ public sealed class VerificationSession : IDisposable
 
     public Instruments.PowerMeter.IPowerMeter OpenPowerMeter() => Bench.OpenPowerMeter(Config.PowerMeter);
 
+    public Instruments.DcSource.IDcSource? OpenDcSource() => Bench.OpenDcSource(Config.DcSource, Config.DcSource.UseDivider);
+
     public PointAcquirer Acquirer(RangeDetector detector, Func<string?>? interlock = null) =>
         new(Dvm, detector, Config.Measurement.Settling(detector.Function), Config.Measurement.Nplc, Config.Measurement.ReadingsPerPoint)
         {

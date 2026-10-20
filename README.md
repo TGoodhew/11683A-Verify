@@ -284,6 +284,27 @@ You need:
 Set `powerMeter.model` to `E4418B`, `E4419B`, `437B` or `438A` to read the meter over the bus
 (`powerMeter.resource`, default `GPIB0::13::INSTR`). Leave it as `manual` to type the readings in.
 
+**The DC calibrator, by hand or over the bus.** Leave `dcSource.model` as `manual` to set the calibrator
+yourself while the DVM shows the error live. Set it to `5440B` (or pass `--dc-source 5440B`) for the app to set a
+Fluke 5440B over the bus at `dcSource.resource` (default `GPIB0::7::INSTR`, the 5440B's factory address; or
+`--dc-source-resource`):
+
+- The app checks the 5440B answers `GVRS` and is in Voltage mode. It selects internal sense and leaves it in
+  Standby at 0 V until a voltage is needed.
+- For each voltage it sets the output, waits the 5 s the 5440B takes to settle to 2 ppm, and reads the DVM on the
+  tee. Then it corrects the setting by the DVM's error until the tee is within ±20 ppm (or 1 µV).
+- With `dcSource.useDivider` (the default), 2.2 V and below come from the 5440B's **DIVIDER** terminals: finer
+  (0.01 µV steps up to 220 mV) and quieter. Its source resistance of about 500 Ω drops a little into the
+  REF EXT load; the trim corrects that. The two highest Table 2-4 rows come from **OUTPUT**. The app puts the
+  calibrator in Standby and tells you when to move the leads.
+- Zeroing is done with the calibrator in Standby. At the end it is left in Standby: press LOCAL to use its front
+  panel again.
+- Guard and LO must still float. Leave GUARD internal (tied to LO), and don't strap LO or GUARD to the rear
+  earth post.
+
+The same setting drives the E4418B's Procedure 2 in `meter-test`. No DVM watches the calibrator there, so the
+app uses the OUTPUT terminals and sets each row's voltage exactly, with the zero and CAL steps in between.
+
 1. **1 mW voltage.** The app needs the 1 mW DC REFERENCE OUTPUT voltage. It takes it from Part 1 in the same
    session, or measures it first.
 2. **Step 1, REF INT.** Connect the power meter with the 11730A cable. Set RANGE 1 mW. In STANDBY, wait for
@@ -293,7 +314,8 @@ Set `powerMeter.model` to `E4418B`, `E4419B`, `437B` or `438A` to read the meter
    connected. **Unplug the 11683A's power cord**: the H01 has a ground loop.
    - Set RANGE **100 mW** and REF **EXT**, as the Service Guide's step 8 does.
    - Move the DVM to a **BNC tee on REF EXT**, and connect the DC calibrator to the tee.
-   - Set the calibrator to the 1 mW voltage, to within ±20 ppm. The DVM shows the error live.
+   - Set the calibrator to the 1 mW voltage, to within ±20 ppm. The DVM shows the error live. A bus calibrator
+     is set and trimmed by the app.
    - The app reads the meter (P_EXT). It reports P_EXT/P_INT − 1, corrected for the calibrator's small offset.
      The default tolerance is ±0.2%. Table 2-4 relates 144.93 mV to 1 mW, so about +0.05% is expected at
      145.00 mV.
@@ -303,7 +325,8 @@ Set `powerMeter.model` to `E4418B`, `E4419B`, `437B` or `438A` to read the meter
    - Set each of the ten voltages, from 458.31 µV to 15.588 V, with the meter filter the table gives. Each
      reading is compared with the table's own limits.
    - The rows are data and are **never scaled**: above 1 mW the table is not linear (15.588 V is 100 mW).
-5. Turn the calibrator off, set REF back to INT, plug the power cord back in, and move the DVM back.
+5. Turn the calibrator off (a bus calibrator is already in Standby), set REF back to INT, plug the power cord
+   back in, and move the DVM back.
 
 **FET Balance Adjustment (not implemented).** The manual's FET Balance Adjustment (para 48–51, p. 8) is
 needed only after the U1 assembly is replaced, or after the A3A1–A3J1 wires have moved. It needs an

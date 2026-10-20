@@ -22,6 +22,12 @@ public sealed class CommandLine
     /// <summary>meter-test: the power meter's VISA resource (overrides powerMeter.resource).</summary>
     public string? MeterResource { get; private set; }
 
+    /// <summary>The DC calibrator on REF EXT: manual or 5440B (overrides dcSource.model).</summary>
+    public string? DcSource { get; private set; }
+
+    /// <summary>The DC calibrator's VISA resource (overrides dcSource.resource).</summary>
+    public string? DcSourceResource { get; private set; }
+
     /// <summary>verify: run Part 4 without asking.</summary>
     public bool Part4 { get; private set; }
 
@@ -74,6 +80,10 @@ public sealed class CommandLine
           --part4              verify: also run Part 4 without asking.
           --meter <model>      meter-test: the power meter, e.g. 437B.
           --meter-resource <r> meter-test: its VISA resource (overrides powerMeter.resource).
+          --dc-source <model>  The DC calibrator on REF EXT (Part 4, E4418B Procedure 2): manual, or 5440B
+                               for the app to set it over the bus (overrides dcSource.model).
+          --dc-source-resource <r>
+                               Its VISA resource, e.g. GPIB0::12::INSTR (overrides dcSource.resource).
           --skip-warmup        Don't ask about or time the warm-up (it is then not recorded).
           --regen-pdf <json>   Rebuild the PDF report from a saved results file, beside it, and exit.
           --print <json>       Print the report of a saved results file (11683A or power meter), and exit.
@@ -137,6 +147,12 @@ public sealed class CommandLine
                 case "--meter-resource":
                     result.MeterResource = Value();
                     break;
+                case "--dc-source":
+                    result.DcSource = Value();
+                    break;
+                case "--dc-source-resource":
+                    result.DcSourceResource = Value();
+                    break;
                 case "--part4":
                     result.Part4 = true;
                     break;
@@ -161,6 +177,8 @@ public sealed class CommandLine
         if (DvmModel is not null) config.Dvm.Model = DvmModel;
         if (Resource is not null) config.Dvm.Resource = Resource;
         if (SpecPeriod is not null) config.Dvm.SpecPeriod = SpecPeriod;
+        if (DcSource is not null) config.DcSource.Model = DcSource;
+        if (DcSourceResource is not null) config.DcSource.Resource = DcSourceResource;
         _ = config.Dvm.Period;
     }
 }

@@ -4,6 +4,7 @@ using Verify11683A.App.Reports;
 using Verify11683A.Calibrator;
 using Verify11683A.Formatting;
 using Verify11683A.H01;
+using Verify11683A.Instruments.DcSource;
 using Verify11683A.Instruments.Dvm;
 using Verify11683A.Instruments.PowerMeter;
 using Verify11683A.Instruments.Simulation;
@@ -20,7 +21,8 @@ namespace Verify11683A.App.Procedures;
 /// Step 1 (REF INT, RANGE 1 mW, CALIBRATE): zero the meter in STANDBY, CAL it in CALIBRATE, read it. Step 2 (REF EXT,
 /// RANGE 100 mW, line unplugged): feed REF EXT from a floating DC calibrator set to the 1 mW DC REFERENCE OUTPUT
 /// voltage from Part 1, monitored by the DVM on a BNC tee, and read the meter again. Step 3, optional: the Service
-/// Guide's own steps 9–14, every Table 2-4 row against its limits.
+/// Guide's own steps 9–14, every Table 2-4 row against its limits. The DC calibrator is set by the operator watching
+/// the DVM, or by the app over the bus and trimmed against the DVM (dcSource in appsettings).
 /// </remarks>
 public static class Part4Procedure
 {
@@ -28,6 +30,9 @@ public static class Part4Procedure
     public const double SourceBandPpm = 20;
 
     private const int PowerReadings = 5;
+
+    /// <summary>Bus calibrator: how many times to set it, read the tee and correct, before taking what it gives.</summary>
+    private const int MaxTrims = 4;
 
     public static Part4Result? Run(VerificationSession session, double? oneMilliwattVolts)
     {
@@ -46,6 +51,11 @@ public static class Part4Procedure
         meter.Identify();
         session.Log.Write($"Part 4 power meter: {meter.Description}");
         AnsiConsole.MarkupLine($"Power meter: [bold]{Markup.Escape(meter.Description)}[/]");
+        using var bus = session.OpenDcSource();
+        var source = new ExtSource(session, bus);
+        AnsiConsole.MarkupLine(bus is null
+            ? "DC calibrator: [bold]set by hand[/], watching the DVM"
+            : $"DC calibrator: [bold]{Markup.Escape(bus.Description)}[/], set by the app and trimmed against the DVM; in Standby until needed");
 
         // The 1 mW DC REFERENCE OUTPUT voltage, from Part 1 or measured now.
         var v1 = oneMilliwattVolts ?? MeasureOneMilliwatt(session);
@@ -93,7 +103,8 @@ public static class Part4Procedure
             .Border(BoxBorder.Heavy).BorderColor(Color.Red));
         AnsiConsole.MarkupLine($"Set RANGE [bold]{Markup.Escape(RangeSwitch.Get(table.RangeSetting).Label)}[/] and REF [bold]EXT[/]; FUNCTION stays CALIBRATE. "
             + $"[grey]({Markup.Escape(table.RangeSource)})[/]");
-        AnsiConsole.MarkupLine("Move the DVM from DC REFERENCE OUTPUT to a [bold]BNC tee on REF EXT[/], and connect the DC calibrator's HI/LO to the tee.");
+        AnsiConsole.MarkupLine("Move the DVM from DC REFERENCE OUTPUT to a [bold]BNC tee on REF EXT[/], and connect the "
+            + $"{source.ConnectText(v1.Value)} to the tee.");
         session.Bench.Step("Press Enter when connected", s =>
         {
             s.LinePowered = false;
@@ -101,7 +112,7 @@ public static class Part4Procedure
             s.SetReference(ReferenceSwitch.Ext);
             s.DvmAt = DvmPoint.RefExtTee;
         });
-        var applied = SetSource(session, v1.Value, "the 1 mW voltage");
+        var applied = source.Set(v1.Value, "the 1 mW voltage");
         var extWatts = ReadPower(session, meter, "REF EXT, 1 mW voltage");
         var transfer = new TransferCheck(intWatts, v1.Value, applied, extWatts, table.TransferTolerance);
         session.Log.Write($"Part 4 transfer: INT {intWatts} W, EXT {extWatts} W at {applied} V (target {v1}); agreement {transfer.Agreement:E3}");
@@ -113,24 +124,27 @@ public static class Part4Procedure
         if (ConsoleUi.Confirm("Also step through the E4418B Table 2-4 voltages (about 10 points)?", defaultValue: sim is not null))
         {
             screens.Begin("Part 4", "Part 4 · Step 3: Table 2-4 (E4418B Service Guide steps 9–14)");
-            AnsiConsole.MarkupLine("FUNCTION [bold]STANDBY[/]; DC calibrator to 0 V, output off; meter filter 512; then [bold]ZERO[/] the meter.");
+            source.Off();
+            AnsiConsole.MarkupLine("FUNCTION [bold]STANDBY[/]; " + (bus is null ? "DC calibrator to 0 V, output off" : "the calibrator is in Standby at 0 V")
+                + "; meter filter 512; then [bold]ZERO[/] the meter.");
             session.Bench.Step("Press Enter when the meter is zeroed", s =>
             {
                 s.SetFunction(FunctionSwitch.Standby);
                 s.ExternalSourceVolts = 0;
                 ((SimulatedPowerMeter)meter).Zero();
             });
-            AnsiConsole.MarkupLine($"FUNCTION [bold]CALIBRATE[/]; DC calibrator to {Si.Format(table.CalibrationVolts, "V", 5)}, output '+'; then [bold]CAL[/] the meter.");
+            AnsiConsole.MarkupLine($"FUNCTION [bold]CALIBRATE[/]; " + (bus is null ? $"DC calibrator to {Si.Format(table.CalibrationVolts, "V", 5)}, output '+'" : "the app sets the calibrator")
+                + "; then [bold]CAL[/] the meter.");
             if (sim is not null)
                 sim.SetFunction(FunctionSwitch.Calibrate);
-            SetSource(session, table.CalibrationVolts, "the calibration voltage");
+            source.Set(table.CalibrationVolts, "the calibration voltage");
             session.Bench.Step("Press Enter when the meter is calibrated", s => ((SimulatedPowerMeter)meter).Cal());
 
             foreach (var row in table.Rows)
             {
                 AnsiConsole.MarkupLine($"Meter filter [bold]{row.Filter}[/]. Expected {Si.Format(row.EffectiveWatts, "W", 5)} "
                     + $"({Si.Format(row.LowerWatts, "W", 5)} to {Si.Format(row.UpperWatts, "W", 5)}).");
-                var v = SetSource(session, row.SettingVolts, "a Table 2-4 row");
+                var v = source.Set(row.SettingVolts, "a Table 2-4 row");
                 var reading = ReadPower(session, meter, Si.Format(row.SettingVolts, "V", 5));
                 var point = new H01PointResult(row, v, reading);
                 points.Add(point);
@@ -142,7 +156,9 @@ public static class Part4Procedure
 
         // Put the unit back as it was.
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("Done. Turn the DC calibrator off, set REF to [bold]INT[/], plug the power cord back in, and move the DVM back to DC REFERENCE OUTPUT.");
+        source.Off();
+        AnsiConsole.MarkupLine("Done. " + (bus is null ? "Turn the DC calibrator off" : "The calibrator is in Standby (press LOCAL to use its front panel again)")
+            + ", set REF to [bold]INT[/], plug the power cord back in, and move the DVM back to DC REFERENCE OUTPUT.");
         screens.Pause("Press Enter when the bench is back as it was");
         if (sim is not null)
         {
@@ -156,6 +172,9 @@ public static class Part4Procedure
             + "Table 2-4's limits do not include measurement uncertainty.");
         if (!meter.OverBus)
             notes.Add("Power meter readings were entered by the operator.");
+        notes.Add(bus is null
+            ? "The DC calibrator on REF EXT was set by the operator, watching the DVM on the tee."
+            : $"The DC calibrator on REF EXT ({bus.Description}) was set by the app and trimmed against the DVM on the tee.");
         var result = new Part4Result(table.Source, meter.Description, meter.OverBus, transfer, points, notes);
         session.Log.Write(ResultLog.Part4(result));
         return result;
@@ -181,23 +200,98 @@ public static class Part4Procedure
     }
 
     /// <summary>
-    /// Has the operator set the DC calibrator to <paramref name="target"/> while the DVM watches the REF EXT tee, then
-    /// returns the mean of five readings.
+    /// The DC calibrator on REF EXT, watched by the DVM on the tee: set by the operator, or by the app over the bus
+    /// (<paramref name="bus"/>), which also says when the leads must move between its OUTPUT and DIVIDER terminals.
     /// </summary>
-    private static double SetSource(VerificationSession session, double target, string what)
+    private sealed class ExtSource(VerificationSession session, IDcSource? bus)
     {
-        var dvm = session.Dvm;
-        var sim = session.Bench.Simulator;
-        var range = RangePicker.Pick(dvm.Ranges(DvmFunction.DcVoltage), target);
-        dvm.Configure(DvmFunction.DcVoltage, range, 10);
-        AnsiConsole.MarkupLine($"Set the DC calibrator to [bold]{Si.Format(target, "V", 5)}[/] ({Markup.Escape(what)}).");
-        if (sim is not null)
-            sim.ExternalSourceVolts = target * (1 + 3e-6);   // a calibrator set a few ppm off
-        if (session.Bench.Walkthrough)
-            ConsoleUi.Prompt("Press Enter when the DC calibrator is set [simulator: it lands 3 ppm high]");
+        private DcTerminals? _terminals;
 
-        if (ConsoleUi.Interactive && sim is null)
+        /// <summary>What to connect to the tee, for the first setting.</summary>
+        public string ConnectText(double firstVolts)
         {
+            if (bus is null)
+                return "DC calibrator's HI/LO";
+            _terminals = bus.TerminalsFor(firstVolts);
+            return $"calibrator's [bold]{Terminals(_terminals.Value)} HI/LO[/] terminals";
+        }
+
+        /// <summary>Output off: the bus calibrator goes to Standby at 0 V; a hand-set one is the operator's to switch.</summary>
+        public void Off() => bus?.Standby();
+
+        /// <summary>Sets the calibrator to <paramref name="target"/> and returns the mean of five DVM readings at the tee.</summary>
+        public double Set(double target, string what)
+        {
+            var dvm = session.Dvm;
+            var sim = session.Bench.Simulator;
+            var range = RangePicker.Pick(dvm.Ranges(DvmFunction.DcVoltage), target);
+            dvm.Configure(DvmFunction.DcVoltage, range, 10);
+            if (bus is not null)
+            {
+                SetOverBus(target, what, range);
+            }
+            else
+            {
+                AnsiConsole.MarkupLine($"Set the DC calibrator to [bold]{Si.Format(target, "V", 5)}[/] ({Markup.Escape(what)}).");
+                if (sim is not null)
+                    sim.ExternalSourceVolts = target * (1 + 3e-6);   // a calibrator set a few ppm off
+                if (session.Bench.Walkthrough)
+                    ConsoleUi.Prompt("Press Enter when the DC calibrator is set [simulator: it lands 3 ppm high]");
+                if (ConsoleUi.Interactive && sim is null)
+                    WatchByHand(target);
+            }
+
+            var mean = MeanAtTee(5, range);
+            session.Log.Write($"REF EXT source for {what}: target {target} V, applied {mean} V");
+            // 100 ppm, but at least 1 µV: at the lowest rows the DVM's own noise is tens of ppm.
+            if (Math.Abs(mean - target) > Math.Max(100e-6 * target, 1e-6))
+                AnsiConsole.MarkupLine($"[yellow]The DC calibrator is {Percent(mean / target - 1)} off the target; the reading is recorded with it.[/]");
+            return mean;
+        }
+
+        /// <summary>
+        /// Sets the bus calibrator, then corrects it by what the DVM reads at the tee (the divider's ~500 Ω source drops
+        /// a little into the REF EXT load) until it is within ±<see cref="SourceBandPpm"/> ppm, or 1 µV.
+        /// </summary>
+        private void SetOverBus(double target, string what, double range)
+        {
+            var terminals = bus!.TerminalsFor(target);
+            if (_terminals is { } present && present != terminals)
+            {
+                bus.Standby();
+                AnsiConsole.MarkupLine($"The calibrator is in Standby. Move its leads from the {Terminals(present)} terminals to its "
+                    + $"[bold]{Terminals(terminals)} HI/LO[/] terminals.");
+                session.Bench.Step("Press Enter when the leads are moved");
+            }
+            _terminals = terminals;
+
+            AnsiConsole.MarkupLine($"Setting the calibrator to [bold]{Si.Format(target, "V", 5)}[/] ({Markup.Escape(what)}), {Terminals(terminals)} terminals.");
+            var band = Math.Max(SourceBandPpm * 1e-6 * Math.Abs(target), 1e-6);
+            var setting = target;
+            for (var i = 0; i < MaxTrims; i++)
+            {
+                bus.Output(setting);
+                var tee = MeanAtTee(3, range);
+                var error = tee - target;
+                session.Log.Write($"DC calibrator set to {setting.ToString("R", CultureInfo.InvariantCulture)} V; tee {tee.ToString("R", CultureInfo.InvariantCulture)} V, "
+                    + $"{((tee / target - 1) * 1e6).ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture)} ppm");
+                if (Math.Abs(error) <= band)
+                    return;
+                // More than 2% off is not loading: the leads are on the wrong terminals, or not connected.
+                if (Math.Abs(error) > 0.02 * Math.Abs(target) + 10e-6)
+                {
+                    bus.Standby();
+                    throw new InvalidOperationException($"The DVM reads {Si.Format(tee, "V", 6)} at the REF EXT tee with the calibrator set to "
+                        + $"{Si.Format(setting, "V", 6)} on its {Terminals(terminals)} terminals. Check the leads; the calibrator is in Standby.");
+                }
+                setting -= error;
+            }
+        }
+
+        /// <summary>The operator adjusts the calibrator against a live DVM reading of the tee, then presses Enter.</summary>
+        private void WatchByHand(double target)
+        {
+            var dvm = session.Dvm;
             AnsiConsole.Live(new Text("")).Start(ctx =>
             {
                 while (true)
@@ -205,7 +299,7 @@ public static class Part4Procedure
                     var r = dvm.Read();
                     var ppm = (r.Value / target - 1) * 1e6;
                     ctx.UpdateTarget(new Markup($"REF EXT: [bold]{Si.Format(r.Value, "V", 7)}[/]  error "
-                        + $"{(Math.Abs(ppm) <= SourceBandPpm ? "[green]" : "[yellow]")}{ppm.ToString("+0.0;-0.0", CultureInfo.InvariantCulture)} ppm[/]  "
+                        + $"{(Math.Abs(ppm) <= SourceBandPpm ? "[green]" : "[yellow]")}{ppm.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture)} ppm[/]  "
                         + $"[blue]Adjust to within ±{SourceBandPpm:0} ppm, then press Enter.[/]"));
                     ctx.Refresh();
                     if (Console.KeyAvailable && Console.ReadKey(intercept: true).Key == ConsoleKey.Enter)
@@ -214,15 +308,15 @@ public static class Part4Procedure
             });
         }
 
-        var readings = Enumerable.Range(0, 5).Select(_ => dvm.Read()).Where(r => !r.Overload).Select(r => r.Value).ToList();
-        if (readings.Count == 0)
-            throw new InvalidOperationException($"The DVM overloaded at the REF EXT tee on its {range} V range.");
-        var mean = readings.Average();
-        session.Log.Write($"REF EXT source for {what}: target {target} V, applied {mean} V");
-        // 100 ppm, but at least 1 µV: at the lowest rows the DVM's own noise is tens of ppm.
-        if (Math.Abs(mean - target) > Math.Max(100e-6 * target, 1e-6))
-            AnsiConsole.MarkupLine($"[yellow]The DC calibrator is {Percent(mean / target - 1)} off the target; the reading is recorded with it.[/]");
-        return mean;
+        private double MeanAtTee(int count, double range)
+        {
+            var readings = Enumerable.Range(0, count).Select(_ => session.Dvm.Read()).Where(r => !r.Overload).Select(r => r.Value).ToList();
+            if (readings.Count == 0)
+                throw new InvalidOperationException($"The DVM overloaded at the REF EXT tee on its {range} V range.");
+            return readings.Average();
+        }
+
+        private static string Terminals(DcTerminals terminals) => terminals == DcTerminals.Divider ? "DIVIDER" : "OUTPUT";
     }
 
     private static double ReadPower(VerificationSession session, IPowerMeter meter, string what)
@@ -252,5 +346,5 @@ public static class Part4Procedure
     }
 
     private static string Percent(double fraction, bool signed = true) =>
-        (fraction * 100).ToString(signed ? "+0.000;-0.000" : "0.0##", CultureInfo.InvariantCulture) + "%";
+        (fraction * 100).ToString(signed ? "+0.000;-0.000;0.000" : "0.0##", CultureInfo.InvariantCulture) + "%";
 }

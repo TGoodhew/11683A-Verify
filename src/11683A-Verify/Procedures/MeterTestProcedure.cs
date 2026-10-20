@@ -4,6 +4,7 @@ using Spectre.Console;
 using Verify11683A.App.Reports;
 using Verify11683A.Calibrator;
 using Verify11683A.Formatting;
+using Verify11683A.Instruments.DcSource;
 using Verify11683A.Instruments.Dvm;
 using Verify11683A.Instruments.PowerMeter;
 using Verify11683A.Instruments.Simulation;
@@ -28,6 +29,8 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     private readonly Random _simOperator = new(435);
     private DvmIdentity? _dvmIdentity;
     private SimulatedPowerMeter? _simMeter;
+    private IDcSource? _dcSource;
+    private bool _dcSourceOpened;
 
     private Simulated11683A? Sim => bench.Simulator;
 
@@ -45,22 +48,35 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
 
         var results = new List<MeterTestResult>();
         var identity = "";
-        foreach (var test in tests)
-        foreach (var channel in test.PerChannel ? channels : [channels[0]])
+        try
         {
-            using var meter = OpenMeter(useBus, channel);
-            meter.Identify();
-            identity = meter.Description;
-            bench.Log.Write($"Meter test {test.Id} channel {channel}: {meter.Description}");
-            screens.Begin(StepName(test, channel), test.Title + (test.PerChannel ? $" — channel {channel}" : ""));
-            var result = RunTest(test, channel, meter);
-            if (result is null)
-                break;
-            results.Add(result);
-            AnsiConsole.WriteLine();
-            screens.Report(() => AnsiConsole.Write(MeterReport.Table(result)));
-            screens.Pause();
+            foreach (var test in tests)
+            foreach (var channel in test.PerChannel ? channels : [channels[0]])
+            {
+                using var meter = OpenMeter(useBus, channel);
+                meter.Identify();
+                identity = meter.Description;
+                bench.Log.Write($"Meter test {test.Id} channel {channel}: {meter.Description}");
+                screens.Begin(StepName(test, channel), test.Title + (test.PerChannel ? $" — channel {channel}" : ""));
+                var result = RunTest(test, channel, meter);
+                if (result is null)
+                    break;
+                results.Add(result);
+                AnsiConsole.WriteLine();
+                screens.Report(() => AnsiConsole.Write(MeterReport.Table(result)));
+                screens.Pause();
+            }
         }
+        finally
+        {
+            _dcSource?.Dispose();
+        }
+
+        var notes = new List<string>();
+        if (definition.Ambiguities.Count > 0)
+            notes.Add($"Transcription notes for {definition.FileName}: " + string.Join(" ", definition.Ambiguities));
+        if (_dcSource is not null)
+            notes.Add($"The DC calibrator on REF EXT ({_dcSource.Description}) was set by the app over the bus, on its OUTPUT terminals.");
 
         var recorderUsed = results.Any(r => r.Points.Any(p => p.Source == ReadingSource.Recorder));
         var defPath = Path.Combine(MeterDefinition.DefaultDirectory, definition.FileName);
@@ -81,9 +97,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             SimulationScenario = Sim?.Scenario.Name,
             Tests = results,
             NotRun = definition.NotCovered,
-            Notes = definition.Ambiguities.Count > 0
-                ? [$"Transcription notes for {definition.FileName}: " + string.Join(" ", definition.Ambiguities)]
-                : [],
+            Notes = notes,
         };
     }
 
@@ -188,11 +202,22 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         if (test.Points.Any(p => test.SourceOf(p) == ReadingSource.Recorder))
             AnsiConsole.MarkupLine("[bold]The bench DVM reads the power meter's rear-panel RECORDER OUTPUT[/] (move it from the 11683A).");
 
-        if ((Sim is null || bench.Walkthrough) && !AskGo("Press Enter when the setup above is done (S to skip this test)"
-                + (bench.Walkthrough ? " [simulator: Enter does the zero and CAL]" : "")))
+        var dc = test.Points.Any(p => p.Calibrator?.ExternalVolts is not null) ? DcSource() : null;
+        if (dc is not null)
+        {
+            dc.Standby();
+            AnsiConsole.MarkupLine($"The app sets the DC calibrator ([bold]{Markup.Escape(dc.Description)}[/]): connect its [bold]OUTPUT HI/LO[/] to REF EXT. "
+                + "It is in Standby; the zero and CAL come after the setup.");
+        }
+
+        if ((Sim is null || bench.Walkthrough) && !AskGo(
+                (dc is null ? "Press Enter when the setup above is done" : "Press Enter when the connections above are made") + " (S to skip this test)"
+                + (bench.Walkthrough && dc is null ? " [simulator: Enter does the zero and CAL]" : "")))
             return new MeterTestResult(test.Id, test.Title, test.Source, channel, []);
         if (Sim is not null)
             PrepareSimulation(test);
+        if (dc is not null)
+            ZeroAndCal(dc);
 
         var results = new List<MeterPointResult>();
         foreach (var point in test.Points)
@@ -202,6 +227,12 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 source = ReadingSource.Operator;
             AnsiConsole.MarkupLine($"[bold]{Markup.Escape(point.Label)}[/]  [grey]11683A:[/] {Markup.Escape(point.Calibrator?.ToString() ?? "not used")}  "
                 + $"[grey]meter:[/] {Markup.Escape(point.MeterSetting)}");
+            if (dc is not null && point.Calibrator?.ExternalVolts is { } volts)
+            {
+                dc.Output(volts);
+                bench.Log.Write($"DC calibrator set to {volts.ToString("R", CultureInfo.InvariantCulture)} V");
+                AnsiConsole.MarkupLine($"  [grey]DC calibrator set to {Si.Format(volts, "V", 5)}[/]");
+            }
 
             double? reading;
             var simulated = false;
@@ -250,7 +281,44 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
 
         if (_simMeter is not null)
             _simMeter.CalFactorPercent = 100;
+        dc?.Standby();
         return new MeterTestResult(test.Id, test.Title, test.Source, channel, results);
+    }
+
+    /// <summary>
+    /// The DC calibrator for the REF EXT tests, opened on first use: on the bus (or simulated) when dcSource names a
+    /// model, otherwise null and the operator sets it. The OUTPUT terminals only: no DVM watches it here, so the
+    /// DIVIDER's ~500 Ω source resistance would go uncorrected.
+    /// </summary>
+    private IDcSource? DcSource()
+    {
+        if (!_dcSourceOpened)
+        {
+            _dcSourceOpened = true;
+            _dcSource = bench.OpenDcSource(config.DcSource, useDivider: false);
+        }
+        return _dcSource;
+    }
+
+    /// <summary>E4418B Procedure 2 steps 9–13 with the calibrator on the bus: zero with it in Standby, CAL at 144.93 mV.</summary>
+    private void ZeroAndCal(IDcSource dc)
+    {
+        dc.Standby();
+        AnsiConsole.MarkupLine("11683A FUNCTION [bold]STANDBY[/]; the calibrator is in Standby at 0 V. Meter filter 512, then [bold]ZERO[/] the meter.");
+        bench.Step("Press Enter when the meter is zeroed", s =>
+        {
+            s.SetFunction(FunctionSwitch.Standby);
+            _simMeter!.Zero();
+        });
+        var calVolts = H01.H01Table.LoadDefault().CalibrationVolts;
+        dc.Output(calVolts);
+        bench.Log.Write($"DC calibrator set to {calVolts.ToString("R", CultureInfo.InvariantCulture)} V for CAL");
+        AnsiConsole.MarkupLine($"The calibrator is at {Si.Format(calVolts, "V", 5)}. 11683A FUNCTION [bold]CALIBRATE[/], then [bold]CAL[/] the meter.");
+        bench.Step("Press Enter when the meter is calibrated", s =>
+        {
+            s.SetFunction(FunctionSwitch.Calibrate);
+            _simMeter!.Cal();
+        });
     }
 
     private double? Read(MeterTestPoint point, ReadingSource source, IPowerMeter meter)
@@ -288,10 +356,12 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         sim.ExternalDvmSource = () => 0;
         if (ext is not null)
         {
-            // E4418B Procedure 2: zero with the DC calibrator off, CAL at 144.93 mV.
+            // E4418B Procedure 2: zero with the DC calibrator off, CAL at 144.93 mV. A bus calibrator does its own (ZeroAndCal).
             sim.LinePowered = false;
             sim.SetRange(ext.Range);
             sim.SetReference(ReferenceSwitch.Ext);
+            if (_dcSource is not null)
+                return;
             sim.ExternalSourceVolts = 0;
             sim.SetFunction(FunctionSwitch.Standby);
             meter.Zero();
@@ -320,7 +390,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             sim.SetPolarity(c.Polarity);
             sim.SetRange(c.Range);
             sim.SetFunction(c.Function);
-            if (c.ExternalVolts is { } v)
+            if (c.ExternalVolts is { } v && _dcSource is null)
                 sim.ExternalSourceVolts = v * (1 + 3e-6);
         }
         else

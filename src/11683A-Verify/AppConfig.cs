@@ -93,6 +93,20 @@ public sealed class PowerMeterConfig
     public int TimeoutMs { get; set; } = 20000;
 }
 
+public sealed class DcSourceConfig
+{
+    /// <summary>"manual" (the operator sets it by hand), or a model with a bus driver: 5440B.</summary>
+    public string Model { get; set; } = "manual";
+
+    /// <summary>7 is the 5440B factory default address.</summary>
+    public string Resource { get; set; } = "GPIB0::7::INSTR";
+
+    /// <summary>Part 4: use the DIVIDER terminals at 2.2 V and below (finer, quieter; the operator moves the leads once).</summary>
+    public bool UseDivider { get; set; } = true;
+
+    public int TimeoutMs { get; set; } = 20000;
+}
+
 public sealed class WarmupConfig
 {
     /// <summary>Minutes the 11683A must be on before testing. The DVM's figure comes from its spec table.</summary>
@@ -109,6 +123,7 @@ public sealed class AppConfig
     public UncertaintyConfig Uncertainty { get; set; } = new();
     public WarmupConfig Warmup { get; set; } = new();
     public PowerMeterConfig PowerMeter { get; set; } = new();
+    public DcSourceConfig DcSource { get; set; } = new();
     public string ResultsDirectory { get; set; } = "results";
 
     /// <summary>
