@@ -78,7 +78,7 @@ the serial from `dvm.serial`.
  ┌────────────────────┐                      ┌───────────────────────────────┐
  │  HI        ───┐    │                      │  REF EXT ◎   (H01 input,      │
  │  HI Sense  ───┤    │                      │               Part 4 only)    │
- │               ├────┼──── 4-wire cable ────┼─► DC REFERENCE OUTPUT ◎        │
+ │               ├────┼──── 4-wire cable ────┼─► DC REFERENCE OUTPUT ◎       │
  │  LO        ───┤    │     ≤ 5 ft, pairs    │      centre: HI + HI Sense    │
  │  LO Sense  ───┘    │     joined at the    │      shell:  LO + LO Sense    │
  └────────────────────┘     BNC plug         │   100 MEG LOAD MIN            │

@@ -97,6 +97,26 @@ public class ConsoleReportTests
         Assert.Contains("REF EXT", Wiring.Diagram);
         Assert.Contains(Wiring.Rules, r => r.Contains("5 ft"));
     }
+
+    [Fact]
+    public void Wiring_rules_start_below_the_diagram()
+    {
+        var console = new TestConsole().Width(200);
+        Spectre.Console.AnsiConsole.Console = console;
+        Wiring.Write();
+        var lines = console.Lines;
+        var bottom = lines.Select((l, i) => (l, i)).Last(x => x.l.Contains('┘')).i;
+        Assert.DoesNotContain("•", lines[bottom]);
+        Assert.StartsWith("•", lines[bottom + 1].TrimStart());
+    }
+
+    [Fact]
+    public void Wiring_diagram_box_borders_line_up()
+    {
+        // A stray space once pushed the DC REFERENCE OUTPUT line's right border out by one.
+        var lines = Wiring.Diagram.Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.EndsWith('│') || l.EndsWith('┐') || l.EndsWith('┘')).ToList();
+        Assert.Single(lines.Select(l => l.Length).Distinct());
+    }
 }
 
 /// <summary>The walkthrough's knob picker, driven with keys through Spectre's interactive TestConsole.</summary>
