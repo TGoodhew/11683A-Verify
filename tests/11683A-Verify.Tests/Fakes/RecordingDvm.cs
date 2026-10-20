@@ -22,6 +22,7 @@ internal sealed class RecordingDvm(IDvm inner, Func<bool> outputLive) : IDvm
 
     public DvmReading Read() => inner.Read();
     public IReadOnlyList<string> ReadErrors() => inner.ReadErrors();
+    public DvmTerminals ReadTerminals() => inner.ReadTerminals();
     public IReadOnlyList<KeyValuePair<string, string>> ReadBackSettings() => inner.ReadBackSettings();
     public void Dispose() => inner.Dispose();
 }

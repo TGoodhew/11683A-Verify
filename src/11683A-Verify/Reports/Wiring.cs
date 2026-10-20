@@ -19,6 +19,8 @@ public static class Wiring
 
     public static readonly IReadOnlyList<string> Rules =
     [
+        "The DVM must read its FRONT terminals: press its Front/Rear (3458A: Terminals) button until FRONT is selected. "
+            + "It can't be set over the bus; the app reads it before measuring.",
         "Measure at DC REFERENCE OUTPUT, the lower BNC. REF EXT, the upper one, is the Option H01 input (Part 4 only).",
         "Run the 4-wire cable straight to the 11683A BNC and make the Kelvin split at the plug: no adapters or tees, "
             + "whose contact resistance would be measured with the 11683A in Part 2.",

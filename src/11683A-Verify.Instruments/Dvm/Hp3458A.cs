@@ -1,3 +1,4 @@
+using System.Globalization;
 using Verify11683A.Instruments.Visa;
 
 namespace Verify11683A.Instruments.Dvm;
@@ -110,11 +111,35 @@ public sealed class Hp3458A(IVisaSession session, IClock? clock = null) : IDvm
 
     public IReadOnlyList<KeyValuePair<string, string>> ReadBackSettings()
     {
-        string[] queries = ["FUNC?", "NPLC?", "AZERO?", "FIXEDZ?", "OCOMP?", "NDIG?", "TRIG?", "END?"];
+        string[] queries = ["FUNC?", "NPLC?", "AZERO?", "FIXEDZ?", "OCOMP?", "NDIG?", "TRIG?", "END?", "TERM?"];
         return queries.Select(q => new KeyValuePair<string, string>(q, session.Query(q).Trim())).ToList();
     }
 
+    /// <summary>
+    /// TERM? reports the front-panel Terminals switch (User's Guide p. 254, PDF p. 256). Under the power-on and
+    /// PRESET query format, QFORMAT NORM, the reply is the numeric equivalent: 1 FRONT, 2 REAR (0 is OPEN). QFORMAT
+    /// ALPHA would give "TERM FRONT" (pp. 153 and 219–220, PDF pp. 155 and 221–222), so both forms are read.
+    /// </summary>
+    public DvmTerminals ReadTerminals() => ParseTerminals(session.Query("TERM?"));
+
     public void Dispose() => session.Dispose();
+
+    internal static DvmTerminals ParseTerminals(string reply)
+    {
+        var words = reply.Trim().Trim('"').ToUpperInvariant().Split((char[])[' ', ','], StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0)
+            return DvmTerminals.Unknown;
+        var value = words[^1];
+        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var n))
+            value = n switch { 0 => "OPEN", 1 => "FRONT", 2 => "REAR", _ => value };
+        return value switch
+        {
+            "FRONT" => DvmTerminals.Front,
+            "REAR" => DvmTerminals.Rear,
+            "OPEN" => DvmTerminals.Open,
+            _ => DvmTerminals.Unknown,
+        };
+    }
 
     private void ThrowIfErrors(string during)
     {

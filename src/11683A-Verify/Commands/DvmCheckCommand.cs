@@ -1,4 +1,5 @@
 using Spectre.Console;
+using Verify11683A.App.Reports;
 using Verify11683A.Calibrator;
 using Verify11683A.Formatting;
 using Verify11683A.Instruments.Dvm;
@@ -60,6 +61,9 @@ public static class DvmCheckCommand
         dvm.Reset();
         AnsiConsole.MarkupLine("[green]✓[/] Reset; error queue empty.");
 
+        // The cable is on the front terminals, and the Front/Rear switch cannot be set over the bus.
+        bench.CheckTerminals();
+
         // 3. Before any ohms range is configured, make sure the 11683A output is not live.
         AnsiConsole.MarkupLine("This check configures the 4-wire ohms ranges, so the 11683A output must not be live.");
         AnsiConsole.MarkupLine("Set the 11683A [bold]FUNCTION[/] switch to [bold]STANDBY[/] (or disconnect the DVM).");
@@ -109,6 +113,7 @@ public static class DvmCheckCommand
             failures += ReadOneMilliwatt(bench, config, specs, limits, options.AmbientC);
 
         AnsiConsole.WriteLine();
+        bench.Log.Write(failures == 0 ? "DVM check passed." : $"DVM check: {failures} problem(s).");
         AnsiConsole.MarkupLine(failures == 0
             ? "[green bold]DVM check passed.[/]"
             : $"[red bold]DVM check: {failures} problem(s).[/] See above.");
@@ -151,6 +156,7 @@ public static class DvmCheckCommand
 
         if (result.Outcome != AcquisitionOutcome.Measured)
         {
+            bench.Log.Write($"1 mW result: not measured ({result.Outcome}): {result.Message}");
             AnsiConsole.MarkupLine($"[red]✗ {Markup.Escape(result.Message)}.[/] Check RANGE is 1 mW and FUNCTION is CALIBRATE.");
             return 1;
         }
@@ -164,6 +170,7 @@ public static class DvmCheckCommand
         var convention = config.Uncertainty.Convention;
         var uncertainty = MeasurementUncertainty.Of(spec, stats, convention);
         var assessment = Assessment.Of(mean, uncertainty.Expanded, new Tolerance(point.VoltsMin!.Value, point.VoltsMax!.Value), convention);
+        bench.Log.Write(ResultLog.OneMilliwatt(stats, uncertainty, assessment, specs.Model, limits.Part1.Source, result.Settled));
 
         var grid = new Grid().AddColumn().AddColumn();
         grid.AddRow("[grey]Mean[/]", $"[bold]{Si.Format(mean, "V", 6)}[/]");

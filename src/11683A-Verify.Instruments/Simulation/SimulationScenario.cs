@@ -33,6 +33,9 @@ public sealed record SimulationScenario
     /// <summary>Time constant of that tail. At NPLC 100 it falls below 20 ppm after about five readings.</summary>
     public double SettlingTauSeconds { get; init; } = 5.0;
 
+    /// <summary>Where the simulated DVM's Front/Rear switch starts. The cable is on the front terminals.</summary>
+    public Dvm.DvmTerminals DvmTerminals { get; init; } = Dvm.DvmTerminals.Front;
+
     public static readonly IReadOnlyList<SimulationScenario> All =
     [
         new()
@@ -77,6 +80,12 @@ public sealed record SimulationScenario
             Name = "drifting",
             Description = "Outputs drift 15 ppm per minute, as if the 11683A had not warmed up.",
             DriftPpmPerMinute = 15,
+        },
+        new()
+        {
+            Name = "rear-terminals",
+            Description = "The DVM's Front/Rear switch on REAR, so the cable on the front terminals is not measured.",
+            DvmTerminals = Dvm.DvmTerminals.Rear,
         },
     ];
 

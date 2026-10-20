@@ -37,7 +37,7 @@ cd src\11683A-Verify\bin\Debug\net10.0
 11683A-Verify wiring                    # wiring diagram and 4-wire cable rules
 11683A-Verify --regen-pdf results\11683A_SG52060005_20261017-1430.json   # rebuild a PDF report
 11683A-Verify dvm-check --simulate      # no hardware; also --simulate=supply-low, ratio-fail,
-                                        # ohms-fail, noisy, drifting
+                                        # ohms-fail, noisy, drifting, rear-terminals
 11683A-Verify --help
 ```
 
@@ -85,6 +85,10 @@ the serial from `dvm.serial`.
                                              └───────────────────────────────┘
 ```
 
+- **The DVM must read its FRONT terminals.** The 34401A's Front/Rear button (the 3458A's Terminals button)
+  can't be set over the bus. Before the first measurement every command reads the switch (`ROUT:TERM?` on the
+  34401A, `TERM?` on the 3458A). If it is on REAR, the app asks you to press the button and waits until FRONT
+  is selected. On REAR the open input floats at some millivolts, and the ohms safety check refuses ohms.
 - **Measure at DC REFERENCE OUTPUT**, the lower BNC. The upper BNC, **REF EXT**, is the Option H01
   reference *input*. It is used only in Part 4.
 - **The 4-wire cable must go directly to the 11683A BNC.** Make the Kelvin split at the BNC plug. Use no
@@ -365,6 +369,7 @@ run is flagged so it can't be used.
 | `noisy` | 30 ppm noise: slow to settle, wider σ. | `part1 --simulate=noisy` |
 | `h01-ext-error` | REF EXT path 0.4% high: Part 4's agreement is outside 0.2%. | `part4 --simulate=h01-ext-error` |
 | `drifting` | Outputs drift 15 ppm/min, as if not warmed up. | `part1 --simulate=drifting` |
+| `rear-terminals` | The DVM's Front/Rear switch starts on REAR: the app asks for FRONT before measuring. | `dvm-check --simulate=rear-terminals` |
 
 - **Part 3:** in `adjust --simulate=...`, ↑/↓ turn the simulated A2R1 in coarse steps and ←/→ in fine steps.
   The live view needs a real console.
@@ -376,14 +381,19 @@ run is flagged so it can't be used.
 
 1. Create `appsettings.local.json` with the 34401A's GPIB address, serial and calibration date.
 2. Warm the 34401A up for at least an hour; its specifications assume 1 hour.
-3. Connect the 4-wire cable to DC REFERENCE OUTPUT and set FUNCTION to **STANDBY**.
+3. Connect the 4-wire cable from the 34401A's **FRONT** terminals to DC REFERENCE OUTPUT, and set FUNCTION
+   to **STANDBY**. Press the 34401A's front-panel **Front/Rear** button so FRONT is selected: the "Rear"
+   annunciator must be off. The switch can't be set over the bus.
 4. Run `11683A-Verify dvm-check`. You should see:
    - the `*IDN?` string;
+   - "The 34401A is reading its FRONT terminals". If it says REAR, press the Front/Rear button, then Enter.
+     On REAR the open input reads some millivolts (about 11 mV on the bench), so the ohms ranges are refused;
    - the output reading a few µV ("grounded");
    - all seven ranges **OK**: DCV 100 mV, 1 V, 10 V and 100 V, and Ω 100, 1 k and 10 k;
-   - `INP:IMP:AUTO? 1` on every DCV range up to 10 V, and `0` on 100 V.
+   - `INP:IMP:AUTO? 1` on every DCV range up to 10 V and `0` on 100 V, and `ROUT:TERM? FRON` on every range.
 5. When asked, set RANGE 1 mW, FUNCTION CALIBRATE, POLARITY NORMAL and REF INT. Accept the readings.
-   Expect about 145 mV, inside 143.00–147.00 mV, with σ of a few µV.
+   Expect about 145 mV, inside 143.00–147.00 mV, with σ of a few µV. The session log records the result as a
+   "1 mW result:" line with the mean, σ, n, DVM spec, U, limits and verdict.
 6. Run `11683A-Verify spec-table`. Check the 34401A table against Service Guide p. 12 (PDF p. 20).
 7. Send back the session log, from `results\logs\` under the current directory.
 

@@ -147,7 +147,17 @@ public sealed class Hp34401A(IVisaSession session, IClock? clock = null) : IDvm
         return settings;
     }
 
+    /// <summary>ROUT:TERM? returns "FRON" or "REAR" (User's Guide p. 123, PDF p. 131).</summary>
+    public DvmTerminals ReadTerminals() => ParseTerminals(session.Query("ROUT:TERM?"));
+
     public void Dispose() => session.Dispose();
+
+    internal static DvmTerminals ParseTerminals(string reply) => reply.Trim().Trim('"').ToUpperInvariant() switch
+    {
+        "FRON" or "FRONT" => DvmTerminals.Front,
+        "REAR" => DvmTerminals.Rear,
+        _ => DvmTerminals.Unknown,
+    };
 
     /// <summary>Parses a CONF? reply such as "VOLT +1.000000E+00,+1.000000E-06".</summary>
     internal static (string Function, double Range) ParseConf(string reply)
