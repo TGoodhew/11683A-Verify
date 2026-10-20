@@ -11,7 +11,7 @@
   "warmupMinutes": 30,
   "notes": [
     "Over SCPI the app reads UNIT1:POW? and FETC1? without changing the meter's set-up.",
-    "For an E4419B, run each test again on channel B (the procedures say to repeat the key presses on both channels)."
+    "For an E4419B, choose the E4419B (data/meters/E4419B.json): it runs each test on both channels."
   ],
   "tests": [
     {

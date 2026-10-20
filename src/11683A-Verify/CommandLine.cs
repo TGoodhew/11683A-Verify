@@ -60,7 +60,7 @@ public sealed class CommandLine
           part4                Part 4: Option H01 REF EXT transfer check against a power meter
                                (informational; E4418B Service Guide procedure 2).
           meter-test           Power meter performance tests with the 11683A: 435A, 435B, 436A, 437B, 438A,
-                               E4418B (definitions in data/meters). Menu choice, or --meter <model>.
+                               E4418B, E4419B (definitions in data/meters). Menu choice, or --meter <model>.
           adjust               Part 3: Power Supply Adjustment assist. Live reading of the 1 mW output while
                                A2R1 is set to 145.00 +/- 2.00 mV, then an offer to rerun Part 1.
                                (In simulation, the arrow keys turn the simulated A2R1.)
