@@ -11,7 +11,7 @@ file in this format: the app checks it on load and refuses one it cannot run.
 | `model` | The model, e.g. `437B`. Also what `--meter` matches. |
 | `manufacturer`, `title` | For the record, e.g. `HP`, `HP 437B Power Meter`. |
 | `manual` | The manual (file name, title, part number) the tests were transcribed from. |
-| `busDriver` | `E4418B`, `437B`, `438A`, `436A`, or `null` when the meter has no bus. |
+| `busDriver` | `E4418B`, `E4419B`, `437B`, `438A`, `436A`, or `null` when the meter has no bus. |
 | `defaultResource` | VISA resource used when `powerMeter.resource` is not set. |
 | `channels` | `["A"]`, or `["A", "B"]` for a dual-channel meter. |
 | `warmupMinutes` | From the manual's performance-test conditions. |

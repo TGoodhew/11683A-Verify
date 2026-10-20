@@ -101,7 +101,7 @@ public sealed class MeterDefinition
     public string Title { get; init; } = "";
     public string Manual { get; init; } = "";
 
-    /// <summary>The bus driver: E4418B, 437B, 438A or 436A. Null when the meter has no bus.</summary>
+    /// <summary>The bus driver: E4418B, E4419B, 437B, 438A or 436A. Null when the meter has no bus.</summary>
     public string? BusDriver { get; init; }
 
     public string DefaultResource { get; init; } = "GPIB0::13::INSTR";

@@ -32,7 +32,7 @@ cd src\11683A-Verify\bin\Debug\net10.0
 11683A-Verify part1                     # Part 1 only: DC voltage and ratio test
 11683A-Verify part2                     # Part 2 only: four-wire resistance test
 11683A-Verify part4                     # Part 4: Option H01 REF EXT check (needs a power meter)
-11683A-Verify meter-test --meter 437B   # power meter performance test (435A/B, 436A, 437B, 438A, E4418B)
+11683A-Verify meter-test --meter 437B   # power meter performance test (435A/B, 436A, 437B, 438A, E4418B, E4419B)
 11683A-Verify adjust                    # Part 3: Power Supply Adjustment assist (A2R1), then Part 1
 11683A-Verify wiring                    # wiring diagram and 4-wire cable rules
 11683A-Verify --regen-pdf results\11683A_SG52060005_20261017-1430.json   # rebuild a PDF report
@@ -224,6 +224,7 @@ reading and min/max limits, and the page each one came from.
 | HP 437B | Zero Carryover, Instrument Accuracy | HP-IB (`LN`, `TR2`) |
 | HP 438A | Zero Carryover, Instrument Accuracy, on channels A and B | HP-IB (`AP`/`BP`, `LN`, `TR2`); dBm/dB typed in |
 | E4418B | Zero Test, Instrument Accuracy Procedure 1, Procedure 2 (H01 + DC calibrator) | SCPI (`UNIT1:POW?`, `FETC1?`) |
+| E4419B | The E4418B's tests and limits, on channels A and B | SCPI (`UNIT2:POW?`, `FETC2? DEF,DEF,(@2)` for channel B) |
 
 How a run goes:
 

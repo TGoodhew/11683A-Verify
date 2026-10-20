@@ -106,6 +106,29 @@ public class PowerMeterDriverTests
         Assert.Empty(session.Commands);                      // queries only: the set-up is left alone
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void E4419B_names_the_channel_in_the_fetch_so_the_window_setup_does_not_matter(int channel)
+    {
+        var session = new ScriptedVisaSession()
+            .Answer("*IDN?", "Agilent Technologies,E4419B,GB98765432,A2.02.00")
+            .Answer("SYST:ERR?", "+0,\"No error\"")
+            .Answer($"UNIT{channel}:POW?", "W").Answer($"FETC{channel}? DEF,DEF,(@{channel})", "+1.00030000E-003");
+        var meter = new E441xPowerMeter(session, channel);
+        meter.Identify();
+        Assert.Equal(1.0003e-3, meter.ReadWatts(), 12);
+        Assert.Equal(["*IDN?", $"UNIT{channel}:POW?", $"FETC{channel}? DEF,DEF,(@{channel})", "SYST:ERR?"], session.Sent);
+        Assert.EndsWith($"channel {channel}", meter.Description);
+    }
+
+    [Fact]
+    public void E4418B_has_no_channel_2()
+    {
+        var session = new ScriptedVisaSession().Answer("*IDN?", "Agilent Technologies,E4418B,GB12345678,A1.06.00");
+        Assert.Throws<PowerMeterException>(() => new E441xPowerMeter(session, 2).Identify());
+    }
+
     [Fact]
     public void E441x_reports_a_meter_error()
     {
