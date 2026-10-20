@@ -5,6 +5,18 @@ using Verify11683A.App.Commands;
 
 Console.OutputEncoding = Encoding.UTF8;
 
+// Ctrl+C ends the process without running finally blocks: put a bus DC calibrator in Standby first, and leave the
+// alternate screen so the message can be read.
+Console.CancelKeyPress += (_, _) =>
+{
+    var failed = Verify11683A.Instruments.Visa.EmergencyStop.RunAll();
+    Console.Write("\u001b[?1049l");
+    Console.WriteLine();
+    Console.WriteLine("Stopped (Ctrl+C). Nothing from this run was saved.");
+    foreach (var f in failed)
+        Console.WriteLine($"Could not do: {f}. Put it in Standby by hand.");
+};
+
 try
 {
     var options = CommandLine.Parse(args);
@@ -45,6 +57,9 @@ try
     if (options.Command is { } command)
         return RunCommand(command, config, options);
 
+    if (Console.IsInputRedirected)
+        throw new UsageException("Name a command: the menu needs an operator at the console.");
+
     // The menu: run a command, then come back, until Exit.
     while (true)
     {
@@ -60,14 +75,14 @@ try
         }
         catch (Exception ex)
         {
-            AnsiConsole.WriteException(ex, ExceptionFormats.ShortenEverything);
+            ConsoleUi.Failure(ex);
         }
         AnsiConsole.WriteLine();
         ConsoleUi.Prompt("Press Enter to return to the menu");
         AnsiConsole.Clear();
     }
 }
-catch (ArgumentException ex)
+catch (UsageException ex)
 {
     AnsiConsole.MarkupLine($"[red]{Markup.Escape(ex.Message)}[/]");
     AnsiConsole.WriteLine();
@@ -76,8 +91,9 @@ catch (ArgumentException ex)
 }
 catch (Exception ex)
 {
-    AnsiConsole.WriteException(ex, ExceptionFormats.ShortenEverything);
-    return 1;
+    // 1 is kept for a test that ran and did not pass; 3 means the run itself failed.
+    ConsoleUi.Failure(ex);
+    return 3;
 }
 
 static int RunCommand(string command, AppConfig config, CommandLine options) => command switch
@@ -93,7 +109,7 @@ static int RunCommand(string command, AppConfig config, CommandLine options) => 
     "part4" => Part4Command.Run(config, options),
     "meter-test" => MeterTestCommand.Run(config, options),
     "exit" => 0,
-    _ => throw new ArgumentException($"Unknown command '{command}'."),
+    _ => throw new UsageException($"Unknown command '{command}'."),
 };
 
 static int WiringCommand()

@@ -69,9 +69,13 @@ public sealed class SimulatedDvm(Simulated11683A source, IClock clock, double li
         return Configuration = new DvmConfiguration(function, range, nplc, AutoZero: true, highZ, inputResistance);
     }
 
+    private int _readings;
+
     public DvmReading Read()
     {
         var config = Configuration ?? throw new InvalidOperationException("Configure the simulated DVM before reading it.");
+        if (++_readings == source.Scenario.DvmTimeoutAtReading)
+            throw new Visa.InstrumentTimeoutException("SIMULATED DVM did not respond within 20 s while waiting for the reply to 'READ?' (the dvm-timeout scenario).");
 
         var duration = ReadingTime.Estimate(config.Nplc, lineHz, config.AutoZero);
         if (clock is SimulatedClock simulated)

@@ -17,9 +17,12 @@ public static class MeterTestCommand
         var definitions = MeterDefinition.LoadAll();
         var definition = options.Meter is { } model
             ? definitions.FirstOrDefault(d => string.Equals(d.Model, model, StringComparison.OrdinalIgnoreCase))
-              ?? throw new ArgumentException($"No meter definition for '{model}'. Available: {string.Join(", ", definitions.Select(d => d.Model))}.")
+              ?? throw new UsageException($"No meter definition for '{model}'. Available: {string.Join(", ", definitions.Select(d => d.Model))}.")
             : Choose(definitions);
 
+        if (!options.IsSimulation && !ConsoleUi.Interactive)
+            throw new OperatorException("A power meter test on the real bench needs you at the console (input and output not redirected): "
+                + "it would otherwise go on without your confirmations.");
         using var bench = Bench.Open(config, options, $"meter-{definition.Model}");
         using var screens = new Screens($"{definition.Title} performance test" + (bench.IsSimulation ? $" (simulated: {bench.Simulator!.Scenario.Name})" : ""),
             ["Setup", "Results"])
@@ -36,7 +39,7 @@ public static class MeterTestCommand
 
         foreach (var line in ResultLog.Meter(run))
             bench.Log.Write(line);
-        var path = run.Save(config.ResultsDirectory);
+        var path = Saving.WithFallback(run.Save, config.ResultsDirectory, bench.Log);
         bench.Log.Write($"Meter results saved to {Path.GetFullPath(path)}");
         try
         {
@@ -44,9 +47,10 @@ public static class MeterTestCommand
         }
         catch (Exception ex)
         {
+            bench.Log.Write($"PDF record failed: {ex}");
             AnsiConsole.MarkupLine($"[red]The PDF record could not be written: {Markup.Escape(ex.Message)}[/]");
         }
-        bench.Log.SaveCopy(Path.ChangeExtension(path, ".log"));
+        Saving.CopyLog(bench.Log, Path.ChangeExtension(path, ".log"));
         AnsiConsole.WriteLine();
         MeterReport.Summary(run, path);
         Printing.Offer(() => MeterReport.Build(MeterRun.Load(path), Path.GetFileName(path)), Path.GetFileNameWithoutExtension(path), bench.Log);
@@ -57,7 +61,7 @@ public static class MeterTestCommand
     private static MeterDefinition Choose(IReadOnlyList<MeterDefinition> definitions)
     {
         if (!ConsoleUi.Interactive)
-            throw new ArgumentException($"Name the meter with --meter: {string.Join(", ", definitions.Select(d => d.Model))}.");
+            throw new UsageException($"Name the meter with --meter: {string.Join(", ", definitions.Select(d => d.Model))}.");
         return AnsiConsole.Prompt(new SelectionPrompt<MeterDefinition>()
             .Title("Which power meter?")
             .UseConverter(d => Markup.Escape($"{d.Title}  ({d.Tests.Count} tests, {d.Tests.Sum(t => t.Points.Count)} rows; "

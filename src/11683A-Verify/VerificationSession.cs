@@ -7,6 +7,7 @@ using Verify11683A.Calibrator;
 using Verify11683A.Formatting;
 using Verify11683A.Instruments.Dvm;
 using Verify11683A.Instruments.Measurement;
+using Verify11683A.Instruments.Visa;
 using Verify11683A.Measurement;
 using Verify11683A.Results;
 using Verify11683A.Specs;
@@ -139,9 +140,22 @@ public sealed class VerificationSession : IDisposable
         var allowUnsettled = false;
         while (true)
         {
-            var acquisition = view is not null && !Console.IsOutputRedirected
-                ? AcquireLive(acquirer, allowUnsettled, startRange, view)
-                : AcquireWithStatus(acquirer, allowUnsettled, startRange);
+            PointAcquisition acquisition;
+            try
+            {
+                acquisition = view is not null && !Console.IsOutputRedirected
+                    ? AcquireLive(acquirer, allowUnsettled, startRange, view)
+                    : AcquireWithStatus(acquirer, allowUnsettled, startRange);
+            }
+            catch (InstrumentException ex)
+            {
+                // A timeout or VISA error: the point so far is lost, but nothing else; the operator can check the DVM and retry.
+                Log.Write($"Measurement failed: {ex.Message}");
+                AnsiConsole.MarkupLine($"[red]✗ {Markup.Escape(ex.Message)}[/]");
+                if (!Retry("The DVM did not respond. Check it and its GPIB cable, then:"))
+                    return null;
+                continue;
+            }
             switch (acquisition.Outcome)
             {
                 case AcquisitionOutcome.Measured:
@@ -266,7 +280,7 @@ public sealed class VerificationSession : IDisposable
     {
         run = run with { Notes = [.. run.Notes, .. AskNotes()] };
         Log.Write(ResultLog.Run(run));
-        var path = ResultsFile.Save(run, Config.ResultsDirectory);
+        var path = Saving.WithFallback(directory => ResultsFile.Save(run, directory), Config.ResultsDirectory, Log);
         Log.Write($"Results saved to {Path.GetFullPath(path)}");
         try
         {
@@ -279,7 +293,7 @@ public sealed class VerificationSession : IDisposable
             AnsiConsole.MarkupLine($"[red]The PDF report could not be written: {Markup.Escape(ex.Message)}[/] "
                 + "[grey]The results are saved; rebuild it later with --regen-pdf.[/]");
         }
-        Log.SaveCopy(Path.ChangeExtension(path, ".log"));
+        Saving.CopyLog(Log, Path.ChangeExtension(path, ".log"));
         AnsiConsole.MarkupLine($"[grey]Results: {Markup.Escape(Path.GetFullPath(path))}, with the PDF report and session log beside it[/]");
         return path;
     }

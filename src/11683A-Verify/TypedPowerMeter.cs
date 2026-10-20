@@ -16,7 +16,7 @@ public sealed class TypedPowerMeter(string model) : IPowerMeter
     public double ReadWatts()
     {
         if (Console.IsInputRedirected)
-            throw new InvalidOperationException("A typed power meter reading needs an operator at the console.");
+            throw new OperatorException("A typed power meter reading needs an operator at the console.");
         var text = AnsiConsole.Prompt(new TextPrompt<string>("Power meter reading [grey](e.g. 1.0003 mW, 999.8 uW, 0.0 dBm)[/]:")
             .Validate(t => PowerText.ParseWatts(t) is > 0
                 ? ValidationResult.Success()

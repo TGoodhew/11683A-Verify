@@ -8,6 +8,7 @@ using Verify11683A.Instruments.DcSource;
 using Verify11683A.Instruments.Dvm;
 using Verify11683A.Instruments.PowerMeter;
 using Verify11683A.Instruments.Simulation;
+using Verify11683A.Instruments.Visa;
 using Verify11683A.Measurement;
 using Verify11683A.Results;
 
@@ -46,9 +47,24 @@ public static class Part4Procedure
             + "whose Guard and LO can float, and a BNC tee. The result is an indication under the power meter's own uncertainty.");
         if (!ConsoleUi.Confirm("Run Part 4?", defaultValue: true))
             return null;
+        if (sim is null && !ConsoleUi.Interactive)
+            throw new OperatorException("Part 4 on the real bench needs you at the console (input and output not redirected): "
+                + "it would otherwise go on without your confirmations.");
 
-        using var meter = session.OpenPowerMeter();
-        meter.Identify();
+        using var meter = ConsoleUi.Attempt("Identifying the power meter", () =>
+        {
+            var m = session.OpenPowerMeter();
+            try
+            {
+                m.Identify();
+                return m;
+            }
+            catch
+            {
+                m.Dispose();
+                throw;
+            }
+        }, session.Log, canSkip: false)!;
         session.Log.Write($"Part 4 power meter: {meter.Description}");
         AnsiConsole.MarkupLine($"Power meter: [bold]{Markup.Escape(meter.Description)}[/]");
         using var bus = session.OpenDcSource();
@@ -228,7 +244,7 @@ public static class Part4Procedure
             dvm.Configure(DvmFunction.DcVoltage, range, 10);
             if (bus is not null)
             {
-                SetOverBus(target, what, range);
+                ConsoleUi.Attempt($"Setting the calibrator to {Si.Format(target, "V", 5)}", () => SetOverBus(target, what, range), session.Log);
             }
             else
             {
@@ -241,7 +257,7 @@ public static class Part4Procedure
                     WatchByHand(target);
             }
 
-            var mean = MeanAtTee(5, range);
+            var mean = ConsoleUi.Attempt("Reading the DVM at the REF EXT tee", () => MeanAtTee(5, range), session.Log, canSkip: false);
             session.Log.Write($"REF EXT source for {what}: target {target} V, applied {mean} V");
             // 100 ppm, but at least 1 µV: at the lowest rows the DVM's own noise is tens of ppm.
             if (Math.Abs(mean - target) > Math.Max(100e-6 * target, 1e-6))
@@ -281,7 +297,7 @@ public static class Part4Procedure
                 if (Math.Abs(error) > 0.02 * Math.Abs(target) + 10e-6)
                 {
                     bus.Standby();
-                    throw new InvalidOperationException($"The DVM reads {Si.Format(tee, "V", 6)} at the REF EXT tee with the calibrator set to "
+                    throw new InstrumentException($"The DVM reads {Si.Format(tee, "V", 6)} at the REF EXT tee with the calibrator set to "
                         + $"{Si.Format(setting, "V", 6)} on its {Terminals(terminals)} terminals. Check the leads; the calibrator is in Standby.");
                 }
                 setting -= error;
@@ -312,7 +328,7 @@ public static class Part4Procedure
         {
             var readings = Enumerable.Range(0, count).Select(_ => session.Dvm.Read()).Where(r => !r.Overload).Select(r => r.Value).ToList();
             if (readings.Count == 0)
-                throw new InvalidOperationException($"The DVM overloaded at the REF EXT tee on its {range} V range.");
+                throw new InstrumentException($"The DVM overloaded at the REF EXT tee on its {range} V range.");
             return readings.Average();
         }
 
@@ -326,13 +342,17 @@ public static class Part4Procedure
         {
             if (session.Bench.Simulator is null || session.Bench.Walkthrough)
                 ConsoleUi.Prompt("Wait for the power meter reading to settle, then press Enter");
-            var values = new List<double>();
-            for (var i = 0; i < PowerReadings; i++)
+            var values = ConsoleUi.Attempt($"Reading the power meter ({what})", () =>
             {
-                values.Add(meter.ReadWatts());
-                if (session.Bench.Simulator is null)
-                    Thread.Sleep(500);
-            }
+                var read = new List<double>();
+                for (var i = 0; i < PowerReadings; i++)
+                {
+                    read.Add(meter.ReadWatts());
+                    if (session.Bench.Simulator is null)
+                        Thread.Sleep(500);
+                }
+                return read;
+            }, session.Log, canSkip: false)!;
             watts = values.Average();
             session.Log.Write($"Power meter ({what}): {string.Join(", ", values.Select(v => v.ToString("R", CultureInfo.InvariantCulture)))} W");
         }

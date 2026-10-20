@@ -18,7 +18,17 @@ public static class Printing
     {
         if (!ConsoleUi.Interactive || !OperatingSystem.IsWindows())
             return;
-        var printers = ReportPrinter.Printers();
+        IReadOnlyList<string> printers;
+        try
+        {
+            printers = ReportPrinter.Printers();
+        }
+        catch (Exception ex)
+        {
+            // The print spooler is stopped, or the printer list can't be read: the PDF is still there.
+            AnsiConsole.MarkupLine($"[yellow]The printers can't be listed ({Markup.Escape(ex.Message)}); the PDF is beside the results.[/]");
+            return;
+        }
         if (printers.Count == 0)
         {
             AnsiConsole.MarkupLine("[grey]No printer is installed, so the report can't be printed from here. The PDF is beside the results.[/]");
@@ -70,7 +80,7 @@ public static class Printing
             if (ConsoleUi.Interactive && printers.Count > 0)
                 printer = ChoosePrinter(printers);
             else
-                printer = ReportPrinter.DefaultPrinter() ?? throw new ArgumentException("There is no default printer: name one with --printer.");
+                printer = ReportPrinter.DefaultPrinter() ?? throw new OperatorException("There is no default printer: name one with --printer.");
             if (printer is null)
                 return 0;
         }
@@ -88,7 +98,7 @@ public static class Printing
         {
             VerificationRun.CurrentSchema => () => PdfReport.Build(ResultsFile.Load(path), name),
             MeterRun.CurrentSchema => () => MeterReport.Build(MeterRun.Load(path), name),
-            _ => throw new ArgumentException($"{name} is not a results file (schema '{schema}')."),
+            _ => throw new OperatorException($"{name} is not a results file (schema '{schema}')."),
         };
     }
 

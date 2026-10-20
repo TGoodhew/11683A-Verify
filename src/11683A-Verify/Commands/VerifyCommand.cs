@@ -32,9 +32,12 @@ public static class VerifyCommand
         {
             if (!part1.SupplyAdjustmentRecommended)
                 screens.Pause("Press Enter for Part 2");
-            part2 = Part2Procedure.Run(session);
-            screens.Begin("Part 2", "Part 2 results");
-            screens.Report(() => ConsoleReport.Part2(part2, session.Limits, session.Convention));
+            part2 = Interrupted(session, "Part 2", () => Part2Procedure.Run(session));
+            if (part2 is not null)
+            {
+                screens.Begin("Part 2", "Part 2 results");
+                screens.Report(() => ConsoleReport.Part2(part2, session.Limits, session.Convention));
+            }
         }
 
         Part4Result? part4 = null;
@@ -43,7 +46,7 @@ public static class VerifyCommand
             screens.Pause("Press Enter for Part 4");
         if (h01 && (options.Part4 || ConsoleUi.Confirm("Run Part 4, the Option H01 REF EXT check? It needs a power meter.", defaultValue: false)))
         {
-            part4 = Part4Procedure.Run(session, part1.Point("1mW")?.Volts);
+            part4 = Interrupted(session, "Part 4", () => Part4Procedure.Run(session, part1.Point("1mW")?.Volts));
             if (part4 is not null)
             {
                 screens.Begin("Part 4", "Part 4 results");
@@ -61,5 +64,24 @@ public static class VerifyCommand
         var run = session.CreateRun(part1, part2, part4: part4);
         session.SaveAndSummarise(run);
         return run.Complete && run.Verdict == Verdict.Pass ? 0 : 1;
+    }
+
+    /// <summary>
+    /// A later part that an instrument error (or the operator's Stop) ends: it is reported as not run, and what the
+    /// earlier parts measured is still saved.
+    /// </summary>
+    private static T? Interrupted<T>(VerificationSession session, string part, Func<T?> run) where T : class
+    {
+        try
+        {
+            return run();
+        }
+        catch (Exception ex) when (ex is Instruments.Visa.InstrumentException or OperatorStopException)
+        {
+            session.Log.Write($"{part} stopped: {ex.Message}");
+            AnsiConsole.MarkupLine($"[red]✗ {part} stopped: {Markup.Escape(ex.Message)}[/] [grey]The earlier parts are still saved.[/]");
+            session.Screens.Skip(part);
+            return null;
+        }
     }
 }

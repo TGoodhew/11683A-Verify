@@ -57,7 +57,7 @@ public interface IPowerMeterControl
     double Read();
 }
 
-public sealed class PowerMeterException(string message) : Exception(message);
+public sealed class PowerMeterException(string message) : InstrumentException(message);
 
 /// <summary>
 /// HP/Agilent E4418B/E4419B (and E4416A/E4417A) over SCPI. Reads FETCh? in whatever units the meter displays
@@ -78,6 +78,7 @@ public sealed class E441xPowerMeter(IVisaSession session, int channel = 1) : IPo
     private const double ReadingsPerSecond = 20;
 
     private bool _twoChannel;
+    private bool _controlled;
     private int _filter = 4;
 
     public string Description { get; private set; } = "E441x power meter";
@@ -108,6 +109,7 @@ public sealed class E441xPowerMeter(IVisaSession session, int channel = 1) : IPo
 
     public void Preset()
     {
+        _controlled = true;
         session.Write("SYST:PRES");
         session.Write("*CLS");
         _filter = 4;
@@ -200,7 +202,7 @@ public sealed class E441xPowerMeter(IVisaSession session, int channel = 1) : IPo
 
     private static string Number(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
-    public void Dispose() => session.Dispose();
+    public void Dispose() => PowerMeterSession.Close(session, _controlled ? $"INIT{channel}:CONT ON" : null);
 
     internal static double DbmToWatts(double dbm) => Math.Pow(10, dbm / 10) * 1e-3;
 }
@@ -248,6 +250,7 @@ internal static class CalZeroWait
 public sealed class Hp437BPowerMeter(IVisaSession session, Action<TimeSpan>? sleep = null) : IPowerMeter, IPowerMeterControl
 {
     private readonly Action<TimeSpan> _sleep = sleep ?? Thread.Sleep;
+    private bool _controlled;
 
     public string Description { get; private set; } = "HP 437B";
     public bool OverBus => true;
@@ -272,7 +275,11 @@ public sealed class Hp437BPowerMeter(IVisaSession session, Action<TimeSpan>? sle
         return value;
     }
 
-    public void Preset() => session.Write("PRLN");
+    public void Preset()
+    {
+        _controlled = true;
+        session.Write("PRLN");
+    }
 
     public void Apply(MeterSettings settings, double? calFactorPercent)
     {
@@ -314,7 +321,7 @@ public sealed class Hp437BPowerMeter(IVisaSession session, Action<TimeSpan>? sle
         return value;
     }
 
-    public void Dispose() => session.Dispose();
+    public void Dispose() => PowerMeterSession.Close(session, _controlled ? "TR3" : null);
 }
 
 /// <summary>HP 438A over its HP-IB codes: AP or BP (sensor), LN (watts), TR2 for one settled reading, TR3 back to free run.</summary>
@@ -329,6 +336,7 @@ public sealed class Hp438APowerMeter(IVisaSession session, char sensor = 'A', Ac
 {
     private readonly Action<TimeSpan> _sleep = sleep ?? Thread.Sleep;
     private bool _relative;
+    private bool _controlled;
 
     public string Description { get; private set; } = "HP 438A";
     public bool OverBus => true;
@@ -355,6 +363,7 @@ public sealed class Hp438APowerMeter(IVisaSession session, char sensor = 'A', Ac
 
     public void Preset()
     {
+        _controlled = true;
         session.Write("PR" + (sensor == 'B' ? "BP" : "AP") + "LN");
         _relative = false;
     }
@@ -396,7 +405,7 @@ public sealed class Hp438APowerMeter(IVisaSession session, char sensor = 'A', Ac
         return value;
     }
 
-    public void Dispose() => session.Dispose();
+    public void Dispose() => PowerMeterSession.Close(session, _controlled ? "TR3" : null);
 }
 
 /// <summary>
@@ -532,4 +541,25 @@ public static class PowerMeters
         "436A" => new Hp436APowerMeter(session),
         _ => throw new ArgumentException($"No bus driver for power meter '{model}'. Use {string.Join(", ", BusModels)} or manual."),
     };
+}
+
+/// <summary>Closing a meter the app controlled: back to free run where it was held, without hiding an earlier error.</summary>
+internal static class PowerMeterSession
+{
+    public static void Close(IVisaSession session, string? freeRun)
+    {
+        try
+        {
+            if (freeRun is not null)
+                session.Write(freeRun);
+        }
+        catch (InstrumentException)
+        {
+            // The meter isn't answering; its front panel's LOCAL key puts it back.
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
 }

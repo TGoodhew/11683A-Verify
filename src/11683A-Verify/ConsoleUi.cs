@@ -1,8 +1,18 @@
 using Spectre.Console;
+using Verify11683A.Instruments.Visa;
 using Verify11683A.Specs;
 using Verify11683A.Uncertainty;
 
 namespace Verify11683A.App;
+
+/// <summary>The operator chose to stop after an instrument error; what was measured so far is kept.</summary>
+public sealed class OperatorStopException(string message, Exception? inner = null) : Exception(message, inner);
+
+/// <summary>Something the operator can put right (a setting, a printer, a console to answer prompts), shown as a message.</summary>
+public sealed class OperatorException(string message) : Exception(message);
+
+/// <summary>A command line the app can't run; the usage text follows the message.</summary>
+public sealed class UsageException(string message) : Exception(message);
 
 /// <summary>Console prompts and markup shared by the commands.</summary>
 public static class ConsoleUi
@@ -40,6 +50,76 @@ public static class ConsoleUi
 
     public static void SessionLogLine(SessionLog log) =>
         AnsiConsole.MarkupLine($"[grey]Session log: {Markup.Escape(Path.GetFullPath(log.Path))}[/]");
+
+    /// <summary>
+    /// An error that ended a command. An instrument's or the operator's is shown as a message (the session log has
+    /// the detail); anything else is a bug, so its stack trace is shown too.
+    /// </summary>
+    public static void Failure(Exception ex)
+    {
+        switch (ex)
+        {
+            case OperatorStopException:
+                AnsiConsole.MarkupLine($"[yellow]{Markup.Escape(ex.Message)}[/]");
+                break;
+            // Conditions of the bench, the files or the settings. The session log gets the stack trace regardless.
+            case InstrumentException or OperatorException or IOException or UnauthorizedAccessException or InvalidDataException
+                or System.Text.Json.JsonException or ArgumentException or NotSupportedException:
+                AnsiConsole.MarkupLine($"[red]✗ {Markup.Escape(ex.Message)}[/]");
+                break;
+            default:
+                AnsiConsole.WriteException(ex, ExceptionFormats.ShortenEverything);
+                break;
+        }
+        if (SessionLog.Latest is not { } log)
+            return;
+        try
+        {
+            // The session has closed its log by now; the error still belongs at the end of it.
+            File.AppendAllText(log, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}  ERROR {ex.GetType().Name}: {ex.Message}{Environment.NewLine}{ex}{Environment.NewLine}");
+        }
+        catch (IOException)
+        {
+        }
+        AnsiConsole.MarkupLine($"[grey]Session log: {Markup.Escape(Path.GetFullPath(log))}[/]");
+    }
+
+    /// <summary>
+    /// Runs an instrument step; if it fails, says why and lets the operator retry it, skip it (when
+    /// <paramref name="canSkip"/>; the result is then default) or stop. Without an operator the error stands.
+    /// </summary>
+    /// <exception cref="OperatorStopException">The operator chose to stop.</exception>
+    public static T? Attempt<T>(string what, Func<T> step, SessionLog log, bool canSkip = true)
+    {
+        while (true)
+        {
+            try
+            {
+                return step();
+            }
+            catch (InstrumentException ex)
+            {
+                log.Write($"{what} failed: {ex.Message}");
+                if (!Interactive)
+                    throw;
+                AnsiConsole.MarkupLine($"[red]✗ {Markup.Escape(what)}: {Markup.Escape(ex.Message)}[/]");
+                var choices = canSkip ? new[] { "Retry", "Skip", "Stop" } : ["Retry", "Stop"];
+                var choice = AnsiConsole.Prompt(new SelectionPrompt<string>().Title("What now?").AddChoices(choices));
+                log.Write($"Operator chose {choice}");
+                if (choice == "Skip")
+                    return default;
+                if (choice == "Stop")
+                    throw new OperatorStopException($"Stopped at: {what}.", ex);
+            }
+        }
+    }
+
+    public static void Attempt(string what, Action step, SessionLog log, bool canSkip = false) =>
+        Attempt<object?>(what, () =>
+        {
+            step();
+            return null;
+        }, log, canSkip);
 
     public static string CalibrationText(DvmDetails dvm, DateOnly today) => dvm.StateOn(today) switch
     {
