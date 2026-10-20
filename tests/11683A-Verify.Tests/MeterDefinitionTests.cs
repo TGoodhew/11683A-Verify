@@ -17,9 +17,9 @@ public class MeterDefinitionTests
         All.Single(d => d.Model == model).Tests.Single(t => t.Id == test).Points.Single(p => p.Label == label);
 
     [Fact]
-    public void All_six_meters_load()
+    public void All_seven_meters_load()
     {
-        Assert.Equal(["435A", "435B", "436A", "437B", "438A", "E4418B"], All.Select(d => d.Model));
+        Assert.Equal(["435A", "435B", "436A", "437B", "438A", "E4418B", "E4419B"], All.Select(d => d.Model));
         Assert.All(All, d => Assert.NotEmpty(d.Manual));
         Assert.All(All.SelectMany(d => d.Tests), t => Assert.Contains("p.", t.Source));
     }
@@ -31,6 +31,7 @@ public class MeterDefinitionTests
     [InlineData("437B", "437B")]
     [InlineData("438A", "438A")]
     [InlineData("E4418B", "E4418B")]
+    [InlineData("E4419B", "E4419B")]
     public void Bus_drivers(string model, string? driver) => Assert.Equal(driver, MeterDefinition.LoadModel(model).BusDriver);
 
     [Fact]
@@ -76,6 +77,18 @@ public class MeterDefinitionTests
         Assert.Equal(15.588, points[^1].Calibrator!.ExternalVolts);
         Assert.Equal((99.54, 100.46), (points[^1].Min, points[^1].Max));
         Assert.True(MeterDefinition.LoadModel("E4418B").Tests.Single(t => t.Id == "instrument-accuracy-procedure-2").NeedsH01);
+    }
+
+    [Fact]
+    public void The_E4419B_runs_the_E4418B_tests_on_both_channels_with_the_same_limits()
+    {
+        var e4418b = MeterDefinition.LoadModel("E4418B");
+        var e4419b = MeterDefinition.LoadModel("E4419B");
+        Assert.Equal(["A", "B"], e4419b.Channels);
+        Assert.All(e4419b.Tests, t => Assert.True(t.PerChannel));
+        Assert.Equal(e4418b.Tests.Select(t => t.Id), e4419b.Tests.Select(t => t.Id));
+        var rows = (MeterDefinition d) => d.Tests.SelectMany(t => t.Points.Select(p => (t.Id, p.Label, p.Expected, p.Min, p.Max, p.Unit, p.Calibrator?.ExternalVolts)));
+        Assert.Equal(rows(e4418b), rows(e4419b));
     }
 
     [Fact]

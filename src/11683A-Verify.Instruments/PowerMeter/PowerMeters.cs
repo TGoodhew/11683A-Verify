@@ -27,10 +27,14 @@ public sealed class PowerMeterException(string message) : Exception(message);
 
 /// <summary>
 /// HP/Agilent E4418B/E4419B (and E4416A/E4417A) over SCPI. Reads FETCh? in whatever units the meter displays
-/// (UNIT:POWer? says which), so the front-panel set-up is left as the operator made it.
+/// (UNIT:POWer? says which), so the front-panel set-up is left as the operator made it. On the two-channel E4417A
+/// and E4419B, FETC&lt;n&gt;? reads window n (1 upper, 2 lower), whose channel is whatever the window shows, so the
+/// query names the channel with a source list: FETC2? DEF,DEF,(@2) is channel B (Programming Guide pp. 2-22 to 2-23).
 /// </summary>
 public sealed class E441xPowerMeter(IVisaSession session, int channel = 1) : IPowerMeter
 {
+    private bool _twoChannel;
+
     public string Description { get; private set; } = "E441x power meter";
     public bool OverBus => true;
 
@@ -41,13 +45,16 @@ public sealed class E441xPowerMeter(IVisaSession session, int channel = 1) : IPo
         var fields = raw.Split(',');
         if (fields.Length < 4 || !Regex.IsMatch(fields[1], "E441[6-9]"))
             throw new PowerMeterException($"{session.ResourceName}: expected an E4416A–E4419B, but *IDN? returned '{raw}'.");
+        _twoChannel = Regex.IsMatch(fields[1], "E441[79]");
+        if (channel != 1 && !_twoChannel)
+            throw new PowerMeterException($"{session.ResourceName}: the {fields[1].Trim()} has one channel, so there is no channel {channel}.");
         Description = $"{fields[0].Trim()} {fields[1].Trim()} s/n {fields[2].Trim()}, fw {fields[3].Trim()}, channel {channel}";
     }
 
     public double ReadWatts()
     {
         var unit = session.Query($"UNIT{channel}:POW?").Trim().Trim('"').ToUpperInvariant();
-        var value = ScpiNumber.Parse(session.Query($"FETC{channel}?"), "a power reading");
+        var value = ScpiNumber.Parse(session.Query(_twoChannel ? $"FETC{channel}? DEF,DEF,(@{channel})" : $"FETC{channel}?"), "a power reading");
         var error = session.Query("SYST:ERR?").Trim();
         if (!error.StartsWith("+0", StringComparison.Ordinal) && !error.StartsWith("0", StringComparison.Ordinal))
             throw new PowerMeterException($"{session.ResourceName}: {error}");
