@@ -21,7 +21,13 @@ public static class MeterTestCommand
             : Choose(definitions);
 
         using var bench = Bench.Open(config, options, $"meter-{definition.Model}");
-        var run = new MeterTestProcedure(config, options, bench, definition).Run();
+        using var screens = new Screens($"{definition.Title} performance test" + (bench.IsSimulation ? $" (simulated: {bench.Simulator!.Scenario.Name})" : ""),
+            ["Setup", "Results"])
+        {
+            Identity = $"with {config.Calibrator.Model} s/n {config.Calibrator.Serial}",
+        };
+        var run = new MeterTestProcedure(config, options, bench, definition, screens).Run();
+        screens.Finish();
         if (run.Tests.Count == 0)
         {
             AnsiConsole.MarkupLine("[yellow]No tests were run.[/]");

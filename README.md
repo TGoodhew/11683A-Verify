@@ -122,6 +122,14 @@ pp. 7–8 (PDF pp. 18–19). All limits are in [`data/limits-11683A.json`](data/
 
 `verify`, `part1` and `part2` start by showing the wiring diagram.
 
+- **One screen per step.** At a console, each step has its own cleared screen: Setup, Wiring, Warm-up, each
+  part's set-up and measuring, its results, then Results. The top of every screen shows the unit and DVM, and
+  a step tracker with the current step highlighted, finished steps ticked and skipped ones struck through.
+  A results screen waits for Enter before the next step clears it. The run uses the terminal's alternate
+  screen, like a full-screen program. When it ends, the normal screen comes back with the results tables,
+  the summary and where everything was saved, so they stay in the scrollback. `dvm-check`, `adjust`,
+  `part4` and `meter-test` work the same way. Redirected or scripted runs scroll as before, with a heading
+  for each step. The session log has everything, whatever was on screen.
 - **Ambient temperature.** The app asks for it, unless `--ambient` was given. Outside 18–28 °C, the DVM's
   temperature coefficient is added.
 - **Warm-up.** The app asks how long the 11683A and the DVM have been on, then counts down whatever is

@@ -37,8 +37,12 @@ public static class DvmCheckCommand
         var limits = CalibratorLimits.LoadDefault();
         var failures = 0;
 
-        AnsiConsole.Write(new Rule($"[bold]DVM check[/] — {Markup.Escape(dvm.Model)} at {Markup.Escape(dvm.ResourceName)}"
-            + (bench.IsSimulation ? $" [yellow](simulated: {Markup.Escape(bench.Simulator!.Scenario.Name)})[/]" : "")).LeftJustified());
+        using var screens = new Screens("DVM check" + (bench.IsSimulation ? $" (simulated: {bench.Simulator!.Scenario.Name})" : ""),
+            ["DVM", "Ranges", "1 mW"])
+        {
+            Identity = $"{dvm.Model} at {dvm.ResourceName}",
+        };
+        screens.Begin("DVM", "DVM: identity, terminals and a grounded output");
 
         // 1. Identity
         var identity = dvm.Identify();
@@ -72,10 +76,11 @@ public static class DvmCheckCommand
         var safety = OhmsSafety.Check(dvm);
         bench.Log.Write($"Ohms safety: {safety.Reading.Value} V, safe={safety.Safe}");
         var ohmsAllowed = safety.Safe;
-        AnsiConsole.MarkupLine(safety.Safe
-            ? $"[green]✓[/] Output reads {Si.Format(safety.Reading.Value, "V", 3)}: {safety.Explanation}."
-            : $"[red]✗[/] Output reads {(safety.Reading.Overload ? "overload" : Si.Format(safety.Reading.Value, "V", 4))}: {safety.Explanation}. [red]Ohms ranges skipped.[/]");
-        AnsiConsole.WriteLine();
+
+        screens.Begin("Ranges", "Ranges used by the verification");
+        screens.Report(() => AnsiConsole.MarkupLine(safety.Safe
+            ? $"[green]✓[/] STANDBY output reads {Si.Format(safety.Reading.Value, "V", 3)}: {safety.Explanation}."
+            : $"[red]✗[/] STANDBY output reads {(safety.Reading.Overload ? "overload" : Si.Format(safety.Reading.Value, "V", 4))}: {safety.Explanation}. [red]Ohms ranges skipped.[/]"));
 
         // 4. Configure every range used and read it back
         var table = new Table().Border(TableBorder.Rounded).Title("[bold]Ranges used by the verification[/]")
@@ -103,16 +108,27 @@ public static class DvmCheckCommand
                 table.AddRow(function.DisplayName(), rangeText, "[red]FAIL[/]", "", Markup.Escape(ex.Message));
             }
         }
-        AnsiConsole.Write(table);
-        AnsiConsole.MarkupLine("[grey]Every DCV range up to 10 V must show the >10 GΩ input: the 11683A needs at least 100 MΩ. "
-            + "The 100 V range is 10 MΩ, as was the manual's 3455A.[/]");
+        screens.Report(() =>
+        {
+            AnsiConsole.Write(table);
+            AnsiConsole.MarkupLine("[grey]Every DCV range up to 10 V must show the >10 GΩ input: the 11683A needs at least 100 MΩ. "
+                + "The 100 V range is 10 MΩ, as was the manual's 3455A.[/]");
+        });
         AnsiConsole.WriteLine();
 
         // 5. Optional: readings of the 11683A at 1 mW
         if (ConsoleUi.Confirm("Take readings of the 11683A at RANGE 1 mW?"))
-            failures += ReadOneMilliwatt(bench, config, specs, limits, options.AmbientC);
+        {
+            screens.Begin("1 mW", "1 mW: the 11683A DC REFERENCE OUTPUT");
+            failures += ReadOneMilliwatt(bench, screens, config, specs, limits, options.AmbientC);
+            screens.Pause();
+        }
+        else
+        {
+            screens.Skip("1 mW");
+        }
 
-        AnsiConsole.WriteLine();
+        screens.Finish();
         bench.Log.Write(failures == 0 ? "DVM check passed." : $"DVM check: {failures} problem(s).");
         AnsiConsole.MarkupLine(failures == 0
             ? "[green bold]DVM check passed.[/]"
@@ -121,14 +137,14 @@ public static class DvmCheckCommand
         return failures == 0 ? 0 : 1;
     }
 
-    private static int ReadOneMilliwatt(Bench bench, AppConfig config, DvmSpecTable specs, CalibratorLimits limits, double? ambientC)
+    private static int ReadOneMilliwatt(Bench bench, Screens screens, AppConfig config, DvmSpecTable specs, CalibratorLimits limits, double? ambientC)
     {
         var dvm = bench.Dvm;
         var point = limits.Part1.Point(limits.SupplyAdjustment.Range);
         const int count = 5;
 
-        AnsiConsole.MarkupLine("Set the 11683A: REF switch [bold]INT[/], POLARITY [bold]NORMAL[/], RANGE [bold]1 mW[/], FUNCTION [bold]CALIBRATE[/].");
-        AnsiConsole.MarkupLine("[grey]DVM on the rear DC REFERENCE OUTPUT BNC.[/]");
+        AnsiConsole.Write(ConsoleUi.Settings("Set the 11683A",
+            ("REF", "INT"), ("POLARITY", "NORMAL"), ("RANGE", "1 mW"), ("FUNCTION", "CALIBRATE"), ("DVM", "rear DC REFERENCE OUTPUT")));
         bench.Step("Press Enter when set", s =>
         {
             s.SetReference(ReferenceSwitch.Int);
@@ -157,7 +173,7 @@ public static class DvmCheckCommand
         if (result.Outcome != AcquisitionOutcome.Measured)
         {
             bench.Log.Write($"1 mW result: not measured ({result.Outcome}): {result.Message}");
-            AnsiConsole.MarkupLine($"[red]✗ {Markup.Escape(result.Message)}.[/] Check RANGE is 1 mW and FUNCTION is CALIBRATE.");
+            screens.Report(() => AnsiConsole.MarkupLine($"[red]✗ 1 mW: {Markup.Escape(result.Message)}.[/] Check RANGE is 1 mW and FUNCTION is CALIBRATE."));
             return 1;
         }
         if (!result.Settled)
@@ -184,7 +200,8 @@ public static class DvmCheckCommand
         grid.AddRow("[grey]Indication[/]", ConsoleUi.VerdictMarkup(assessment.Verdict) + (assessment.Verdict == Verdict.Pass
             ? " [grey](a preview: the full Part 1 test checks every range)[/]"
             : " [yellow]the Power Supply Adjustment (A2R1) would be recommended[/]"));
-        AnsiConsole.Write(new Panel(grid).Header("11683A DC REFERENCE OUTPUT, RANGE 1 mW"));
+        var panel = new Panel(grid).Header("11683A DC REFERENCE OUTPUT, RANGE 1 mW");
+        screens.Report(() => AnsiConsole.Write(panel));
         return 0;
     }
 }

@@ -5,13 +5,29 @@ using Verify11683A.Measurement;
 
 namespace Verify11683A.App.Procedures;
 
-/// <summary>Before the first part: the wiring diagram, the ambient temperature and the warm-up countdown.</summary>
+/// <summary>
+/// Before the first part: the ambient temperature (on the Setup screen), the wiring diagram (its own screen), and the
+/// warm-up countdown (its own screen, when it is timed).
+/// </summary>
 public static class Preparation
 {
     public static void Run(VerificationSession session)
     {
-        Wiring.Write();
         AskAmbient(session);
+
+        session.Screens.Begin("Wiring", "Wiring: DVM to the 11683A DC REFERENCE OUTPUT");
+        Wiring.Write(heading: false);
+        var timed = !(session.Bench.IsSimulation || session.Options.SkipWarmup || Console.IsInputRedirected);
+        if (!timed)
+        {
+            session.Screens.Skip("Warm-up");
+            if (session.Bench.Walkthrough)
+                AnsiConsole.MarkupLine("[grey]Simulator: the warm-up countdown is skipped (on the bench it asks how long each instrument has been on and counts down).[/]");
+        }
+        session.Screens.Pause("Press Enter when the DVM is connected as shown");
+
+        if (timed)
+            session.Screens.Begin("Warm-up");
         WarmUp(session);
     }
 
@@ -38,8 +54,6 @@ public static class Preparation
         if (session.Bench.IsSimulation || session.Options.SkipWarmup || Console.IsInputRedirected)
         {
             session.Log.Write(session.Bench.IsSimulation ? "Warm-up: simulated, not timed." : "Warm-up: skipped.");
-            if (session.Bench.Walkthrough)
-                AnsiConsole.MarkupLine("[grey]Simulator: the warm-up countdown is skipped (on the bench it asks how long each instrument has been on and counts down).[/]");
             return;
         }
 

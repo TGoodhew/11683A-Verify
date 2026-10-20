@@ -30,9 +30,11 @@ public static class Wiring
         "Ohms current is applied only in STANDBY, after a DC reading shows the output is grounded.",
     ];
 
-    public static void Write()
+    /// <param name="heading">Write a "Wiring" heading first; not on the run's Wiring screen, which has its own.</param>
+    public static void Write(bool heading = true)
     {
-        AnsiConsole.Write(new Rule("[bold]Wiring[/]").LeftJustified());
+        if (heading)
+            AnsiConsole.Write(new Rule("[bold]Wiring[/]").LeftJustified());
         // The raw string has no final newline, so end the diagram's last line before the rules.
         AnsiConsole.Write(new Text(Diagram + "\n"));
         foreach (var rule in Rules)

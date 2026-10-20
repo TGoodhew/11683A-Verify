@@ -14,7 +14,7 @@ public static class AdjustCommand
 {
     public static int Run(AppConfig config, CommandLine options)
     {
-        using var session = VerificationSession.Start(config, options, "adjust");
+        using var session = VerificationSession.Start(config, options, "adjust", "Part 3", "Part 1", "Results");
         var final = SupplyAdjustmentProcedure.Run(session);
         if (final is null)
             return 1;
@@ -22,6 +22,9 @@ public static class AdjustCommand
         AnsiConsole.WriteLine();
         if (!ConsoleUi.Confirm("Rerun Part 1 now to confirm the ratios and the 1 mW voltage?", defaultValue: true))
         {
+            session.Screens.Skip("Part 1");
+            session.Screens.Skip("Results");
+            session.Screens.Finish();
             AnsiConsole.MarkupLine("[yellow]Rerun Part 1 (part1 or verify) before relying on the unit.[/]");
             ConsoleUi.SessionLogLine(session.Log);
             return 0;
@@ -32,15 +35,11 @@ public static class AdjustCommand
         session.Bench.Step("Press Enter to start Part 1");
 
         var part1 = Part1Procedure.Run(session);
-        AnsiConsole.WriteLine();
-        ConsoleReport.Part1(part1, session.Limits, session.Convention);
-        var run = session.CreateRun(part1, null,
-            [string.Create(CultureInfo.InvariantCulture, $"Part 1 run after the Power Supply Adjustment: A2R1 left at {final.Volts * 1e3:0.000} mV ({final.State}).")]);
-        var path = session.Save(run);
-        AnsiConsole.WriteLine();
-        ConsoleReport.Summary(run, path);
-        session.OfferActualsExport(path);
-        ConsoleUi.SessionLogLine(session.Log);
+        session.Screens.Begin("Part 1", "Part 1 results");
+        session.Screens.Report(() => ConsoleReport.Part1(part1, session.Limits, session.Convention));
+        session.Screens.Pause();
+        session.SaveAndSummarise(session.CreateRun(part1, null,
+            [string.Create(CultureInfo.InvariantCulture, $"Part 1 run after the Power Supply Adjustment: A2R1 left at {final.Volts * 1e3:0.000} mV ({final.State}).")]));
         return part1.Complete && part1.Verdict == Verdict.Pass ? 0 : 1;
     }
 }

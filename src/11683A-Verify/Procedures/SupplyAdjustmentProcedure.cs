@@ -32,15 +32,16 @@ public static class SupplyAdjustmentProcedure
         var sim = session.Bench.Simulator;
         var dvm = session.Dvm;
 
-        AnsiConsole.Write(new Rule($"[bold]Part 3: {Markup.Escape(limits.Title)} ({Markup.Escape(limits.Adjustment)})[/]").LeftJustified());
+        session.Screens.Begin("Part 3", $"Part 3: {limits.Title} ({limits.Adjustment})");
         AnsiConsole.MarkupLine($"[grey]{Markup.Escape(limits.Source)}[/]");
         AnsiConsole.Write(new Panel(new Markup($"[bold red]WARNING[/]\n{Markup.Escape(CoversOffWarning)}"))
             .Border(BoxBorder.Heavy).BorderColor(Color.Red));
         if (!ConsoleUi.Confirm("Continue with the adjustment?", defaultValue: true))
             return null;
 
-        AnsiConsole.MarkupLine($"Set RANGE [bold]1 mW[/], FUNCTION [bold]CALIBRATE[/], POLARITY [bold]NORMAL[/], REF [bold]INT[/]. "
-            + "DVM on the rear [bold]DC REFERENCE OUTPUT[/]. Remove the top cover.");
+        AnsiConsole.Write(ConsoleUi.Settings("Set the 11683A",
+            ("RANGE", "1 mW"), ("FUNCTION", "CALIBRATE"), ("POLARITY", "NORMAL"), ("REF", "INT"),
+            ("DVM", "rear DC REFERENCE OUTPUT"), ("COVER", "top cover removed")));
         AnsiConsole.MarkupLine($"Adjust [bold]{Markup.Escape(limits.Adjustment)}[/] for {Si.Format(limits.TargetVolts, "V", 5)} "
             + $"± {Si.Format(limits.ToleranceVolts, "V", 3)}; aim for the centre.");
         session.Bench.Step("Press Enter when set", s =>
@@ -103,8 +104,8 @@ public static class SupplyAdjustmentProcedure
 
         var final = AdjustmentReading.For(recent.Count > 0 ? recent.Average() : last!.Volts, limits);
         session.Log.Write($"Power Supply Adjustment finished at {final.Volts} V ({final.State}, error {final.Error} V)");
-        AnsiConsole.MarkupLine($"Finished at [bold]{Si.Format(final.Volts, "V", 6)}[/] "
-            + $"({Signed(final.Error * 1e3, "0.000")} mV): {StateMarkup(final.State)}.");
+        session.Screens.Report(() => AnsiConsole.MarkupLine($"Power Supply Adjustment finished at [bold]{Si.Format(final.Volts, "V", 6)}[/] "
+            + $"({Signed(final.Error * 1e3, "0.000")} mV): {StateMarkup(final.State)}."));
         return final;
     }
 
