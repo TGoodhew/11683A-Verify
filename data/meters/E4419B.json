@@ -11,8 +11,8 @@
   ],
   "warmupMinutes": 30,
   "notes": [
-    "Over SCPI the app reads UNIT<n>:POW? and FETC<n>? DEF,DEF,(@<n>), with n = 1 for channel A and 2 for channel B: the source list names the channel, so the window set-up does not matter (E4418B/E4419B Programming Guide, pp. 2-22 to 2-23).",
-    "The Service Guide gives the E4418B key presses; on the E4419B the equivalent key presses are made on both channels (notes on pp. 2-6, 2-8 and 2-12), with the same limits (Tables 2-2 and 2-4 have Channel A and Channel B columns). Make the filter, Zero and Cal settings on the channel under test."
+    "Over SCPI the app does each channel's steps as for the E4418B, on channel n (CAL<n>, SENS<n>, UNIT<n>), and reads READ<n>? DEF,DEF,(@<n>), n = 1 for A and 2 for B: the source list names the channel, so the window set-up does not matter (E4418B/E4419B Programming Guide, pp. 2-22 to 2-23).",
+    "The Service Guide gives the E4418B key presses; on the E4419B the equivalent key presses are made on both channels (notes on pp. 2-6, 2-8 and 2-12), with the same limits (Tables 2-2 and 2-4 have Channel A and Channel B columns)."
   ],
   "tests": [
     {
@@ -31,6 +31,18 @@
         "System, Inputs, Input Settings, More, Filter: On, Mode Man, Length 512, Enter.",
         "Zero/Cal, Zero; wait about 10 s, then 30 s more before reading."
       ],
+      "meter": {
+        "display": "Watts",
+        "filter": 512
+      },
+      "zero": {
+        "calibrator": {
+          "range": "3uW",
+          "function": "Standby",
+          "polarity": "Normal"
+        },
+        "settleSeconds": 60
+      },
       "points": [
         {
           "label": "Zero, filter 512",
@@ -68,6 +80,26 @@
         "11683A FUNCTION CALIBRATE, RANGE 1 mW; press Cal.",
         "Set the 11683A RANGE to each row."
       ],
+      "meter": {
+        "display": "Watts",
+        "filter": 512
+      },
+      "zero": {
+        "calibrator": {
+          "range": "3uW",
+          "function": "Standby",
+          "polarity": "Normal"
+        },
+        "settleSeconds": 60
+      },
+      "cal": {
+        "calibrator": {
+          "range": "1mW",
+          "function": "Calibrate",
+          "polarity": "Normal"
+        },
+        "referenceCalFactorPercent": 100
+      },
       "points": [
         {
           "label": "3 µW",
@@ -225,6 +257,31 @@
         "DC calibrator 144.93 mV, output '+'; 11683A FUNCTION CALIBRATE; press Cal.",
         "Set the DC calibrator to each row's voltage and the meter filter to the row's value."
       ],
+      "meter": {
+        "display": "Watts",
+        "filter": 512,
+        "resolution": 4
+      },
+      "zero": {
+        "calibrator": {
+          "range": "100mW",
+          "function": "Standby",
+          "polarity": "Normal",
+          "reference": "Ext",
+          "externalVolts": 0
+        },
+        "settleSeconds": 60
+      },
+      "cal": {
+        "calibrator": {
+          "range": "100mW",
+          "function": "Calibrate",
+          "polarity": "Normal",
+          "reference": "Ext",
+          "externalVolts": 0.14493
+        },
+        "referenceCalFactorPercent": 100
+      },
       "points": [
         {
           "label": "0.00045831 V",
@@ -236,6 +293,9 @@
             "externalVolts": 0.00045831
           },
           "meterSetting": "W, filter 256, resolution 4",
+          "meter": {
+            "filter": 256
+          },
           "expected": 3.1623,
           "unit": "uW",
           "min": 3.0977,
@@ -252,6 +312,9 @@
             "externalVolts": 0.0014493
           },
           "meterSetting": "W, filter 256, resolution 4",
+          "meter": {
+            "filter": 256
+          },
           "expected": 10,
           "unit": "uW",
           "min": 9.904,
@@ -268,6 +331,9 @@
             "externalVolts": 0.0045831
           },
           "meterSetting": "W, filter 256, resolution 4",
+          "meter": {
+            "filter": 256
+          },
           "expected": 31.6228,
           "unit": "uW",
           "min": 31.428,
@@ -284,6 +350,9 @@
             "externalVolts": 0.014493
           },
           "meterSetting": "W, filter 64, resolution 4",
+          "meter": {
+            "filter": 64
+          },
           "expected": 100,
           "unit": "uW",
           "min": 99.49,
@@ -300,6 +369,9 @@
             "externalVolts": 0.045831
           },
           "meterSetting": "W, filter 64, resolution 4",
+          "meter": {
+            "filter": 64
+          },
           "expected": 316.2278,
           "unit": "uW",
           "min": 314.72,
@@ -316,6 +388,9 @@
             "externalVolts": 0.14493
           },
           "meterSetting": "W, filter 16, resolution 4",
+          "meter": {
+            "filter": 16
+          },
           "expected": 1,
           "unit": "mW",
           "min": 0.9954,
@@ -332,6 +407,9 @@
             "externalVolts": 0.45912
           },
           "meterSetting": "W, filter 16, resolution 4",
+          "meter": {
+            "filter": 16
+          },
           "expected": 3.1623,
           "unit": "mW",
           "min": 3.1477,
@@ -348,6 +426,9 @@
             "externalVolts": 1.4588
           },
           "meterSetting": "W, filter 16, resolution 4",
+          "meter": {
+            "filter": 16
+          },
           "expected": 10,
           "unit": "mW",
           "min": 9.954,
@@ -364,6 +445,9 @@
             "externalVolts": 4.6872
           },
           "meterSetting": "W, filter 16, resolution 4",
+          "meter": {
+            "filter": 16
+          },
           "expected": 31.6228,
           "unit": "mW",
           "min": 31.477,
@@ -380,6 +464,9 @@
             "externalVolts": 15.588
           },
           "meterSetting": "W, filter 16, resolution 4",
+          "meter": {
+            "filter": 16
+          },
           "expected": 100,
           "unit": "mW",
           "min": 99.54,

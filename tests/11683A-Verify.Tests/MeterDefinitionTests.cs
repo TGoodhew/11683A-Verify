@@ -100,10 +100,46 @@ public class MeterDefinitionTests
     }
 
     [Fact]
-    public void Display_readings_the_bus_cannot_give_are_typed()
+    public void dBm_and_dB_rows_are_read_with_the_meter_showing_dBm_or_dB_REL()
     {
-        foreach (var p in All.SelectMany(d => d.Tests.SelectMany(t => t.Points.Select(p => (t, p)))).Where(x => x.p.Unit is "dB" or "dBm"))
-            Assert.Equal(ReadingSource.Operator, p.t.SourceOf(p.p));
+        foreach (var (t, p) in All.SelectMany(d => d.Tests.SelectMany(t => t.Points.Select(p => (t, p)))).Where(x => x.p.Unit is "dB" or "dBm"))
+        {
+            Assert.Equal(ReadingSource.Meter, t.SourceOf(p));
+            Assert.Equal(p.Unit == "dB" ? MeterDisplay.DbRelative : MeterDisplay.Dbm, t.Meter!.With(p.Meter).Display);
+        }
+    }
+
+    [Fact]
+    public void Every_bus_meter_test_is_automated_with_a_zero_in_STANDBY()
+    {
+        foreach (var t in All.Where(d => d.BusDriver is not null).SelectMany(d => d.Tests))
+        {
+            Assert.True(t.Automated, t.Id);
+            Assert.Equal(FunctionSwitch.Standby, t.Zero!.Calibrator.Function);
+            if (t.Cal is { } cal)
+                Assert.Equal(FunctionSwitch.Calibrate, cal.Calibrator.Function);
+        }
+        Assert.All(All.Where(d => d.BusDriver is null).SelectMany(d => d.Tests), t => Assert.False(t.Automated));
+    }
+
+    [Fact]
+    public void The_dB_REL_rows_store_their_reference_first()
+    {
+        foreach (var model in new[] { "436A", "438A" })
+        {
+            var test = MeterDefinition.LoadModel(model).Tests.Single(t => t.Id == "instrument-accuracy");
+            var rel = test.Points.Where(p => p.Unit == "dB").ToList();
+            Assert.True(rel[0].Meter!.StoreReference, model);
+            Assert.All(rel.Skip(1), p => Assert.False(p.Meter!.StoreReference));
+        }
+    }
+
+    [Fact]
+    public void The_436A_CAL_ADJ_is_by_hand_and_the_437B_438A_and_E441x_CAL_is_over_the_bus()
+    {
+        Assert.All(MeterDefinition.LoadModel("436A").Tests.Where(t => t.Cal is not null), t => Assert.Equal("1.000 ±0.002 mW", t.Cal!.AdjustTo));
+        Assert.All(new[] { "437B", "438A", "E4418B" }.SelectMany(m => MeterDefinition.LoadModel(m).Tests).Where(t => t.Cal is not null),
+            t => Assert.Null(t.Cal!.AdjustTo));
     }
 
     [Fact]

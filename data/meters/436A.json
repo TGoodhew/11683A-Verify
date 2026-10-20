@@ -10,16 +10,16 @@
   ],
   "warmupMinutes": 30,
   "notes": [
-    "Over HP-IB the app sends 9A+T (autorange, watts, cal factor disabled, trigger with settling) and reads the 14-character string (Table 3-3, Table 3-4). For the Calibration Factor test it sends 9A-T so the front-panel CAL FACTOR switch applies.",
-    "dBm and dB readings are typed in from the display.",
-    "Common setup: CAL FACTOR 100%, POWER REF off, MODE WATT, RANGE HOLD off; 11683A in STANDBY for 60 s before zeroing."
+    "Over HP-IB the app does the zero (Z, then readings until the auto-zero status clears; Example 2, p. 3-18), selects each range (1-5, or 9 for autorange), the mode (A watts, D dBm, C to store the dB REF, B dB REL) and the cal factor (+ off, - the front-panel switch), and takes readings with settling (T) (Table 3-3, p. 3-17; replies per Table 3-4).",
+    "CAL ADJ and the CAL FACTOR switch have no bus control (para 3-15): the app asks for them and shows the live reading while CAL ADJ is set.",
+    "Common setup: POWER REF off; the 11683A in STANDBY for 60 s before zeroing."
   ],
   "tests": [
     {
       "id": "zero-carryover",
       "title": "Zero Carryover Test",
       "source": "436A.pdf, para 4-10, pp. 4-2 to 4-3 (PDF pp. 58-59); Table 4-1 p. 4-3; Test Record Table 4-5 p. 4-10 (PDF p. 66)",
-      "reading": "Operator",
+      "reading": "Meter",
       "equipment": [
         "HP 11683A Range Calibrator",
         "Power sensor cable"
@@ -29,6 +29,17 @@
         "After 60 s in STANDBY, hold SENSOR ZERO until the readout is stable (0.00 ±0.02, ZERO lamp lit), then release it.",
         "For each row: set the 11683A RANGE, switch FUNCTION to CALIBRATE and check the 436A autoranges to it, set RANGE HOLD on, switch FUNCTION to STANDBY, read, then RANGE HOLD off."
       ],
+      "meter": {
+        "display": "Watts"
+      },
+      "zero": {
+        "calibrator": {
+          "range": "100uW",
+          "function": "Standby",
+          "polarity": "Normal"
+        },
+        "settleSeconds": 60
+      },
       "points": [
         {
           "label": "10 µW (after zero)",
@@ -38,7 +49,10 @@
             "polarity": "Normal"
           },
           "meterSetting": "Zeroed on the 10 µW range",
-          "expected": 0.0,
+          "meter": {
+            "range": 1
+          },
+          "expected": 0,
           "unit": "uW",
           "min": -0.02,
           "max": 0.02,
@@ -52,7 +66,10 @@
             "polarity": "Normal"
           },
           "meterSetting": "RANGE HOLD on the 100 µW range",
-          "expected": 0.0,
+          "meter": {
+            "range": 2
+          },
+          "expected": 0,
           "unit": "uW",
           "min": -0.2,
           "max": 0.2
@@ -65,7 +82,10 @@
             "polarity": "Normal"
           },
           "meterSetting": "RANGE HOLD on the 1 mW range",
-          "expected": 0.0,
+          "meter": {
+            "range": 3
+          },
+          "expected": 0,
           "unit": "mW",
           "min": -0.002,
           "max": 0.002
@@ -78,7 +98,10 @@
             "polarity": "Normal"
           },
           "meterSetting": "RANGE HOLD on the 10 mW range",
-          "expected": 0.0,
+          "meter": {
+            "range": 4
+          },
+          "expected": 0,
           "unit": "mW",
           "min": -0.02,
           "max": 0.02
@@ -91,7 +114,10 @@
             "polarity": "Normal"
           },
           "meterSetting": "RANGE HOLD on the 100 mW range",
-          "expected": 0.0,
+          "meter": {
+            "range": 5
+          },
+          "expected": 0,
           "unit": "mW",
           "min": -0.2,
           "max": 0.2
@@ -99,7 +125,7 @@
       ],
       "notes": [
         "Spec: ±0.2% of full scale when zeroed on the most sensitive range; noise and drift are included.",
-        "Typed in: the bus read code selects autorange, which would undo RANGE HOLD."
+        "Over the bus the app selects each fixed range directly (codes 1 to 5, para 3-25, p. 3-14), the remote equivalent of RANGE HOLD."
       ]
     },
     {
@@ -118,6 +144,26 @@
         "Set the 11683A to 3 µW for a few seconds, then step through the rows: each range in WATT, then in dBm, then back to WATT.",
         "For the dB REL rows: 11683A at -10 dBm (100 µW), press dB [REF], then step to -20, -5 and +10 dBm."
       ],
+      "meter": {
+        "display": "Watts",
+        "range": 0
+      },
+      "zero": {
+        "calibrator": {
+          "range": "1mW",
+          "function": "Standby",
+          "polarity": "Normal"
+        },
+        "settleSeconds": 60
+      },
+      "cal": {
+        "calibrator": {
+          "range": "1mW",
+          "function": "Calibrate",
+          "polarity": "Normal"
+        },
+        "adjustTo": "1.000 ±0.002 mW"
+      },
       "points": [
         {
           "label": "10 µW (W)",
@@ -127,7 +173,7 @@
             "polarity": "Normal"
           },
           "meterSetting": "MODE WATT, autorange",
-          "expected": 10.0,
+          "expected": 10,
           "unit": "uW",
           "min": 9.95,
           "max": 10.05
@@ -140,11 +186,13 @@
             "polarity": "Normal"
           },
           "meterSetting": "MODE dBm",
-          "expected": -20.0,
+          "meter": {
+            "display": "Dbm"
+          },
+          "expected": -20,
           "unit": "dBm",
           "min": -20.02,
-          "max": -19.98,
-          "reading": "Operator"
+          "max": -19.98
         },
         {
           "label": "100 µW (W)",
@@ -154,7 +202,7 @@
             "polarity": "Normal"
           },
           "meterSetting": "MODE WATT, autorange",
-          "expected": 100.0,
+          "expected": 100,
           "unit": "uW",
           "min": 99.5,
           "max": 100.5
@@ -167,11 +215,13 @@
             "polarity": "Normal"
           },
           "meterSetting": "MODE dBm",
-          "expected": -10.0,
+          "meter": {
+            "display": "Dbm"
+          },
+          "expected": -10,
           "unit": "dBm",
           "min": -10.02,
-          "max": -9.98,
-          "reading": "Operator"
+          "max": -9.98
         },
         {
           "label": "1 mW (W)",
@@ -181,7 +231,7 @@
             "polarity": "Normal"
           },
           "meterSetting": "MODE WATT, autorange",
-          "expected": 1.0,
+          "expected": 1,
           "unit": "mW",
           "min": 0.995,
           "max": 1.005
@@ -194,11 +244,13 @@
             "polarity": "Normal"
           },
           "meterSetting": "MODE dBm",
-          "expected": 0.0,
+          "meter": {
+            "display": "Dbm"
+          },
+          "expected": 0,
           "unit": "dBm",
           "min": -0.02,
-          "max": 0.02,
-          "reading": "Operator"
+          "max": 0.02
         },
         {
           "label": "3 mW (W)",
@@ -222,11 +274,13 @@
             "polarity": "Normal"
           },
           "meterSetting": "MODE dBm",
-          "expected": 5.0,
+          "meter": {
+            "display": "Dbm"
+          },
+          "expected": 5,
           "unit": "dBm",
           "min": 4.98,
-          "max": 5.02,
-          "reading": "Operator"
+          "max": 5.02
         },
         {
           "label": "10 mW (W)",
@@ -236,7 +290,7 @@
             "polarity": "Normal"
           },
           "meterSetting": "MODE WATT, autorange",
-          "expected": 10.0,
+          "expected": 10,
           "unit": "mW",
           "min": 9.95,
           "max": 10.05
@@ -249,11 +303,13 @@
             "polarity": "Normal"
           },
           "meterSetting": "MODE dBm",
-          "expected": 10.0,
+          "meter": {
+            "display": "Dbm"
+          },
+          "expected": 10,
           "unit": "dBm",
           "min": 9.98,
-          "max": 10.02,
-          "reading": "Operator"
+          "max": 10.02
         },
         {
           "label": "100 mW (W)",
@@ -263,7 +319,7 @@
             "polarity": "Normal"
           },
           "meterSetting": "MODE WATT, autorange",
-          "expected": 100.0,
+          "expected": 100,
           "unit": "mW",
           "min": 99.5,
           "max": 100.5
@@ -276,11 +332,13 @@
             "polarity": "Normal"
           },
           "meterSetting": "MODE dBm",
-          "expected": 20.0,
+          "meter": {
+            "display": "Dbm"
+          },
+          "expected": 20,
           "unit": "dBm",
           "min": 19.98,
-          "max": 20.02,
-          "reading": "Operator"
+          "max": 20.02
         },
         {
           "label": "dB REF at -10 dBm",
@@ -290,11 +348,14 @@
             "polarity": "Normal"
           },
           "meterSetting": "MODE dB [REF] pressed at -10 dBm",
-          "expected": 0.0,
+          "meter": {
+            "display": "DbRelative",
+            "storeReference": true
+          },
+          "expected": 0,
           "unit": "dB",
           "min": -0.01,
-          "max": 0.01,
-          "reading": "Operator"
+          "max": 0.01
         },
         {
           "label": "-20 dBm (dB REL)",
@@ -304,11 +365,13 @@
             "polarity": "Normal"
           },
           "meterSetting": "MODE dB (REL), autorange",
-          "expected": -10.0,
+          "meter": {
+            "display": "DbRelative"
+          },
+          "expected": -10,
           "unit": "dB",
           "min": -10.04,
           "max": -9.96,
-          "reading": "Operator",
           "note": "Printed with min/max reversed (-9.96 / -10.04); the Test Record prints the unit as dBm."
         },
         {
@@ -319,11 +382,13 @@
             "polarity": "Normal"
           },
           "meterSetting": "MODE dB (REL), autorange",
-          "expected": 5.0,
+          "meter": {
+            "display": "DbRelative"
+          },
+          "expected": 5,
           "unit": "dB",
           "min": 4.96,
-          "max": 5.04,
-          "reading": "Operator"
+          "max": 5.04
         },
         {
           "label": "+10 dBm (dB REL)",
@@ -333,11 +398,13 @@
             "polarity": "Normal"
           },
           "meterSetting": "MODE dB (REL), autorange",
-          "expected": 20.0,
+          "meter": {
+            "display": "DbRelative"
+          },
+          "expected": 20,
           "unit": "dB",
           "min": 19.96,
-          "max": 20.04,
-          "reading": "Operator"
+          "max": 20.04
         }
       ],
       "notes": [
@@ -360,6 +427,26 @@
         "11683A FUNCTION CALIBRATE; adjust CAL ADJ for 1.000 ±0.002 mW.",
         "Turn the CAL FACTOR % switch to each position in turn (the switch cannot be set over the bus). Return it to 100% afterwards."
       ],
+      "meter": {
+        "display": "Watts",
+        "range": 3
+      },
+      "zero": {
+        "calibrator": {
+          "range": "1mW",
+          "function": "Standby",
+          "polarity": "Normal"
+        },
+        "settleSeconds": 60
+      },
+      "cal": {
+        "calibrator": {
+          "range": "1mW",
+          "function": "Calibrate",
+          "polarity": "Normal"
+        },
+        "adjustTo": "1.000 ±0.002 mW"
+      },
       "points": [
         {
           "label": "CAL FACTOR 100%",
@@ -369,7 +456,7 @@
             "polarity": "Normal"
           },
           "meterSetting": "RANGE 1 mW; CAL FACTOR 100%",
-          "expected": 1.0,
+          "expected": 1,
           "unit": "mW",
           "min": 0.994,
           "max": 1.006,

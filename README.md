@@ -216,25 +216,37 @@ The operator sets the knobs; the app works out which range is selected.
 one file per meter, transcribed from its own manual, with every row's 11683A setting, meter setting, expected
 reading and min/max limits, and the page each one came from.
 
-| Meter | Tests (from the manual) | Readings |
+| Meter | Tests (from the manual) | Over the bus |
 |---|---|---|
-| HP 435A | Zero Carryover (power sensor), Instrumentation Accuracy | Bench DVM on the rear RECORDER OUTPUT, mVdc |
-| HP 435B | Zero Carryover (power sensor), Instrumentation Accuracy, Calibration Factor | Bench DVM on the RECORDER OUTPUT, mVdc / Vdc |
-| HP 436A | Zero Carryover, Instrument Accuracy (W, dBm, dB REL), Calibration Factor | HP-IB (`9A+T`) for watts; dBm/dB typed in |
-| HP 437B | Zero Carryover, Instrument Accuracy | HP-IB (`LN`, `TR2`) |
-| HP 438A | Zero Carryover, Instrument Accuracy, on channels A and B | HP-IB (`AP`/`BP`, `LN`, `TR2`); dBm/dB typed in |
-| E4418B | Zero Test, Instrument Accuracy Procedure 1, Procedure 2 (H01 + DC calibrator) | SCPI (`UNIT1:POW?`, `FETC1?`) |
-| E4419B | The E4418B's tests and limits, on channels A and B | SCPI (`UNIT2:POW?`, `FETC2? DEF,DEF,(@2)` for channel B) |
+| HP 435A | Zero Carryover (power sensor), Instrumentation Accuracy | No bus: bench DVM on the rear RECORDER OUTPUT, mVdc |
+| HP 435B | Zero Carryover (power sensor), Instrumentation Accuracy, Calibration Factor | No bus: bench DVM on the RECORDER OUTPUT, mVdc / Vdc |
+| HP 436A | Zero Carryover, Instrument Accuracy (W, dBm, dB REL), Calibration Factor | Zero, ranges, W/dBm/dB REF/dB REL. CAL ADJ and the CAL FACTOR switch are front-panel only |
+| HP 437B | Zero Carryover, Instrument Accuracy | Preset, ranges, filter, cal factor, zero, CAL |
+| HP 438A | Zero Carryover, Instrument Accuracy, on sensors A and B | Preset, sensor, ranges, cal factor, zero, CAL (external reference), W/dBm/REL |
+| E4418B | Zero Test, Instrument Accuracy Procedure 1, Procedure 2 (H01 + DC calibrator) | Preset, filter, resolution, cal factor, zero, CAL |
+| E4419B | The E4418B's tests and limits, on channels A and B | As the E4418B, per channel |
+
+**With the meter on the bus you only set the 11683A.** The app presets the meter and makes every setting the
+manual asks for: units, range, filter, resolution, cal factor, zero (with the 11683A in STANDBY, after its 60 s
+drift) and CAL (on the 11683A's 1 mW, not the meter's own POWER REF). It asks you to set the 11683A only when a
+row changes it: the zero carryover rows, which change only the meter's range, run straight through. A bus DC
+calibrator (`--dc-source 5440B`) is set by the app too. Each reading is repeated until two agree, because the
+meter's own settling doesn't cover the 11683A's.
+
+The 436A is the exception: its CAL ADJ and CAL FACTOR switch have no bus control, so the app asks for them, and
+shows the live reading while you set CAL ADJ.
 
 How a run goes:
 
 1. Choose the tests. Procedure 2 is only offered on an H01 calibrator, and is off by default.
-2. Enter the meter's serial number, and choose the channels on a 438A.
-3. For each test, the app shows the manual's equipment and set-up steps.
-4. For each row, it shows what to set on the 11683A and on the meter, then takes the reading:
+2. Enter the meter's serial number, and choose the channels on a 438A or E4419B.
+3. For each test, the app shows the manual's equipment and set-up steps, and asks for the connections.
+4. It sets up, zeroes and CALs the meter, asking you for the 11683A's switches. Then for each row it makes the
+   meter's settings and takes the reading:
    - over the bus, at `powerMeter.resource` or `--meter-resource`;
    - from the DVM, for the 435s, which the manual reads at the RECORDER OUTPUT;
-   - typed in, for displays the bus can't read and for meters without a bus.
+   - typed in, for meters without a bus, or if you answer No to reading the meter over the bus (you then
+     follow the manual's set-up steps yourself).
 5. Each reading is checked against the manual's limits. Type S to skip a row or a test.
 6. Results go to `results\<model>_<serial>_<stamp>.json`, with a PDF test record in the manual's
    Min / Actual / Max layout and the session log beside it.

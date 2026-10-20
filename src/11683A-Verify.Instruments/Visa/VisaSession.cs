@@ -48,5 +48,7 @@ public sealed class VisaSession : IVisaSession
 
     public void Clear() => _session.Clear();
 
+    public byte ReadStatusByte() => (byte)_session.ReadStatusByte();
+
     public void Dispose() => _session.Dispose();
 }
