@@ -37,7 +37,8 @@ public static class PdfReport
 
     public static byte[] Generate(VerificationRun run, string? sourceFile = null) => Build(run, sourceFile).GeneratePdf();
 
-    private static Document Build(VerificationRun run, string? sourceFile) => Document.Create(document =>
+    /// <summary>The report as a document: written as the PDF, or printed (<see cref="ReportPrinter"/>).</summary>
+    public static Document Build(VerificationRun run, string? sourceFile) => Document.Create(document =>
     {
         document.Page(page =>
         {

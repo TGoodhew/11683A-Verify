@@ -21,6 +21,9 @@ try
         return 0;
     }
 
+    if (options.Print is { } printJson)
+        return Printing.PrintSaved(printJson, options.Printer);
+
     if (options.ExportActuals is { } source)
     {
         var text = File.ReadAllText(source);
@@ -82,6 +85,7 @@ static int RunCommand(string command, AppConfig config, CommandLine options) => 
     "dvm-check" => DvmCheckCommand.Run(config, options),
     "spec-table" => SpecTableCommand.Run(config, options),
     "wiring" => WiringCommand(),
+    "print" => PrintCommand(config),
     "verify" => VerifyCommand.Run(config, options),
     "part1" => Part1Command.Run(config, options),
     "part2" => Part2Command.Run(config, options),
@@ -96,6 +100,19 @@ static int WiringCommand()
 {
     Verify11683A.App.Reports.Wiring.Write();
     return 0;
+}
+
+static int PrintCommand(AppConfig config)
+{
+    var saved = Printing.SavedResults(config.ResultsDirectory);
+    if (saved.Count == 0)
+    {
+        AnsiConsole.MarkupLine($"[yellow]No saved results in {Markup.Escape(Path.GetFullPath(config.ResultsDirectory))}.[/]");
+        return 1;
+    }
+    var names = saved.Take(20).Select(Path.GetFileName).OfType<string>().ToList();
+    var name = ConsoleUi.Choose("Which report? (newest first)", names, names[0]);
+    return Printing.PrintSaved(saved[names.IndexOf(name)], null);
 }
 
 static string ChooseFromMenu(CommandLine options)
@@ -116,6 +133,7 @@ static string ChooseFromMenu(CommandLine options)
         ["Adjust: Power Supply Adjustment (A2R1), then Part 1"] = "adjust",
         ["DVM spec table and test-point limits"] = "spec-table",
         ["Wiring diagram"] = "wiring",
+        ["Print a saved report"] = "print",
         ["Exit"] = "exit",
     };
     var choice = AnsiConsole.Prompt(new SelectionPrompt<string>().Title("What would you like to do?").AddChoices(choices.Keys));
