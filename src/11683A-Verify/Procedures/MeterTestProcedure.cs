@@ -112,6 +112,11 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 results.Add(new MeterTestResult(test.Id, test.Title, test.Source, channel,
                     [.. test.Points.Select(p => new MeterPointResult(p, test.SourceOf(p), null, false))]));
         }
+        foreach (var ((testId, channel, label), readings) in _rereads)
+        {
+            var test = definition.Tests.First(t => t.Id == testId);
+            notes.Add($"{StepName(test, channel)}, {label}: outside its limits and read again at once, {readings} readings in all; the last is recorded.");
+        }
         if (definition.Ambiguities.Count > 0)
             notes.Add($"Transcription notes for {definition.FileName}: " + string.Join(" ", definition.Ambiguities));
         if (_dcSource is not null)
@@ -171,6 +176,80 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             ? $"Retest of {Path.GetFileName(last.PreviousPath)}: {string.Join(", ", last.ToRerun.Select(t => $"{t.TestId} {t.Channel}"))}"
             : "Retest offered and declined");
         return accept ? last : null;
+    }
+
+    /// <summary>The rows read again straight after a reading outside their limits, and how many readings each had in all.</summary>
+    private readonly Dictionary<(string TestId, string Channel, string Label), int> _rereads = [];
+
+    /// <summary>
+    /// Takes a row's reading with <paramref name="read"/> and, while it is outside the limits, offers at the console to
+    /// read the row again at once (the operator can check the 11683A and the meter first). The last reading counts.
+    /// With <paramref name="ownLine"/> (a bus reading, which asks nothing), the retries keep to one line, rewritten
+    /// in place; otherwise each reading's own prompt follows.
+    /// </summary>
+    private double? ReadRow(MeterTest test, string channel, MeterTestPoint point, ReadingSource source, bool ownLine, Func<double?> read)
+    {
+        var reading = read();
+        var reread = false;
+        for (var count = 2; reading is { } r && new MeterPointResult(point, source, r, false).Pass == false && OfferReread(test, channel, point, r, count - 1, ownLine); count++)
+        {
+            bench.Log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {r.ToString("R", CultureInfo.InvariantCulture)} {point.Unit} is outside its limits; read again (reading {count})");
+            _rereads[(test.Id, channel, point.Label)] = count;
+            reread = true;
+            ConsoleUi.NoSpinner = ownLine;
+            try
+            {
+                reading = read();
+            }
+            finally
+            {
+                ConsoleUi.NoSpinner = false;
+            }
+        }
+        if (reread && ownLine)
+            Console.Write(ClearLine);   // a passing reading: the row's own result line takes it
+        return reading;
+    }
+
+    /// <summary>Back to the start of the line, and the line erased.</summary>
+    private const string ClearLine = "\r\u001b[2K";
+
+    /// <summary>
+    /// After a reading outside its limits, at the console: read the row again? One line, rewritten by each retry so
+    /// retries do not fill the screen: Enter (or Y) reads again, N keeps the reading, X exits. Not offered to a
+    /// scripted run.
+    /// </summary>
+    /// <exception cref="OperatorStopException">The operator typed X.</exception>
+    private bool OfferReread(MeterTest test, string channel, MeterTestPoint point, double reading, int readings, bool ownLine)
+    {
+        if (!ConsoleUi.Interactive || _stopped is not null)
+            return false;
+        var unit = MeterUnits.Display(point.Unit);
+        var failed = $"✗ {point.Label}: {Fmt(reading, point)} {unit}, limits {Fmt(point.Min, point)} to {Fmt(point.Max, point)}";
+        var count = readings > 1 ? $" ({readings} readings)" : "";
+        // Kept within the window: a wrapped line could not be rewritten in place.
+        var keys = 2 + failed.Length + count.Length + 41 < Console.WindowWidth ? "Enter: read again   N: keep it   X: exit" : "Enter/N/X";
+        ConsoleUi.BeforePrompt();
+        Console.Write(ClearLine);
+        AnsiConsole.Markup($"  [red]{Markup.Escape(failed)}[/][grey]{Markup.Escape(count)}[/]   [blue]{Markup.Escape(keys)}[/] ");
+        ConsoleKey key;
+        do
+            key = Console.ReadKey(intercept: true).Key;
+        while (key is not (ConsoleKey.Enter or ConsoleKey.Y or ConsoleKey.N or ConsoleKey.X));
+        ConsoleUi.Answered();
+        if (key is ConsoleKey.Enter or ConsoleKey.Y)
+        {
+            // The same line, until the next reading is in.
+            Console.Write(ClearLine);
+            if (ownLine)
+                AnsiConsole.Markup($"  [grey]{Markup.Escape(point.Label)}: reading again ({readings + 1})…[/]");
+            return true;
+        }
+        AnsiConsole.WriteLine();
+        if (key == ConsoleKey.X)
+            throw new OperatorStopException("Exited by the operator.");
+        bench.Log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': outside its limits; not read again");
+        return false;
     }
 
     /// <summary>Why the run stopped early (an instrument error with no one to retry it, or the operator's Stop); null if it did not.</summary>
@@ -323,78 +402,93 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 + "It is in Standby; the zero and CAL come after the setup.");
         }
 
-        if ((Sim is null || bench.Walkthrough) && !AskGo(
-                (dc is null ? "Press Enter when the setup above is done" : "Press Enter when the connections above are made") + " (S to skip this test, X to exit)"
-                + (bench.Walkthrough && dc is null ? " [simulator: Enter does the zero and CAL]" : "")))
-            return new MeterTestResult(test.Id, test.Title, test.Source, channel, []);
-        if (Sim is not null)
-            PrepareSimulation(test);
-        if (dc is not null)
-            ZeroAndCal(dc);
-
         var results = new List<MeterPointResult>();
-        foreach (var point in test.Points)
+        try
         {
-            var source = test.SourceOf(point);
-            if (source == ReadingSource.Meter && !meter.OverBus)
-                source = ReadingSource.Operator;
-            AnsiConsole.MarkupLine($"[bold]{Markup.Escape(point.Label)}[/]  [grey]11683A:[/] {Markup.Escape(point.Calibrator?.ToString() ?? "not used")}  "
-                + $"[grey]meter:[/] {Markup.Escape(point.MeterSetting)}");
-            if (dc is not null && point.Calibrator?.ExternalVolts is { } volts)
-            {
-                dc.Output(volts);
-                bench.Log.Write($"DC calibrator set to {volts.ToString("R", CultureInfo.InvariantCulture)} V");
-                AnsiConsole.MarkupLine($"  [grey]DC calibrator set to {Si.Format(volts, "V", 5)}[/]");
-            }
-
-            double? reading;
-            var simulated = false;
+            if ((Sim is null || bench.Walkthrough) && !AskGo(
+                    (dc is null ? "Press Enter when the setup above is done" : "Press Enter when the connections above are made") + " (S to skip this test, X to exit)"
+                    + (bench.Walkthrough && dc is null ? " [simulator: Enter does the zero and CAL]" : "")))
+                return new MeterTestResult(test.Id, test.Title, test.Source, channel, []);
             if (Sim is not null)
+                PrepareSimulation(test);
+            if (dc is not null)
+                ZeroAndCal(dc);
+            foreach (var point in test.Points)
             {
-                if (bench.Walkthrough && source != ReadingSource.Operator
-                    && !AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip, X to exit) [simulator: Enter sets it]"))
+                var source = test.SourceOf(point);
+                if (source == ReadingSource.Meter && !meter.OverBus)
+                    source = ReadingSource.Operator;
+                AnsiConsole.MarkupLine($"[bold]{Markup.Escape(point.Label)}[/]  [grey]11683A:[/] {Markup.Escape(point.Calibrator?.ToString() ?? "not used")}  "
+                    + $"[grey]meter:[/] {Markup.Escape(point.MeterSetting)}");
+                if (dc is not null && point.Calibrator?.ExternalVolts is { } volts)
                 {
-                    reading = null;
+                    dc.Output(volts);
+                    bench.Log.Write($"DC calibrator set to {volts.ToString("R", CultureInfo.InvariantCulture)} V");
+                    AnsiConsole.MarkupLine($"  [grey]DC calibrator set to {Si.Format(volts, "V", 5)}[/]");
                 }
-                else
+
+                var simulated = false;
+                double? Take()
                 {
-                    ApplySimulation(point);
-                    if (source == ReadingSource.Operator)
+                    if (Sim is not null)
                     {
-                        // The simulator cannot read a display: it offers the expected value with a last-digit wobble, which the
-                        // walkthrough operator can accept or overtype (and a scripted run just takes).
-                        var display = point.Expected + (point.Max - point.Min) * 0.02 * (_simOperator.NextDouble() - 0.5);
-                        reading = bench.Walkthrough ? AskReading(point, display) : display;
-                        simulated = reading == display;
+                        if (bench.Walkthrough && source != ReadingSource.Operator
+                            && !AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip, X to exit) [simulator: Enter sets it]"))
+                        {
+                            return null;
+                        }
+                        else
+                        {
+                            ApplySimulation(point);
+                            if (source == ReadingSource.Operator)
+                            {
+                                // The simulator cannot read a display: it offers the expected value with a last-digit wobble, which the
+                                // walkthrough operator can accept or overtype (and a scripted run just takes).
+                                var display = point.Expected + (point.Max - point.Min) * 0.02 * (_simOperator.NextDouble() - 0.5);
+                                var typed = bench.Walkthrough ? AskReading(point, display) : display;
+                                simulated = typed == display;
+                                return typed;
+                            }
+                            else
+                            {
+                                return Read(point, source, meter);
+                            }
+                        }
+                    }
+                    else if (source == ReadingSource.Operator)
+                    {
+                        return AskReading(point);
                     }
                     else
                     {
-                        reading = Read(point, source, meter);
+                        return AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip, X to exit)") ? Read(point, source, meter) : null;
                     }
                 }
-            }
-            else if (source == ReadingSource.Operator)
-            {
-                reading = AskReading(point);
-            }
-            else
-            {
-                reading = AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip, X to exit)") ? Read(point, source, meter) : null;
-            }
 
-            var result = new MeterPointResult(point, source, reading, simulated);
-            results.Add(result);
-            bench.Log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {reading?.ToString("R", CultureInfo.InvariantCulture) ?? "skipped"} {point.Unit} "
-                + $"[{point.Min}, {point.Max}] {source}{(simulated ? " (simulated operator)" : "")}");
-            AnsiConsole.MarkupLine(reading is { } r
-                ? $"  {(result.Pass == true ? "[green]✓[/]" : "[red]✗[/]")} {Fmt(r, point)} {Markup.Escape(MeterUnits.Display(point.Unit))} "
-                  + $"[grey](limits {Fmt(point.Min, point)} to {Fmt(point.Max, point)})[/]"
-                : "  [yellow]skipped[/]");
+                var reading = ReadRow(test, channel, point, source, ownLine: false, Take);
+                var result = new MeterPointResult(point, source, reading, simulated);
+                results.Add(result);
+                bench.Log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {reading?.ToString("R", CultureInfo.InvariantCulture) ?? "skipped"} {point.Unit} "
+                    + $"[{point.Min}, {point.Max}] {source}{(simulated ? " (simulated operator)" : "")}");
+                AnsiConsole.MarkupLine(reading is { } r
+                    ? $"  {(result.Pass == true ? "[green]✓[/]" : "[red]✗[/]")} {Fmt(r, point)} {Markup.Escape(MeterUnits.Display(point.Unit))} "
+                      + $"[grey](limits {Fmt(point.Min, point)} to {Fmt(point.Max, point)})[/]"
+                    : "  [yellow]skipped[/]");
+            }
         }
-
-        if (_simMeter is not null)
-            _simMeter.CalFactorPercent = 100;
-        dc?.Standby();
+        catch (Exception ex) when (ex is OperatorStopException or InstrumentException)
+        {
+            Stop(ex);
+            // As in an automated test: the readings taken are kept, and the rows not reached are on the record as not measured.
+            foreach (var p in test.Points.Skip(results.Count))
+                results.Add(new MeterPointResult(p, test.SourceOf(p), null, false));
+        }
+        finally
+        {
+            if (_simMeter is not null)
+                _simMeter.CalFactorPercent = 100;
+            StandbyQuietly(dc);
+        }
         return new MeterTestResult(test.Id, test.Title, test.Source, channel, results);
     }
 
@@ -452,7 +546,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                     if (!control.CanSetCalFactor && (point.CalFactorPercent ?? 100) != _calFactorSwitch)
                         SetCalFactorSwitch(point.CalFactorPercent ?? 100);
                     var settings = baseline.With(point.Meter);
-                    reading = ConsoleUi.Attempt($"Reading '{point.Label}'", () =>
+                    reading = ReadRow(test, channel, point, source, ownLine: source != ReadingSource.Operator, () => ConsoleUi.Attempt($"Reading '{point.Label}'", () =>
                     {
                         if (settings.StoreReference || applied != (settings, point.CalFactorPercent))
                         {
@@ -466,7 +560,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                             ReadingSource.Recorder => Read(point, source, (IPowerMeter)control),
                             _ => ReadSettled(control, point, settings.Display ?? MeterDisplay.Watts),
                         };
-                    }, log, canSkip: true);
+                    }, log, canSkip: true));
                 }
 
                 var result = new MeterPointResult(point, source, reading, false);

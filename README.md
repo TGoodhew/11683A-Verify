@@ -268,7 +268,9 @@ How a run goes:
    - typed in, for meters without a bus, or if you answer No to reading the meter over the bus (you then
      follow the manual's set-up steps yourself).
 5. Each reading is checked against the manual's limits. Type S to skip a row or a test, X to exit (what was
-   measured is saved, marked INCOMPLETE).
+   measured is saved, marked INCOMPLETE). If a reading is outside its limits, the app shows it and offers to
+   read that step again straight away, before the next step, so you can check the 11683A and the meter first.
+   The record keeps the last reading, and a note names the step and how many readings it took.
 6. Results go to `results\<model>_<serial>_<stamp>.json`, with a PDF test record in the manual's
    Min / Actual / Max layout and the session log beside it.
 7. Tests the 11683A can't do, such as the Power Reference Level tests (432A and thermistor mount), are
