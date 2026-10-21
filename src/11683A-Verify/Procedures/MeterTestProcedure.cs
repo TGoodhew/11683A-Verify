@@ -44,11 +44,12 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         var channels = ChooseChannels(tests);
         var useBus = definition.BusDriver is not null && (Sim is not null
             || ConsoleUi.Confirm($"Read the {definition.Model} over the bus at {Resource}?", defaultValue: true));
-        screens.SetSteps([.. tests.SelectMany(t => (t.PerChannel ? channels : [channels[0]]).Select(c => StepName(t, c))), "Results"]);
+        // Every test on one channel before the cable moves to the next: A, then B.
+        var planned = channels.SelectMany((c, i) => tests.Where(t => t.PerChannel || i == 0).Select(t => (Test: t, Channel: c))).ToList();
+        screens.SetSteps([.. planned.Select(p => StepName(p.Test, p.Channel)), "Results"]);
 
         var results = new List<MeterTestResult>();
         var identity = "";
-        var planned = tests.SelectMany(t => (t.PerChannel ? channels : [channels[0]]).Select(c => (Test: t, Channel: c))).ToList();
         try
         {
             foreach (var (test, channel) in planned)
@@ -57,7 +58,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                     () => OpenIdentified(useBus, channel), bench.Log, canSkip: false)!;
                 identity = meter.Description;
                 bench.Log.Write($"Meter test {test.Id} channel {channel}: {meter.Description}");
-                screens.Begin(StepName(test, channel), test.Title + (test.PerChannel ? $" — channel {channel}" : ""));
+                screens.Begin(StepName(test, channel), ShortTitle(test) + (test.PerChannel && definition.Channels.Count > 1 ? $" — channel {channel}" : ""));
                 var result = RunTest(test, channel, meter);
                 results.Add(result);
                 AnsiConsole.WriteLine();
@@ -149,7 +150,11 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
 
     /// <summary>The test's name in the step tracker, with the channel when it is run on each.</summary>
     private string StepName(MeterTest test, string channel) =>
-        test.Title + (test.PerChannel && definition.Channels.Count > 1 ? $" {channel}" : "");
+        (test.PerChannel && definition.Channels.Count > 1 ? $"{channel}: " : "") + ShortTitle(test);
+
+    /// <summary>"Instrument Accuracy Test, Procedure 1 (standard 11683A; for indication)" without the parenthesis.</summary>
+    private static string ShortTitle(MeterTest test) =>
+        test.Title.IndexOf(" (", StringComparison.Ordinal) is > 0 and var cut ? test.Title[..cut] : test.Title;
 
     private string Resource => options.MeterResource ?? (config.PowerMeter.Model.Equals("manual", StringComparison.OrdinalIgnoreCase)
         ? definition.DefaultResource
@@ -349,24 +354,11 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     /// </summary>
     private MeterTestResult RunAutomated(MeterTest test, string channel, IPowerMeterControl control)
     {
-        AnsiConsole.MarkupLine($"[grey]{Markup.Escape(test.Source)}[/]");
-        AnsiConsole.MarkupLine($"Equipment: {Markup.Escape(string.Join("; ", test.Equipment))}");
-        AnsiConsole.MarkupLine("[grey]The manual's steps. The app makes the meter's settings, zero and CAL over the bus; you set the 11683A when asked.[/]");
-        for (var i = 0; i < test.Setup.Count; i++)
-            AnsiConsole.MarkupLine($"[grey]  {i + 1}. {Markup.Escape(test.Setup[i])}[/]");
-        foreach (var note in test.Notes)
-            AnsiConsole.MarkupLine($"[grey]  • {Markup.Escape(note)}[/]");
-
         var dc = test.Points.Any(p => p.Calibrator?.ExternalVolts is not null) ? DcSource() : null;
-        if (dc is not null)
-        {
-            dc.Standby();
-            AnsiConsole.MarkupLine($"The app sets the DC calibrator ([bold]{Markup.Escape(dc.Description)}[/]): connect its [bold]OUTPUT HI/LO[/] to REF EXT. It is in Standby.");
-        }
-        if ((Sim is null || bench.Walkthrough) && !AskGo("Make the connections above, then press Enter (S to skip this test)"))
+        dc?.Standby();
+        if (!Connect(Connections(test, channel, dc)))
             return new MeterTestResult(test.Id, test.Title, test.Source, channel, []);
 
-        _calibratorNow = null;
         _calFactorSwitch = 100;
         var baseline = test.Meter!;
         var log = bench.Log;
@@ -406,7 +398,6 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             foreach (var point in test.Points)
             {
                 var source = test.SourceOf(point);
-                AnsiConsole.MarkupLine($"[bold]{Markup.Escape(point.Label)}[/]  [grey]meter:[/] {Markup.Escape(point.MeterSetting)}");
                 double? reading = null;
                 if (SetCalibrator(point.Calibrator, dc, null, allowSkip: true))
                 {
@@ -434,10 +425,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 results.Add(result);
                 log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {reading?.ToString("R", CultureInfo.InvariantCulture) ?? "skipped"} {point.Unit} "
                     + $"[{point.Min}, {point.Max}] {source}, automated");
-                AnsiConsole.MarkupLine(reading is { } r
-                    ? $"  {(result.Pass == true ? "[green]✓[/]" : "[red]✗[/]")} {Fmt(r, point)} {Markup.Escape(MeterUnits.Display(point.Unit))} "
-                      + $"[grey](limits {Fmt(point.Min, point)} to {Fmt(point.Max, point)})[/]"
-                    : "  [yellow]skipped[/]");
+                RowLine(point, result, reading);
             }
 
             if (_calFactorSwitch != 100)
@@ -493,7 +481,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             return true;
         }
 
-        AnsiConsole.MarkupLine($"Set the 11683A{(purpose is null ? "" : " " + purpose)}: [bold]{Markup.Escape(Describe(setting, dc))}[/]");
+        AnsiConsole.Write(SwitchPanel(setting, _calibratorNow, dc, "Set the 11683A" + (purpose is null ? "" : " " + purpose)));
         if ((Sim is null || bench.Walkthrough))
         {
             var prompt = "Press Enter when set" + (allowSkip ? " (S to skip this row)" : "") + (bench.Walkthrough ? " [simulator: Enter sets it]" : "");
@@ -515,9 +503,80 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         return true;
     }
 
-    /// <summary>The 11683A's switches for the operator; with a bus calibrator its voltage is the app's to set.</summary>
-    private static string Describe(CalibratorSetting setting, IDcSource? dc) =>
-        dc is null ? setting.ToString() : (setting with { ExternalVolts = null }).ToString().Replace(", DC calibrator 0 V", "", StringComparison.Ordinal);
+    /// <summary>
+    /// The 11683A's switches as a panel, each on its own line; the ones that differ from <paramref name="before"/> are
+    /// highlighted and the rest greyed, so what to turn stands out. A hand-set DC calibrator is a line of its own.
+    /// </summary>
+    private static Panel SwitchPanel(CalibratorSetting setting, CalibratorSetting? before, IDcSource? dc, string header)
+    {
+        var rows = new List<(string Name, string Value, bool Changed)>
+        {
+            ("RANGE", RangeSwitch.Get(setting.Range).Label, before?.Range != setting.Range),
+            ("FUNCTION", setting.Function.ToString().ToUpperInvariant(), before?.Function != setting.Function),
+            ("POLARITY", setting.Polarity.ToString().ToUpperInvariant(), before?.Polarity != setting.Polarity),
+            ("REF", setting.Reference == ReferenceSwitch.Ext ? "EXT" : "INT", before?.Reference != setting.Reference),
+        };
+        if (dc is null && setting.Reference == ReferenceSwitch.Ext)
+            rows.Add(("DC calibrator", setting.ExternalVolts is { } v and not 0 ? Si.Format(v, "V", 5) : "0 V, output off", before?.ExternalVolts != setting.ExternalVolts));
+        return Highlighted(rows, header);
+    }
+
+    /// <summary>A panel of name/value lines, the changed values highlighted and the rest greyed.</summary>
+    private static Panel Highlighted(IEnumerable<(string Name, string Value, bool Changed)> rows, string header)
+    {
+        var list = rows.ToList();
+        var grid = new Grid().AddColumn(new GridColumn().PadRight(3)).AddColumn();
+        foreach (var (name, value, changed) in list)
+            grid.AddRow($"[grey]{Markup.Escape(name)}[/]", changed ? $"[bold yellow]{Markup.Escape(value)}[/]" : $"[grey]{Markup.Escape(value)}[/]");
+        // Wide enough for the header, which a panel otherwise cuts to its contents' width.
+        var content = list.Max(r => r.Name.Length) + 3 + list.Max(r => r.Value.Length) + 4;
+        return new Panel(grid) { Width = Math.Max(content, header.Length + 6) }
+            .Header($" {Markup.Escape(header)} ").Border(BoxBorder.Rounded).BorderColor(Color.Blue);
+    }
+
+    /// <summary>The connections as they are now; the operator is asked only when they change.</summary>
+    private IReadOnlyList<(string Name, string Value)>? _connectionsNow;
+
+    /// <summary>What is connected to what for <paramref name="test"/> on <paramref name="channel"/>.</summary>
+    private IReadOnlyList<(string Name, string Value)> Connections(MeterTest test, string channel, IDcSource? dc)
+    {
+        var input = definition.Channels.Count < 2 ? "sensor input"
+            : (definition.BusDriver == "438A" ? "SENSOR " : "CHANNEL ") + channel;
+        var rows = new List<(string, string)> { ("11730A cable", $"11683A POWER METER → {definition.Model} {input}") };
+        if (test.NeedsH01)
+        {
+            rows.Add(("DC calibrator", (dc is null ? "HI/LO" : "OUTPUT HI/LO") + " → 11683A REF EXT (Guard, LO floating)"));
+            rows.Add(("11683A power", "unplugged (keep the power meter connected)"));
+        }
+        else
+        {
+            rows.Add(("11683A power", "plugged in, LINE ON"));
+        }
+        return rows;
+    }
+
+    /// <summary>Shows the connections and waits for them, if they differ from the last test's. False if the operator skips the test.</summary>
+    private bool Connect(IReadOnlyList<(string Name, string Value)> connections)
+    {
+        var before = _connectionsNow;
+        if (before is not null && before.SequenceEqual(connections))
+            return true;
+        AnsiConsole.Write(Highlighted(connections.Select(c => (c.Name, c.Value, before is null || !before.Contains(c))), "Connect"));
+        if ((Sim is null || bench.Walkthrough) && !AskGo("Press Enter when connected (S to skip this test)"))
+            return false;
+        _connectionsNow = connections;
+        return true;
+    }
+
+    /// <summary>One line per row: its name, the reading, its limits.</summary>
+    private static void RowLine(MeterTestPoint point, MeterPointResult result, double? reading)
+    {
+        var label = Markup.Escape(point.Label.PadRight(18));
+        AnsiConsole.MarkupLine(reading is { } r
+            ? $"  {(result.Pass == true ? "[green]✓[/]" : "[red]✗[/]")} {label} [bold]{Fmt(r, point)}[/] {Markup.Escape(MeterUnits.Display(point.Unit))}  "
+              + $"[grey]{Fmt(point.Min, point)} to {Fmt(point.Max, point)}[/]"
+            : $"  [yellow]–[/] {label} [yellow]skipped[/]");
+    }
 
     private void ApplyDcSource(CalibratorSetting setting, IDcSource? dc)
     {
