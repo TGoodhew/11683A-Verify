@@ -186,30 +186,49 @@ public sealed class E441xPowerMeter(IVisaSession session, int channel = 1) : IPo
     /// After a reading that never came: a device clear halts the measurement, returns the trigger to idle and empties
     /// the buffers, leaving every setting and the error queue as they were (Programming Guide pp. 1-91 to 1-92), so a
     /// retry starts clean rather than queueing behind a stuck READ?. The error queue then says what the meter made of
-    /// it. Returns what to add to the message.
+    /// it, and is read to the end, so no stale error fails the retry's own check. Returns what to add to the message.
     /// </summary>
     private string Recover()
     {
         try
         {
             session.Clear();
-            var errors = new List<string>();
-            for (var i = 0; i < 5; i++)
+        }
+        catch (InstrumentException ex)
+        {
+            return $" It did not answer a device clear either: {ex.Message}";
+        }
+        var errors = new List<string>();
+        try
+        {
+            // The queue holds at most 30 (Programming Guide p. 11-24); one more read must then say "No error".
+            for (var i = 0; i <= ErrorQueueCapacity; i++)
             {
                 var error = session.Query("SYST:ERR?").Trim();
                 if (IsNoError(error))
-                    break;
+                    return errors.Count == 0
+                        ? " The app has cleared the meter (device clear), and it reports no error."
+                        : $" The app has cleared the meter (device clear). Its error queue: {Summary(errors)}.";
                 errors.Add(error);
             }
-            return errors.Count == 0
-                ? " The app has cleared the meter (device clear), and it reports no error."
-                : $" The app has cleared the meter (device clear). Its error queue: {string.Join("; ", errors)}.";
+            session.Write("*CLS");
+            return $" The app has cleared the meter (device clear). Its error queue did not empty after {errors.Count} errors "
+                + $"({Summary(errors)}), so it was cleared with *CLS.";
         }
-        catch (InstrumentException)
+        catch (InstrumentException ex)
         {
-            return " It did not answer a device clear either.";
+            return $" The app has cleared the meter (device clear), but reading its error queue failed"
+                + (errors.Count > 0 ? $" after {Summary(errors)}" : "") + $": {ex.Message}";
         }
     }
+
+    /// <summary>The E441x error queue's capacity (Programming Guide p. 11-24).</summary>
+    private const int ErrorQueueCapacity = 30;
+
+    /// <summary>The errors, the same ones counted once each: "-213,"Init ignored" (×2); -420,...".</summary>
+    private static string Summary(List<string> errors) => string.Join("; ", errors
+        .GroupBy(e => e)
+        .Select(g => g.Count() > 1 ? $"{g.Key} (×{g.Count()})" : g.Key));
 
     /// <summary>An overlapped command (about 10 s), waited for with *OPC?, then the error queue (-231 for a zero or CAL error).</summary>
     private void Overlapped(string command, string what)

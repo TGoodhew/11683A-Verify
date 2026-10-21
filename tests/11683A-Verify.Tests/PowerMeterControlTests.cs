@@ -85,6 +85,35 @@ public class PowerMeterControlTests
     }
 
     [Fact]
+    public void E441x_recovery_reads_the_error_queue_to_the_end()
+    {
+        // Eight errors queued: all are read, so none is left to fail the retry's own SYST:ERR? check.
+        var session = E441x("E4419B").TimeOutOnce("READ2? DEF,DEF,(@2)").Answer("READ2? DEF,DEF,(@2)", "-1.0E-009");
+        var meter = new E441xPowerMeter(session, 2);
+        meter.Identify();
+        for (var i = 0; i < 4; i++)
+            session.AnswerOnce("SYST:ERR?", "-213,\"Init ignored\"").AnswerOnce("SYST:ERR?", "-420,\"Query UNTERMINATED\"");
+
+        var ex = Assert.Throws<InstrumentTimeoutException>(() => meter.Read());
+        Assert.Contains("-213,\"Init ignored\" (×4); -420,\"Query UNTERMINATED\" (×4)", ex.Message);
+        Assert.Equal(-1e-9, meter.Read());   // the retry is not failed by a stale error
+    }
+
+    [Fact]
+    public void E441x_recovery_clears_a_queue_that_will_not_empty()
+    {
+        var session = E441x("E4419B").TimeOutOnce("READ2? DEF,DEF,(@2)").Answer("READ2? DEF,DEF,(@2)", "-1.0E-009");
+        var meter = new E441xPowerMeter(session, 2);
+        meter.Identify();
+        for (var i = 0; i < 31; i++)
+            session.AnswerOnce("SYST:ERR?", "-350,\"Queue overflow\"");
+
+        var ex = Assert.Throws<InstrumentTimeoutException>(() => meter.Read());
+        Assert.Contains("did not empty after 31 errors", ex.Message);
+        Assert.Contains("*CLS", session.Sent);
+    }
+
+    [Fact]
     public void E441x_turns_free_run_off_before_every_reading()
     {
         // A front-panel key puts the meter in local, which sets free run, and READ? then hangs with -213 INIT ignored.
