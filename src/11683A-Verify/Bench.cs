@@ -1,5 +1,6 @@
 using Spectre.Console;
 using Verify11683A.Calibrator;
+using Verify11683A.Instruments.DcSource;
 using Verify11683A.Instruments.Dvm;
 using Verify11683A.Instruments.PowerMeter;
 using Verify11683A.Instruments.Simulation;
@@ -122,6 +123,38 @@ public sealed class Bench : IDisposable
         Log.Write($"Opening power meter {config.Model} at {config.Resource}, timeout {config.TimeoutMs} ms");
         var visa = VisaSession.Open(config.Resource, config.TimeoutMs);
         return PowerMeters.Open(config.Model, new LoggingVisaSession(visa, Log.Write), config.Channel);
+    }
+
+    /// <summary>
+    /// The DC calibrator on REF EXT: on the bus (or simulated), identified and in Standby; null when the operator sets
+    /// it by hand. Without a DVM watching it (the meter tests), <paramref name="useDivider"/> is off.
+    /// </summary>
+    public IDcSource? OpenDcSource(DcSourceConfig config, bool useDivider)
+    {
+        if (DcSources.IsManual(config.Model))
+            return null;
+        IDcSource source;
+        if (Simulator is { } sim)
+        {
+            source = new SimulatedDcSource(sim, useDivider);
+        }
+        else
+        {
+            Log.Write($"Opening DC calibrator {config.Model} at {config.Resource}, timeout {config.TimeoutMs} ms");
+            var visa = VisaSession.Open(config.Resource, config.TimeoutMs);
+            source = DcSources.Open(config.Model, new LoggingVisaSession(visa, Log.Write), useDivider);
+        }
+        try
+        {
+            source.Identify();
+        }
+        catch
+        {
+            source.Dispose();
+            throw;
+        }
+        Log.Write($"DC calibrator: {source.Description}" + (Simulator is null ? $" at {config.Resource}" : ""));
+        return source;
     }
 
     public void Dispose()

@@ -111,7 +111,7 @@ public sealed class RangeDetector
         if (within == 0)
             return new Detection(DetectionKind.OutOfFamily, reading, null, deviation,
                 $"{Si.Format(reading, unit, 5)} is not close to any expected value; the nearest is {nearest.Range} "
-                + $"({Si.Format(nearest.Nominal, unit, 5)}, {deviation.ToString("+0.0%;-0.0%", CultureInfo.InvariantCulture)}). Check RANGE"
+                + $"({Si.Format(nearest.Nominal, unit, 5)}, {deviation.ToString("+0.0%;-0.0%;0.0%", CultureInfo.InvariantCulture)}). Check RANGE"
                 + (volts ? "." : ", and that FUNCTION is in STANDBY."));
 
         return new Detection(DetectionKind.Match, reading, nearest, deviation, $"RANGE {nearest.Range}");
