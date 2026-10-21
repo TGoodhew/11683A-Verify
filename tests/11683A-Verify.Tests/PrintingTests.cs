@@ -66,7 +66,7 @@ public class PrintingTests : IDisposable
 
         var other = Path.Combine(_dir, "other.json");
         File.WriteAllText(other, """{ "schema": "something-else" }""");
-        Assert.Throws<ArgumentException>(() => Printing.DocumentFor(other));
+        Assert.Throws<OperatorException>(() => Printing.DocumentFor(other));
     }
 
     [Fact]

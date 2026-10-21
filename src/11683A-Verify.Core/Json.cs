@@ -21,10 +21,18 @@ public static class Json
         Converters = { new JsonStringEnumConverter() },
     };
 
+    /// <exception cref="InvalidDataException">The file is not valid JSON for <typeparamref name="T"/>; the message names it.</exception>
     public static T Load<T>(string path)
     {
         using var stream = File.OpenRead(path);
-        return JsonSerializer.Deserialize<T>(stream, Options)
-            ?? throw new InvalidDataException($"{path} is empty.");
+        try
+        {
+            return JsonSerializer.Deserialize<T>(stream, Options)
+                ?? throw new InvalidDataException($"{path} is empty.");
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException($"{path}: {ex.Message}", ex);
+        }
     }
 }

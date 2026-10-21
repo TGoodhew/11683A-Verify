@@ -44,7 +44,7 @@ public static class ReportPrinter
         using var print = new PrintDocument { DocumentName = jobName };
         print.PrinterSettings.PrinterName = printer;
         if (!print.PrinterSettings.IsValid)
-            throw new InvalidOperationException($"No printer named '{printer}'.");
+            throw new OperatorException($"No printer named '{printer}'.");
         if (toFile is not null)
         {
             print.PrinterSettings.PrintToFile = true;

@@ -44,7 +44,11 @@ public sealed class SimulatedPowerMeter(Simulated11683A source, int seed = 4418)
 
     public void Calibrate(double referenceCalFactorPercent) => _gain = 1e-3 * referenceCalFactorPercent / 100 / (source.OutputPowerWatts() - _offset);
 
-    public double Read() => _display switch
+    private int _readings;
+
+    public double Read() => ++_readings == source.Scenario.MeterTimeoutAtReading
+        ? throw new Visa.InstrumentTimeoutException($"{Description} did not respond within 20 s while waiting for a reading (the meter-timeout scenario).")
+        : _display switch
     {
         MeterDisplay.Dbm => Dbm(ReadWatts()),
         MeterDisplay.DbRelative => Dbm(ReadWatts()) - _referenceDbm,

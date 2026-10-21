@@ -94,16 +94,14 @@ public sealed class Bench : IDisposable
                 return new Bench(dvm, simulator, clock, log);
             }
 
+            var model = config.Dvm.Model.ToUpperInvariant();
+            if (model is not ("34401A" or "3458A"))
+                throw new OperatorException($"Unsupported DVM model '{config.Dvm.Model}' in the settings. Use 34401A or 3458A.");
             log.Write($"Opening {config.Dvm.Model} at {config.Dvm.Resource}, timeout {config.Dvm.TimeoutMs} ms");
             var visa = VisaSession.Open(config.Dvm.Resource, config.Dvm.TimeoutMs);
             log.Write($"VISA implementation: {visa.Implementation}");
             var session = new LoggingVisaSession(visa, log.Write);
-            IDvm real = config.Dvm.Model.ToUpperInvariant() switch
-            {
-                "34401A" => new Hp34401A(session),
-                "3458A" => new Hp3458A(session),
-                _ => throw new ArgumentException($"Unsupported DVM model '{config.Dvm.Model}'. Use 34401A or 3458A."),
-            };
+            IDvm real = model == "34401A" ? new Hp34401A(session) : new Hp3458A(session);
             return new Bench(real, null, SystemClock.Instance, log);
         }
         catch
@@ -122,8 +120,19 @@ public sealed class Bench : IDisposable
             return new TypedPowerMeter(config.Model);
         Log.Write($"Opening power meter {config.Model} at {config.Resource}, timeout {config.TimeoutMs} ms");
         var visa = VisaSession.Open(config.Resource, config.TimeoutMs);
-        return PowerMeters.Open(config.Model, new LoggingVisaSession(visa, Log.Write), config.Channel);
+        try
+        {
+            return PowerMeters.Open(config.Model, new LoggingVisaSession(visa, Log.Write), config.Channel);
+        }
+        catch
+        {
+            visa.Dispose();
+            throw;
+        }
     }
+
+    /// <summary>Emergency Standby for each bus DC calibrator opened in this session, released when the bench closes.</summary>
+    private readonly List<IDisposable> _emergency = [];
 
     /// <summary>
     /// The DC calibrator on REF EXT: on the bus (or simulated), identified and in Standby; null when the operator sets
@@ -142,7 +151,31 @@ public sealed class Bench : IDisposable
         {
             Log.Write($"Opening DC calibrator {config.Model} at {config.Resource}, timeout {config.TimeoutMs} ms");
             var visa = VisaSession.Open(config.Resource, config.TimeoutMs);
-            source = DcSources.Open(config.Model, new LoggingVisaSession(visa, Log.Write), useDivider);
+            try
+            {
+                source = DcSources.Open(config.Model, new LoggingVisaSession(visa, Log.Write), useDivider);
+            }
+            catch
+            {
+                visa.Dispose();
+                throw;
+            }
+            if (source is Fluke5440B fluke)
+            {
+                fluke.StandbyFailed = message =>
+                {
+                    Log.Write($"DC calibrator Standby failed on closing: {message}");
+                    AnsiConsole.Write(new Panel(new Markup($"[bold red]The {Markup.Escape(config.Model)} did not confirm Standby.[/] It may still be in "
+                        + "OPERATE: press its STBY key now.")).BorderColor(Color.Red));
+                };
+                // Ctrl+C runs no cleanup: the handler puts the calibrator in Standby on a session of its own.
+                var resource = config.Resource;
+                _emergency.Add(EmergencyStop.Register($"{config.Model} at {resource} to Standby", () =>
+                {
+                    using var emergency = VisaSession.Open(resource, 3000);
+                    emergency.Write("STBY");
+                }));
+            }
         }
         try
         {
@@ -157,9 +190,19 @@ public sealed class Bench : IDisposable
         return source;
     }
 
+    /// <summary>Closes everything even if a session fails to close, so the error that got here is the one reported.</summary>
     public void Dispose()
     {
-        Dvm.Dispose();
+        foreach (var registration in _emergency)
+            registration.Dispose();
+        try
+        {
+            Dvm.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log.Write($"Closing the DVM session failed: {ex.Message}");
+        }
         Log.Dispose();
     }
 }

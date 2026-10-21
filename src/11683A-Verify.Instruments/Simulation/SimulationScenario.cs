@@ -36,6 +36,12 @@ public sealed record SimulationScenario
     /// <summary>Where the simulated DVM's Front/Rear switch starts. The cable is on the front terminals.</summary>
     public Dvm.DvmTerminals DvmTerminals { get; init; } = Dvm.DvmTerminals.Front;
 
+    /// <summary>The DVM reading (counting from 1) that times out, once, as a real one does on a GPIB fault.</summary>
+    public int? DvmTimeoutAtReading { get; init; }
+
+    /// <summary>The power meter reading (counting from 1, meter-test) that times out, once.</summary>
+    public int? MeterTimeoutAtReading { get; init; }
+
     public static readonly IReadOnlyList<SimulationScenario> All =
     [
         new()
@@ -87,10 +93,22 @@ public sealed record SimulationScenario
             Description = "The DVM's Front/Rear switch on REAR, so the cable on the front terminals is not measured.",
             DvmTerminals = Dvm.DvmTerminals.Rear,
         },
+        new()
+        {
+            Name = "dvm-timeout",
+            Description = "The DVM's 40th reading times out, once, as on a GPIB fault: the point is retried or the part stops and is saved.",
+            DvmTimeoutAtReading = 40,
+        },
+        new()
+        {
+            Name = "meter-timeout",
+            Description = "The power meter's 6th reading times out, once: meter-test offers Retry / Skip / Stop, or stops and saves the rows so far.",
+            MeterTimeoutAtReading = 6,
+        },
     ];
 
     public static SimulationScenario Get(string name) =>
         All.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))
-        ?? throw new KeyNotFoundException(
+        ?? throw new ArgumentException(
             $"Unknown simulation scenario '{name}'. Choose from: {string.Join(", ", All.Select(s => s.Name))}.");
 }

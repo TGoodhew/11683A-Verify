@@ -1,3 +1,5 @@
+using Verify11683A.Instruments.Visa;
+
 namespace Verify11683A.Instruments.Dvm;
 
 /// <summary>What the DVM reports about itself. Serial is empty when the instrument cannot report it.</summary>
@@ -34,7 +36,7 @@ public enum DvmTerminals
 }
 
 /// <summary>A DVM failure: unexpected identity, rejected command, or a configuration that did not read back.</summary>
-public sealed class DvmException(string message) : Exception(message);
+public sealed class DvmException(string message) : InstrumentException(message);
 
 /// <summary>
 /// A DVM that measures the 11683A DC REFERENCE OUTPUT. Implemented by the 34401A, the 3458A and the

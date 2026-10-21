@@ -71,7 +71,8 @@ public sealed class CommandLine
         Options:
           --simulate[=name]    Use the simulated 11683A, DVM and (Part 4) power meter. Scenarios: nominal
                                (default), supply-low, ratio-fail, ohms-fail, noisy, h01-ext-error,
-                               drifting, rear-terminals. See the README's Simulation section.
+                               drifting, rear-terminals, dvm-timeout, meter-timeout. See the README's
+                               Simulation section.
           --dvm <model>        34401A or 3458A (overrides dvm.model).
           --resource <name>    VISA resource, e.g. GPIB0::22::INSTR (overrides dvm.resource).
           --period <p>         Spec column: 24h, 90d, 1y or 2y (overrides dvm.specPeriod).
@@ -104,7 +105,7 @@ public sealed class CommandLine
             var arg = args[i];
             string Value() => i + 1 < args.Length
                 ? args[++i]
-                : throw new ArgumentException($"{arg} needs a value.");
+                : throw new UsageException($"{arg} needs a value.");
 
             switch (arg)
             {
@@ -127,7 +128,9 @@ public sealed class CommandLine
                     result.SpecPeriod = Value();
                     break;
                 case "--ambient":
-                    result.AmbientC = double.Parse(Value(), System.Globalization.CultureInfo.InvariantCulture);
+                    result.AmbientC = double.TryParse(Value(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ambient)
+                        ? ambient
+                        : throw new UsageException("--ambient needs a temperature in °C, e.g. 23.5.");
                     break;
                 case "--export-actuals":
                     result.ExportActuals = Value();
@@ -166,7 +169,7 @@ public sealed class CommandLine
                     result.Command = c.ToLowerInvariant();
                     break;
                 default:
-                    throw new ArgumentException($"Unknown argument '{arg}'.");
+                    throw new UsageException($"Unknown argument '{arg}'.");
             }
         }
         return result;

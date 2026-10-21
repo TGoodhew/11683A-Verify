@@ -134,26 +134,39 @@ public sealed class AppConfig
     public static AppConfig Load(string? path = null)
     {
         path ??= Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-        var root = JsonNode.Parse(File.ReadAllText(path), documentOptions: new JsonDocumentOptions
-        {
-            CommentHandling = JsonCommentHandling.Skip,
-            AllowTrailingCommas = true,
-        }) as JsonObject ?? throw new InvalidDataException($"{path} is not a JSON object.");
-
+        var root = ParseObject(path);
         var local = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, "appsettings.local.json");
         if (File.Exists(local))
+            Merge(root, ParseObject(local));
+
+        AppConfig config;
+        try
         {
-            var overlay = JsonNode.Parse(File.ReadAllText(local), documentOptions: new JsonDocumentOptions
+            config = root.Deserialize<AppConfig>(Json.Options) ?? new AppConfig();
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException($"A setting in {path} or appsettings.local.json has the wrong type: {ex.Message}", ex);
+        }
+        _ = config.Dvm.Period;
+        return config;
+    }
+
+    /// <summary>A settings file as a JSON object; a syntax error names the file and the line.</summary>
+    private static JsonObject ParseObject(string path)
+    {
+        try
+        {
+            return JsonNode.Parse(File.ReadAllText(path), documentOptions: new JsonDocumentOptions
             {
                 CommentHandling = JsonCommentHandling.Skip,
                 AllowTrailingCommas = true,
-            }) as JsonObject ?? throw new InvalidDataException($"{local} is not a JSON object.");
-            Merge(root, overlay);
+            }) as JsonObject ?? throw new InvalidDataException($"{path} is not a JSON object.");
         }
-
-        var config = root.Deserialize<AppConfig>(Json.Options) ?? new AppConfig();
-        _ = config.Dvm.Period;
-        return config;
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException($"{path} is not valid JSON: {ex.Message}", ex);
+        }
     }
 
     /// <summary>Copies every value in <paramref name="overlay"/> onto <paramref name="target"/>, recursing into objects.</summary>

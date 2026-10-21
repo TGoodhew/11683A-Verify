@@ -35,7 +35,7 @@ public interface IDcSource : IDisposable
     void Standby();
 }
 
-public sealed class DcSourceException(string message) : Exception(message);
+public sealed class DcSourceException(string message) : InstrumentException(message);
 
 /// <summary>
 /// Fluke 5440B over its own device-dependent messages (5440B User Manual, Table 4-7, pp. 4-16 to 4-19), not SCPI.
@@ -124,17 +124,24 @@ public sealed class Fluke5440B(IVisaSession session, bool useDivider = true, Act
         _sleep(SettleTime);
     }
 
+    /// <summary>Told when Standby fails on closing, so the operator can be warned the output may still be on.</summary>
+    public Action<string>? StandbyFailed { get; set; }
+
+    /// <summary>Standby, then close. A failed Standby is reported to <see cref="StandbyFailed"/>, not thrown over the error being unwound.</summary>
     public void Dispose()
     {
         try
         {
             Standby();
         }
-        catch (Exception)
+        catch (InstrumentException ex)
         {
-            // Closing anyway: the operator is told to check the calibrator is off.
+            StandbyFailed?.Invoke(ex.Message);
         }
-        session.Dispose();
+        finally
+        {
+            session.Dispose();
+        }
     }
 }
 

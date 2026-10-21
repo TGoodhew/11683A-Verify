@@ -190,7 +190,7 @@ public class SimulationTests
     public void Every_scenario_has_a_unique_name_and_unknown_ones_are_rejected()
     {
         Assert.Equal(SimulationScenario.All.Count, SimulationScenario.All.Select(s => s.Name).Distinct().Count());
-        Assert.Throws<KeyNotFoundException>(() => SimulationScenario.Get("nope"));
+        Assert.Throws<ArgumentException>(() => SimulationScenario.Get("nope"));
     }
 
     private static SimulatedDvm Configured(SimulatedDvm dvm)

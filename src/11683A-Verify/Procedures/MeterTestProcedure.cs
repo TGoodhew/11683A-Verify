@@ -48,31 +48,51 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
 
         var results = new List<MeterTestResult>();
         var identity = "";
+        var planned = tests.SelectMany(t => (t.PerChannel ? channels : [channels[0]]).Select(c => (Test: t, Channel: c))).ToList();
         try
         {
-            foreach (var test in tests)
-            foreach (var channel in test.PerChannel ? channels : [channels[0]])
+            foreach (var (test, channel) in planned)
             {
-                using var meter = OpenMeter(useBus, channel);
-                meter.Identify();
+                using var meter = ConsoleUi.Attempt($"Identifying the {definition.Model}" + (useBus ? $" at {Resource}" : ""),
+                    () => OpenIdentified(useBus, channel), bench.Log, canSkip: false)!;
                 identity = meter.Description;
                 bench.Log.Write($"Meter test {test.Id} channel {channel}: {meter.Description}");
                 screens.Begin(StepName(test, channel), test.Title + (test.PerChannel ? $" — channel {channel}" : ""));
                 var result = RunTest(test, channel, meter);
-                if (result is null)
-                    break;
                 results.Add(result);
                 AnsiConsole.WriteLine();
                 screens.Report(() => AnsiConsole.Write(MeterReport.Table(result)));
+                if (_stopped is not null)
+                    break;
                 screens.Pause();
             }
         }
+        catch (Exception ex) when (ex is OperatorStopException or InstrumentException)
+        {
+            Stop(ex);
+        }
         finally
         {
-            _dcSource?.Dispose();
+            try
+            {
+                _dcSource?.Dispose();
+            }
+            catch (InstrumentException ex)
+            {
+                bench.Log.Write($"DC calibrator not put in Standby on closing: {ex.Message}");
+                AnsiConsole.MarkupLine("[red]Check the DC calibrator is in Standby: it did not answer on closing.[/]");
+            }
         }
 
         var notes = new List<string>();
+        if (_stopped is not null)
+        {
+            notes.Add($"Stopped before the end: {_stopped.Message}");
+            // Tests not reached are on the record too, every row not measured.
+            foreach (var (test, channel) in planned.Skip(results.Count))
+                results.Add(new MeterTestResult(test.Id, test.Title, test.Source, channel,
+                    [.. test.Points.Select(p => new MeterPointResult(p, test.SourceOf(p), null, false))]));
+        }
         if (definition.Ambiguities.Count > 0)
             notes.Add($"Transcription notes for {definition.FileName}: " + string.Join(" ", definition.Ambiguities));
         if (_dcSource is not null)
@@ -99,6 +119,32 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             NotRun = definition.NotCovered,
             Notes = notes,
         };
+    }
+
+    /// <summary>Why the run stopped early (an instrument error with no one to retry it, or the operator's Stop); null if it did not.</summary>
+    private Exception? _stopped;
+
+    private void Stop(Exception ex)
+    {
+        _stopped ??= ex;
+        bench.Log.Write($"Run stopped: {ex.Message}");
+        AnsiConsole.MarkupLine($"[yellow]The run stopped: {Markup.Escape(ex.Message)} The rows measured so far are kept in the record.[/]");
+    }
+
+    /// <summary>Opens and identifies the meter; the session is closed again if it does not answer.</summary>
+    private IPowerMeter OpenIdentified(bool useBus, string channel)
+    {
+        var meter = OpenMeter(useBus, channel);
+        try
+        {
+            meter.Identify();
+            return meter;
+        }
+        catch
+        {
+            meter.Dispose();
+            throw;
+        }
     }
 
     /// <summary>The test's name in the step tracker, with the channel when it is run on each.</summary>
@@ -199,7 +245,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         return range => map.TryGetValue(range, out var r) ? r : 1;
     }
 
-    private MeterTestResult? RunTest(MeterTest test, string channel, IPowerMeter meter)
+    private MeterTestResult RunTest(MeterTest test, string channel, IPowerMeter meter)
     {
         if (test.Automated && meter.OverBus && meter is IPowerMeterControl control)
             return RunAutomated(test, channel, control);
@@ -323,72 +369,106 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         _calibratorNow = null;
         _calFactorSwitch = 100;
         var baseline = test.Meter!;
-        control.Preset();
-        control.Apply(baseline, null);
-        (MeterSettings, double?)? applied = (baseline, null);
-        bench.Log.Write($"{definition.Model} {test.Id} {channel}: preset; {baseline}");
-
-        if (test.Zero is { } zero)
-        {
-            SetCalibrator(zero.Calibrator, dc, "for the zero", allowSkip: false);
-            Settle(zero.SettleSeconds);
-            Busy("Zeroing the meter", control.Zero);
-            AnsiConsole.MarkupLine("[green]✓[/] Meter zeroed.");
-        }
-        if (test.Cal is { } cal)
-        {
-            SetCalibrator(cal.Calibrator, dc, "for the CAL", allowSkip: false);
-            Settle(cal.SettleSeconds);
-            if (control.CanCalibrate)
-            {
-                Busy("CAL on the 11683A", () => control.Calibrate(cal.ReferenceCalFactorPercent));
-                AnsiConsole.MarkupLine($"[green]✓[/] Meter calibrated (reference cal factor {cal.ReferenceCalFactorPercent.ToString("0.#", CultureInfo.InvariantCulture)}%).");
-            }
-            else
-            {
-                AdjustByHand(control, cal.AdjustTo ?? "1.000 mW");
-            }
-        }
-
+        var log = bench.Log;
         var results = new List<MeterPointResult>();
-        foreach (var point in test.Points)
+        try
         {
-            var source = test.SourceOf(point);
-            AnsiConsole.MarkupLine($"[bold]{Markup.Escape(point.Label)}[/]  [grey]meter:[/] {Markup.Escape(point.MeterSetting)}");
-            double? reading = null;
-            if (SetCalibrator(point.Calibrator, dc, null, allowSkip: true))
+            ConsoleUi.Attempt("Presetting the meter", () =>
             {
-                if (!control.CanSetCalFactor && (point.CalFactorPercent ?? 100) != _calFactorSwitch)
-                    SetCalFactorSwitch(point.CalFactorPercent ?? 100);
-                var settings = baseline.With(point.Meter);
-                if (settings.StoreReference || applied != (settings, point.CalFactorPercent))
+                control.Preset();
+                control.Apply(baseline, null);
+            }, log);
+            (MeterSettings, double?)? applied = (baseline, null);
+            log.Write($"{definition.Model} {test.Id} {channel}: preset; {baseline}");
+
+            if (test.Zero is { } zero)
+            {
+                SetCalibrator(zero.Calibrator, dc, "for the zero", allowSkip: false);
+                Settle(zero.SettleSeconds);
+                ConsoleUi.Attempt("Zeroing the meter", () => Busy("Zeroing the meter", control.Zero), log);
+                AnsiConsole.MarkupLine("[green]✓[/] Meter zeroed.");
+            }
+            if (test.Cal is { } cal)
+            {
+                SetCalibrator(cal.Calibrator, dc, "for the CAL", allowSkip: false);
+                Settle(cal.SettleSeconds);
+                if (control.CanCalibrate)
                 {
-                    control.Apply(settings, point.CalFactorPercent);
-                    applied = (settings, point.CalFactorPercent);
-                    bench.Log.Write($"{definition.Model} settings for '{point.Label}': {settings}, cal factor {point.CalFactorPercent?.ToString(CultureInfo.InvariantCulture) ?? "100"}");
+                    ConsoleUi.Attempt("CAL on the 11683A", () => Busy("CAL on the 11683A", () => control.Calibrate(cal.ReferenceCalFactorPercent)), log);
+                    AnsiConsole.MarkupLine($"[green]✓[/] Meter calibrated (reference cal factor {cal.ReferenceCalFactorPercent.ToString("0.#", CultureInfo.InvariantCulture)}%).");
                 }
-                reading = source switch
+                else
                 {
-                    ReadingSource.Operator => AskReading(point),
-                    ReadingSource.Recorder => Read(point, source, (IPowerMeter)control),
-                    _ => ReadSettled(control, point, settings.Display ?? MeterDisplay.Watts),
-                };
+                    ConsoleUi.Attempt("CAL ADJ", () => AdjustByHand(control, cal.AdjustTo ?? "1.000 mW"), log);
+                }
             }
 
-            var result = new MeterPointResult(point, source, reading, false);
-            results.Add(result);
-            bench.Log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {reading?.ToString("R", CultureInfo.InvariantCulture) ?? "skipped"} {point.Unit} "
-                + $"[{point.Min}, {point.Max}] {source}, automated");
-            AnsiConsole.MarkupLine(reading is { } r
-                ? $"  {(result.Pass == true ? "[green]✓[/]" : "[red]✗[/]")} {Fmt(r, point)} {Markup.Escape(MeterUnits.Display(point.Unit))} "
-                  + $"[grey](limits {Fmt(point.Min, point)} to {Fmt(point.Max, point)})[/]"
-                : "  [yellow]skipped[/]");
-        }
+            foreach (var point in test.Points)
+            {
+                var source = test.SourceOf(point);
+                AnsiConsole.MarkupLine($"[bold]{Markup.Escape(point.Label)}[/]  [grey]meter:[/] {Markup.Escape(point.MeterSetting)}");
+                double? reading = null;
+                if (SetCalibrator(point.Calibrator, dc, null, allowSkip: true))
+                {
+                    if (!control.CanSetCalFactor && (point.CalFactorPercent ?? 100) != _calFactorSwitch)
+                        SetCalFactorSwitch(point.CalFactorPercent ?? 100);
+                    var settings = baseline.With(point.Meter);
+                    reading = ConsoleUi.Attempt($"Reading '{point.Label}'", () =>
+                    {
+                        if (settings.StoreReference || applied != (settings, point.CalFactorPercent))
+                        {
+                            control.Apply(settings, point.CalFactorPercent);
+                            applied = (settings, point.CalFactorPercent);
+                            log.Write($"{definition.Model} settings for '{point.Label}': {settings}, cal factor {point.CalFactorPercent?.ToString(CultureInfo.InvariantCulture) ?? "100"}");
+                        }
+                        return source switch
+                        {
+                            ReadingSource.Operator => AskReading(point),
+                            ReadingSource.Recorder => Read(point, source, (IPowerMeter)control),
+                            _ => ReadSettled(control, point, settings.Display ?? MeterDisplay.Watts),
+                        };
+                    }, log, canSkip: true);
+                }
 
-        if (_calFactorSwitch != 100)
-            SetCalFactorSwitch(100);
-        dc?.Standby();
+                var result = new MeterPointResult(point, source, reading, false);
+                results.Add(result);
+                log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {reading?.ToString("R", CultureInfo.InvariantCulture) ?? "skipped"} {point.Unit} "
+                    + $"[{point.Min}, {point.Max}] {source}, automated");
+                AnsiConsole.MarkupLine(reading is { } r
+                    ? $"  {(result.Pass == true ? "[green]✓[/]" : "[red]✗[/]")} {Fmt(r, point)} {Markup.Escape(MeterUnits.Display(point.Unit))} "
+                      + $"[grey](limits {Fmt(point.Min, point)} to {Fmt(point.Max, point)})[/]"
+                    : "  [yellow]skipped[/]");
+            }
+
+            if (_calFactorSwitch != 100)
+                SetCalFactorSwitch(100);
+        }
+        catch (Exception ex) when (ex is OperatorStopException or InstrumentException)
+        {
+            Stop(ex);
+            // The rows not reached are on the record as not measured, so the run is not taken for complete.
+            foreach (var p in test.Points.Skip(results.Count))
+                results.Add(new MeterPointResult(p, test.SourceOf(p), null, false));
+        }
+        finally
+        {
+            StandbyQuietly(dc);
+        }
         return new MeterTestResult(test.Id, test.Title, test.Source, channel, results);
+    }
+
+    /// <summary>The DC calibrator to Standby, even after an error; a failure is reported, not thrown over the first one.</summary>
+    private void StandbyQuietly(IDcSource? dc)
+    {
+        try
+        {
+            dc?.Standby();
+        }
+        catch (InstrumentException ex)
+        {
+            bench.Log.Write($"DC calibrator Standby failed: {ex.Message}");
+            AnsiConsole.MarkupLine("[red]The DC calibrator did not answer: put it in Standby by hand.[/]");
+        }
     }
 
     /// <summary>The 11683A's switches as the operator last set them in this test; null before the first.</summary>
@@ -445,13 +525,13 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             return;
         if (setting.ExternalVolts is { } v and not 0)
         {
-            dc.Output(v);
+            ConsoleUi.Attempt($"Setting the DC calibrator to {Si.Format(v, "V", 5)}", () => dc.Output(v), bench.Log);
             bench.Log.Write($"DC calibrator set to {v.ToString("R", CultureInfo.InvariantCulture)} V");
             AnsiConsole.MarkupLine($"  [grey]DC calibrator set to {Si.Format(v, "V", 5)}[/]");
         }
         else
         {
-            dc.Standby();
+            ConsoleUi.Attempt("Putting the DC calibrator in Standby", dc.Standby, bench.Log);
             AnsiConsole.MarkupLine("  [grey]DC calibrator in Standby (0 V)[/]");
         }
     }
@@ -465,8 +545,16 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         {
             for (var left = seconds; left > 0; left--)
             {
-                ctx.Status($"Letting the 11683A settle: {left} s");
-                Thread.Sleep(1000);
+                ctx.Status($"Letting the 11683A settle: {left} s [grey](Enter to go on now)[/]");
+                for (var tick = 0; tick < 10; tick++)
+                {
+                    if (ConsoleUi.Interactive && Console.KeyAvailable && Console.ReadKey(intercept: true).Key == ConsoleKey.Enter)
+                    {
+                        bench.Log.Write($"Settling cut short by the operator with {left} s to go");
+                        return;
+                    }
+                    Thread.Sleep(100);
+                }
             }
         });
     }
@@ -515,7 +603,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             return;
         }
         if (!ConsoleUi.Interactive)
-            throw new InvalidOperationException("CAL ADJ needs an operator at the console.");
+            throw new OperatorException("CAL ADJ needs an operator at the console.");
         AnsiConsole.Live(new Text("")).Start(ctx =>
         {
             while (true)
@@ -673,7 +761,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     private static double? AskReading(MeterTestPoint point, double? simulatedDisplay = null)
     {
         if (!ConsoleUi.Interactive)
-            throw new InvalidOperationException("A typed reading needs an operator at the console.");
+            throw new OperatorException("A typed reading needs an operator at the console.");
         var shown = simulatedDisplay is { } d ? Fmt(d, point) : null;
         var prompt = new TextPrompt<string>($"Reading in {Markup.Escape(MeterUnits.Display(point.Unit))} "
                 + (shown is null ? "[grey](Enter to skip)[/]:" : $"[grey](the simulated display shows {shown}; Enter accepts it)[/]:"))

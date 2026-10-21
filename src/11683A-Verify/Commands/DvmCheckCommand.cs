@@ -4,6 +4,7 @@ using Verify11683A.Calibrator;
 using Verify11683A.Formatting;
 using Verify11683A.Instruments.Dvm;
 using Verify11683A.Instruments.Measurement;
+using Verify11683A.Instruments.Visa;
 using Verify11683A.Measurement;
 using Verify11683A.Specs;
 using Verify11683A.Uncertainty;
@@ -101,12 +102,24 @@ public static class DvmCheckCommand
                 table.AddRow(function.DisplayName(), rangeText, "[green]OK[/]", Markup.Escape(applied.InputResistance),
                     Markup.Escape(string.Join("\n", readBack.Select(kv => $"{kv.Key} {kv.Value}"))));
             }
-            catch (DvmException ex)
+            catch (InstrumentException ex)
             {
+                // A wrong setting or no reply: this range fails, the others are still checked.
                 failures++;
                 bench.Log.Write($"{function} {range}: FAIL: {ex.Message}");
                 table.AddRow(function.DisplayName(), rangeText, "[red]FAIL[/]", "", Markup.Escape(ex.Message));
             }
+        }
+        // The loop ends on 4-wire ohms: back to DC volts before the operator is asked to set CALIBRATE.
+        try
+        {
+            dvm.Configure(DvmFunction.DcVoltage, 10, config.Measurement.Nplc);
+        }
+        catch (InstrumentException ex)
+        {
+            failures++;
+            bench.Log.Write($"Back to DC volts failed: {ex.Message}");
+            AnsiConsole.MarkupLine($"[red]✗ The DVM did not go back to DC volts ({Markup.Escape(ex.Message)}). Leave FUNCTION in STANDBY.[/]");
         }
         screens.Report(() =>
         {
