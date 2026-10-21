@@ -365,32 +365,28 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         var results = new List<MeterPointResult>();
         try
         {
-            ConsoleUi.Attempt("Presetting the meter", () =>
-            {
-                control.Preset();
-                control.Apply(baseline, null);
-            }, log);
-            (MeterSettings, double?)? applied = (baseline, null);
-            log.Write($"{definition.Model} {test.Id} {channel}: preset; {baseline}");
-
+            ConsoleUi.Attempt("Presetting the meter", control.Preset, log);
+            // The STANDBY check comes before the test's settings, while a reading is quick (an E441x at filter 512 takes 26 s).
             if (test.Zero is { } zero)
             {
                 SetCalibrator(zero.Calibrator, dc, "for the zero", allowSkip: false);
                 Settle(zero.SettleSeconds);
-                ConsoleUi.Attempt("Zeroing the meter", () => Busy("Zeroing the meter", control.Zero), log);
-                AnsiConsole.MarkupLine("[green]✓[/] Meter zeroed.");
+                CheckStandby(control, zero);
             }
+            ConsoleUi.Attempt("Setting up the meter", () => control.Apply(baseline, null), log);
+            (MeterSettings, double?)? applied = (baseline, null);
+            log.Write($"{definition.Model} {test.Id} {channel}: preset; {baseline}");
+
+            if (test.Zero is not null)
+                ZeroMeter(control);
             if (test.Cal is { } cal)
             {
-                SetCalibrator(cal.Calibrator, dc, "for the CAL", allowSkip: false);
-                Settle(cal.SettleSeconds);
                 if (control.CanCalibrate)
-                {
-                    ConsoleUi.Attempt("CAL on the 11683A", () => Busy("CAL on the 11683A", () => control.Calibrate(cal.ReferenceCalFactorPercent)), log);
-                    AnsiConsole.MarkupLine($"[green]✓[/] Meter calibrated (reference cal factor {cal.ReferenceCalFactorPercent.ToString("0.#", CultureInfo.InvariantCulture)}%).");
-                }
+                    CalibrateMeter(control, test, cal, dc);
                 else
                 {
+                    SetCalibrator(cal.Calibrator, dc, "for the CAL", allowSkip: false);
+                    Settle(cal.SettleSeconds);
                     ConsoleUi.Attempt("CAL ADJ", () => AdjustByHand(control, cal.AdjustTo ?? "1.000 mW"), log);
                 }
             }
@@ -445,6 +441,100 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             StandbyQuietly(dc);
         }
         return new MeterTestResult(test.Id, test.Title, test.Source, channel, results);
+    }
+
+    private void ZeroMeter(IPowerMeterControl control)
+    {
+        ConsoleUi.Attempt("Zeroing the meter", () => Busy("Zeroing the meter", control.Zero), bench.Log);
+        AnsiConsole.MarkupLine("[green]✓[/] Meter zeroed.");
+    }
+
+    /// <summary>
+    /// Before the zero: the meter should see next to nothing with the 11683A in STANDBY. If it sees power, FUNCTION is
+    /// most likely still in CALIBRATE, and a zero now would take that power as zero and make the CAL fail; the operator
+    /// is told, and can check again, zero anyway or exit. The limit is a quarter of the zero range's full scale.
+    /// </summary>
+    private void CheckStandby(IPowerMeterControl control, MeterStep zero)
+    {
+        var limit = 0.25 * Simulated11683A.TrueFullScaleWatts(RangeSwitch.Get(zero.Calibrator.Range));
+        while (true)
+        {
+            var watts = ConsoleUi.Attempt("Checking the 11683A is in STANDBY",
+                () => (double?)ConsoleUi.Busy("Checking the 11683A is in STANDBY", _ => control.Read()), bench.Log, canSkip: true);
+            if (watts is not { } w || Math.Abs(w) <= limit)
+                return;
+            bench.Log.Write($"Before the zero the meter read {w.ToString("R", CultureInfo.InvariantCulture)} W (limit {limit} W): the 11683A looks to be in CALIBRATE");
+            AnsiConsole.MarkupLine($"[red]✗ The meter reads {Si.Format(w, "W", 4)} with the 11683A meant to be in STANDBY: FUNCTION looks to be in CALIBRATE.[/]");
+            AnsiConsole.MarkupLine("[grey]Zeroing now would take that power as zero, and the CAL would then fail.[/]");
+            var choice = ConsoleUi.Choose("Set FUNCTION to STANDBY, then:", ["Check again", "Zero anyway", "Exit"], "Zero anyway");
+            bench.Log.Write($"Operator chose {choice}");
+            if (choice == "Exit")
+                throw new OperatorStopException("Exited by the operator before the zero.");
+            if (choice == "Zero anyway")
+                return;
+        }
+    }
+
+    /// <summary>
+    /// The CAL, and if the meter refuses it (CAL ERROR, the 1 mW it sees is too far off), what it sees and the likely
+    /// cause; the operator can redo the zero and then the CAL (a zero taken in CALIBRATE is the usual cause), retry the
+    /// CAL, or exit.
+    /// </summary>
+    private void CalibrateMeter(IPowerMeterControl control, MeterTest test, MeterStep cal, IDcSource? dc)
+    {
+        while (true)
+        {
+            SetCalibrator(cal.Calibrator, dc, "for the CAL", allowSkip: false);
+            Settle(cal.SettleSeconds);
+            try
+            {
+                Busy("CAL on the 11683A", () => control.Calibrate(cal.ReferenceCalFactorPercent));
+                AnsiConsole.MarkupLine($"[green]✓[/] Meter calibrated (reference cal factor {cal.ReferenceCalFactorPercent.ToString("0.#", CultureInfo.InvariantCulture)}%).");
+                return;
+            }
+            catch (InstrumentException ex)
+            {
+                bench.Log.Write($"CAL failed: {ex.Message}");
+                if (!ConsoleUi.Interactive)
+                    throw;
+                AnsiConsole.MarkupLine($"[red]✗ The CAL failed: {Markup.Escape(ex.Message)}[/]");
+                AnsiConsole.MarkupLine(Markup.Escape(CalDiagnosis(control)));
+                var choice = ConsoleUi.Choose("What now?", ["Redo the zero, then the CAL", "Retry the CAL", "Exit"], "Exit");
+                bench.Log.Write($"Operator chose {choice}");
+                if (choice == "Exit")
+                    throw new OperatorStopException("Exited by the operator after the CAL failed.", ex);
+                _calibratorNow = null;   // ask for the 11683A's switches again, whatever was set
+                if (choice.StartsWith("Redo", StringComparison.Ordinal) && test.Zero is { } zero)
+                {
+                    SetCalibrator(zero.Calibrator, dc, "for the zero", allowSkip: false);
+                    Settle(zero.SettleSeconds);
+                    CheckStandby(control, zero);
+                    ZeroMeter(control);
+                }
+            }
+        }
+    }
+
+    /// <summary>What the meter sees after a failed CAL, and what that most likely means.</summary>
+    private string CalDiagnosis(IPowerMeterControl control)
+    {
+        double watts;
+        try
+        {
+            watts = ConsoleUi.Busy("Checking what the meter sees", _ => control.Read());
+        }
+        catch (InstrumentException)
+        {
+            return "Check the 11683A is at RANGE 1 mW, FUNCTION CALIBRATE.";
+        }
+        bench.Log.Write($"After the failed CAL the meter read {watts.ToString("R", CultureInfo.InvariantCulture)} W");
+        var seen = Si.Format(watts, "W", 4);
+        if (watts < 0.1e-3)
+            return $"The meter sees almost no power ({seen}): FUNCTION may still be in STANDBY, or the zero was taken with the 11683A in CALIBRATE.";
+        if (Math.Abs(watts / 1e-3 - 1) > 0.05)
+            return $"The meter sees {seen} instead of about 1 mW. Check RANGE 1 mW and FUNCTION CALIBRATE; if they are right, the zero was "
+                + "most likely taken with the 11683A in CALIBRATE: redo the zero.";
+        return $"The meter sees about 1 mW ({seen}), so the 11683A looks right: retry the CAL.";
     }
 
     /// <summary>The DC calibrator to Standby, even after an error; a failure is reported, not thrown over the first one.</summary>
