@@ -188,7 +188,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     private double? ReadRow(MeterTest test, string channel, MeterTestPoint point, ReadingSource source, Func<double?> read)
     {
         var reading = read();
-        for (var count = 2; reading is { } r && new MeterPointResult(point, source, r, false).Pass == false && OfferReread(test, channel, point, r); count++)
+        for (var count = 2; reading is { } r && new MeterPointResult(point, source, r, false).Pass == false && OfferReread(test, channel, point, r, count - 1); count++)
         {
             bench.Log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {r.ToString("R", CultureInfo.InvariantCulture)} {point.Unit} is outside its limits; read again (reading {count})");
             _rereads[(test.Id, channel, point.Label)] = count;
@@ -197,17 +197,35 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         return reading;
     }
 
-    /// <summary>After a reading outside its limits, at the console: read the row again? Not offered to a scripted run.</summary>
-    private bool OfferReread(MeterTest test, string channel, MeterTestPoint point, double reading)
+    /// <summary>
+    /// After a reading outside its limits, at the console: read the row again? One line, which the next reading
+    /// overwrites, so retries do not fill the screen: Enter (or Y) reads again, N keeps the reading, X exits. Not
+    /// offered to a scripted run.
+    /// </summary>
+    /// <exception cref="OperatorStopException">The operator typed X.</exception>
+    private bool OfferReread(MeterTest test, string channel, MeterTestPoint point, double reading, int readings)
     {
         if (!ConsoleUi.Interactive || _stopped is not null)
             return false;
         var unit = Markup.Escape(MeterUnits.Display(point.Unit));
-        AnsiConsole.MarkupLine($"  [red]✗ {Markup.Escape(point.Label)}: {Fmt(reading, point)} {unit}[/], outside {Fmt(point.Min, point)} to {Fmt(point.Max, point)} {unit}.");
-        var again = ConsoleUi.Confirm("Read this step again?", defaultValue: true);
-        if (!again)
-            bench.Log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': outside its limits; not read again");
-        return again;
+        ConsoleUi.BeforePrompt();
+        AnsiConsole.Markup($"\r  [red]✗ {Markup.Escape(point.Label)}: {Fmt(reading, point)} {unit}[/], outside {Fmt(point.Min, point)} to {Fmt(point.Max, point)} {unit}"
+            + (readings > 1 ? $" [grey]({readings} readings)[/]" : "") + "   [blue]Enter: read again   N: keep it   X: exit[/] ");
+        ConsoleKey key;
+        do
+            key = Console.ReadKey(intercept: true).Key;
+        while (key is not (ConsoleKey.Enter or ConsoleKey.Y or ConsoleKey.N or ConsoleKey.X));
+        ConsoleUi.Answered();
+        if (key is ConsoleKey.Enter or ConsoleKey.Y)
+        {
+            Console.Write("\r\u001b[2K");   // the next reading takes this line
+            return true;
+        }
+        AnsiConsole.WriteLine();
+        if (key == ConsoleKey.X)
+            throw new OperatorStopException("Exited by the operator.");
+        bench.Log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': outside its limits; not read again");
+        return false;
     }
 
     /// <summary>Why the run stopped early (an instrument error with no one to retry it, or the operator's Stop); null if it did not.</summary>
