@@ -171,3 +171,25 @@ public class SimulatorKnobsTests
         Assert.Equal("30mW", sim.Range.Id);
     }
 }
+
+public class MeterProgressTableTests
+{
+    [Fact]
+    public void While_a_test_runs_its_table_shows_the_rows_done_with_PASS_or_FAIL_and_the_rest_to_come()
+    {
+        var test = Meters.MeterDefinition.LoadModel("437B").Tests.Single(t => t.Id == "instrument-accuracy");
+        var done = test.Points.Take(2).Select((p, i) => new Meters.MeterPointResult(p, Meters.ReadingSource.Meter, i == 0 ? p.Expected : p.Max * 2, false));
+        var rest = test.Points.Skip(2).Select(p => new Meters.MeterPointResult(p, Meters.ReadingSource.Meter, null, false));
+        var result = new Meters.MeterTestResult(test.Id, test.Title, test.Source, "A", [.. done, .. rest]);
+
+        var console = new TestConsole().Width(200);
+        console.Write(App.Reports.MeterReport.Table(result, pendingFrom: 2));
+        var output = console.Output;
+
+
+        Assert.Contains("PASS", output);
+        Assert.Contains("FAIL", output);
+        Assert.Equal(test.Points.Count - 2, output.Split('…').Length - 1);
+        Assert.DoesNotContain("skipped", output);
+    }
+}

@@ -341,7 +341,7 @@ public sealed class VerificationSession : IDisposable
     {
         if (!ConsoleUi.Interactive)
             return [];
-        var text = AnsiConsole.Prompt(new TextPrompt<string>("Operator notes for the report [grey](Enter for none)[/]:").AllowEmpty());
+        var text = ConsoleUi.Ask(new TextPrompt<string>("Operator notes for the report [grey](Enter for none)[/]:").AllowEmpty());
         return text.Trim() == "" ? [] : [text.Trim()];
     }
 

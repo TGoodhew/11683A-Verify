@@ -22,12 +22,62 @@ public static class ConsoleUi
 
     public static void Prompt(string message)
     {
-        DiscardTypeAhead();
-        AnsiConsole.Markup($"[blue]{Markup.Escape(message)}[/] ");
-        if (!Console.IsInputRedirected)
-            Console.ReadLine();
-        else
+        if (Console.IsInputRedirected)
+        {
+            AnsiConsole.Markup($"[blue]{Markup.Escape(message)}[/] ");
             AnsiConsole.WriteLine();
+            return;
+        }
+        BeforePrompt();
+        AnsiConsole.Markup($"[blue]{Markup.Escape(message)}[/] ");
+        Console.ReadLine();
+        Answered();
+    }
+
+    /// <summary>Every question to the operator goes through here: stray keys dropped, a beep if the app has been busy, the answer timed.</summary>
+    public static T Ask<T>(IPrompt<T> prompt)
+    {
+        BeforePrompt();
+        var answer = AnsiConsole.Prompt(prompt);
+        Answered();
+        return answer;
+    }
+
+    /// <summary>A short beep when the app needs the operator (Settings: "beep"). On by default.</summary>
+    public static bool BeepEnabled { get; set; } = true;
+
+    /// <summary>The app has been working at least this long since the last answer: the operator may be looking away.</summary>
+    private static readonly TimeSpan AttentionAfter = TimeSpan.FromSeconds(3);
+
+    private static DateTime _lastAnswer = DateTime.Now;
+
+    /// <summary>Before the operator is needed (a prompt, or a live view they adjust from): stray keys dropped, and a beep if the app has been busy.</summary>
+    public static void BeforePrompt()
+    {
+        DiscardTypeAhead();
+        if (DateTime.Now - _lastAnswer > AttentionAfter)
+            Attention();
+    }
+
+    /// <summary>The operator has answered (or finished a live adjustment): the clock for the next beep starts again.</summary>
+    public static void Answered() => _lastAnswer = DateTime.Now;
+
+    /// <summary>A short beep, so an operator at the bench knows to look back at the screen.</summary>
+    public static void Attention()
+    {
+        if (!BeepEnabled || !Interactive)
+            return;
+        try
+        {
+            if (OperatingSystem.IsWindows())
+                Console.Beep(1000, 150);
+            else
+                Console.Write('\a');
+        }
+        catch (Exception ex) when (ex is IOException or PlatformNotSupportedException or InvalidOperationException)
+        {
+            // No beeper: the screen still shows the prompt.
+        }
     }
 
     /// <summary>
@@ -47,8 +97,7 @@ public static class ConsoleUi
     {
         if (Console.IsInputRedirected)
             return defaultValue;
-        DiscardTypeAhead();
-        return AnsiConsole.Confirm(question, defaultValue);
+        return Ask(new ConfirmationPrompt(question) { DefaultValue = defaultValue });
     }
 
     /// <summary>
@@ -79,8 +128,7 @@ public static class ConsoleUi
     {
         if (Console.IsInputRedirected)
             return whenRedirected;
-        DiscardTypeAhead();
-        return AnsiConsole.Prompt(new SelectionPrompt<string>().Title(Markup.Escape(title)).AddChoices(choices));
+        return Ask(new SelectionPrompt<string>().Title(Markup.Escape(title)).AddChoices(choices));
     }
 
     /// <summary>What to set before a step, as a panel: one knob or connection per row, so it can be checked at a glance.</summary>
@@ -148,8 +196,7 @@ public static class ConsoleUi
                     throw;
                 AnsiConsole.MarkupLine($"[red]✗ {Markup.Escape(what)}: {Markup.Escape(ex.Message)}[/]");
                 var choices = canSkip ? new[] { "Retry", "Skip", "Stop" } : ["Retry", "Stop"];
-                DiscardTypeAhead();
-                var choice = AnsiConsole.Prompt(new SelectionPrompt<string>().Title("What now?").AddChoices(choices));
+                var choice = Ask(new SelectionPrompt<string>().Title("What now?").AddChoices(choices));
                 log.Write($"Operator chose {choice}");
                 if (choice == "Skip")
                     return default;

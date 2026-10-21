@@ -62,7 +62,7 @@ public static class MeterTestCommand
     {
         if (!ConsoleUi.Interactive)
             throw new UsageException($"Name the meter with --meter: {string.Join(", ", definitions.Select(d => d.Model))}.");
-        return AnsiConsole.Prompt(new SelectionPrompt<MeterDefinition>()
+        return ConsoleUi.Ask(new SelectionPrompt<MeterDefinition>()
             .Title("Which power meter?")
             .UseConverter(d => Markup.Escape($"{d.Title}  ({d.Tests.Count} tests, {d.Tests.Sum(t => t.Points.Count)} rows; "
                 + (d.BusDriver is null ? "readings via the DVM / typed" : $"read over the bus") + ")"))

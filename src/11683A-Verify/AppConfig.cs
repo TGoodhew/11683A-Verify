@@ -124,6 +124,9 @@ public sealed class AppConfig
     public WarmupConfig Warmup { get; set; } = new();
     public PowerMeterConfig PowerMeter { get; set; } = new();
     public DcSourceConfig DcSource { get; set; } = new();
+    /// <summary>A short beep when the app needs the operator after it has been busy.</summary>
+    public bool Beep { get; set; } = true;
+
     public string ResultsDirectory { get; set; } = "results";
 
     /// <summary>

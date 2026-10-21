@@ -191,14 +191,14 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             .AddChoices(available);
         foreach (var t in available.Where(t => !t.NeedsH01))
             prompt.Select(t);
-        return AnsiConsole.Prompt(prompt);
+        return ConsoleUi.Ask(prompt);
     }
 
     private string AskSerial()
     {
         if (!ConsoleUi.Interactive)
             return Sim is not null ? "SIM0001" : "";
-        return AnsiConsole.Prompt(new TextPrompt<string>($"{Markup.Escape(definition.Model)} serial number:").AllowEmpty()).Trim();
+        return ConsoleUi.Ask(new TextPrompt<string>($"{Markup.Escape(definition.Model)} serial number:").AllowEmpty()).Trim();
     }
 
     private List<string> ChooseChannels(List<MeterTest> tests)
@@ -208,7 +208,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         var prompt = new MultiSelectionPrompt<string>().Title("Which channels?").AddChoices(definition.Channels);
         foreach (var c in definition.Channels)
             prompt.Select(c);
-        var chosen = AnsiConsole.Prompt(prompt);
+        var chosen = ConsoleUi.Ask(prompt);
         return chosen.Count == 0 ? [definition.Channels[0]] : chosen;
     }
 
@@ -273,7 +273,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         }
 
         if ((Sim is null || bench.Walkthrough) && !AskGo(
-                (dc is null ? "Press Enter when the setup above is done" : "Press Enter when the connections above are made") + " (S to skip this test)"
+                (dc is null ? "Press Enter when the setup above is done" : "Press Enter when the connections above are made") + " (S to skip this test, X to exit)"
                 + (bench.Walkthrough && dc is null ? " [simulator: Enter does the zero and CAL]" : "")))
             return new MeterTestResult(test.Id, test.Title, test.Source, channel, []);
         if (Sim is not null)
@@ -301,7 +301,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             if (Sim is not null)
             {
                 if (bench.Walkthrough && source != ReadingSource.Operator
-                    && !AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip) [simulator: Enter sets it]"))
+                    && !AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip, X to exit) [simulator: Enter sets it]"))
                 {
                     reading = null;
                 }
@@ -328,7 +328,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             }
             else
             {
-                reading = AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip)") ? Read(point, source, meter) : null;
+                reading = AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip, X to exit)") ? Read(point, source, meter) : null;
             }
 
             var result = new MeterPointResult(point, source, reading, simulated);
@@ -397,6 +397,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
 
             foreach (var point in test.Points)
             {
+                ShowProgress(test, channel, results);
                 var source = test.SourceOf(point);
                 double? reading = null;
                 if (SetCalibrator(point.Calibrator, dc, null, allowSkip: true))
@@ -425,7 +426,8 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 results.Add(result);
                 log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {reading?.ToString("R", CultureInfo.InvariantCulture) ?? "skipped"} {point.Unit} "
                     + $"[{point.Min}, {point.Max}] {source}, automated");
-                RowLine(point, result, reading);
+                if (!screens.Clearing)
+                    RowLine(point, result, reading);
             }
 
             if (_calFactorSwitch != 100)
@@ -484,7 +486,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         AnsiConsole.Write(SwitchPanel(setting, _calibratorNow, dc, "Set the 11683A" + (purpose is null ? "" : " " + purpose)));
         if ((Sim is null || bench.Walkthrough))
         {
-            var prompt = "Press Enter when set" + (allowSkip ? " (S to skip this row)" : "") + (bench.Walkthrough ? " [simulator: Enter sets it]" : "");
+            var prompt = "Press Enter when set" + (allowSkip ? " (S to skip this row, X to exit)" : " (X to exit)") + (bench.Walkthrough ? " [simulator: Enter sets it]" : "");
             if (allowSkip ? !AskGo(prompt) : !Ask(prompt))
                 return false;
         }
@@ -562,7 +564,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         if (before is not null && before.SequenceEqual(connections))
             return true;
         AnsiConsole.Write(Highlighted(connections.Select(c => (c.Name, c.Value, before is null || !before.Contains(c))), "Connect"));
-        if ((Sim is null || bench.Walkthrough) && !AskGo("Press Enter when connected (S to skip this test)"))
+        if ((Sim is null || bench.Walkthrough) && !AskGo("Press Enter when connected (S to skip this test, X to exit)"))
             return false;
         _connectionsNow = connections;
         return true;
@@ -670,6 +672,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         }
         if (!ConsoleUi.Interactive)
             throw new OperatorException("CAL ADJ needs an operator at the console.");
+        ConsoleUi.BeforePrompt();
         AnsiConsole.Live(new Text("")).Start(ctx =>
         {
             while (true)
@@ -681,6 +684,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                     break;
             }
         });
+        ConsoleUi.Answered();
         bench.Log.Write($"CAL ADJ set by the operator for {target}");
     }
 
@@ -692,13 +696,29 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         _calFactorSwitch = percent;
     }
 
+    /// <summary>Enter to go on; X to exit the run.</summary>
+    /// <exception cref="OperatorStopException">The operator typed X.</exception>
     private static bool Ask(string message)
     {
         if (!ConsoleUi.Interactive)
             return true;
-        ConsoleUi.DiscardTypeAhead();
-        AnsiConsole.Prompt(new TextPrompt<string>($"[blue]{Markup.Escape(message)}[/]").AllowEmpty());
+        var text = ConsoleUi.Ask(new TextPrompt<string>($"[blue]{Markup.Escape(message)}[/]").AllowEmpty()).Trim();
+        if (text.Equals("x", StringComparison.OrdinalIgnoreCase))
+            throw new OperatorStopException("Exited by the operator.");
         return true;
+    }
+
+    /// <summary>
+    /// On a clearing console, the test's screen redrawn with its table so far: the rows measured, with PASS or FAIL,
+    /// and the rows to come. A redirected console gets one line per row instead.
+    /// </summary>
+    private void ShowProgress(MeterTest test, string channel, IReadOnlyList<MeterPointResult> done)
+    {
+        if (!screens.Clearing)
+            return;
+        screens.Redraw();
+        var all = done.Concat(test.Points.Skip(done.Count).Select(p => new MeterPointResult(p, test.SourceOf(p), null, false))).ToList();
+        AnsiConsole.Write(MeterReport.Table(new MeterTestResult(test.Id, ShortTitle(test), test.Source, channel, all), pendingFrom: done.Count));
     }
 
     /// <summary>
@@ -818,27 +838,29 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         sim.ExternalDvmSource = () => meter.DisplayedWatts() / fullScale;   // RECORDER OUTPUT: 1 V at full scale
     }
 
+    /// <summary>Enter to go on (true), S to skip (false), X to exit the run: what is measured so far is saved.</summary>
+    /// <exception cref="OperatorStopException">The operator typed X.</exception>
     private static bool AskGo(string message)
     {
         if (!ConsoleUi.Interactive)
             return true;
-        ConsoleUi.DiscardTypeAhead();
-        var text = AnsiConsole.Prompt(new TextPrompt<string>($"[blue]{Markup.Escape(message)}[/]").AllowEmpty());
-        return !text.Trim().Equals("s", StringComparison.OrdinalIgnoreCase);
+        var text = ConsoleUi.Ask(new TextPrompt<string>($"[blue]{Markup.Escape(message)}[/]").AllowEmpty()).Trim();
+        if (text.Equals("x", StringComparison.OrdinalIgnoreCase))
+            throw new OperatorStopException("Exited by the operator.");
+        return !text.Equals("s", StringComparison.OrdinalIgnoreCase);
     }
 
     private static double? AskReading(MeterTestPoint point, double? simulatedDisplay = null)
     {
         if (!ConsoleUi.Interactive)
             throw new OperatorException("A typed reading needs an operator at the console.");
-        ConsoleUi.DiscardTypeAhead();
         var shown = simulatedDisplay is { } d ? Fmt(d, point) : null;
         var prompt = new TextPrompt<string>($"Reading in {Markup.Escape(MeterUnits.Display(point.Unit))} "
                 + (shown is null ? "[grey](Enter to skip)[/]:" : $"[grey](the simulated display shows {shown}; Enter accepts it)[/]:"))
             .AllowEmpty();
         if (shown is not null)
             prompt = prompt.DefaultValue(shown).HideDefaultValue();
-        var text = AnsiConsole.Prompt(prompt
+        var text = ConsoleUi.Ask(prompt
             .Validate(t => t.Trim() == "" || double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out _)
                 ? ValidationResult.Success()
                 : ValidationResult.Error("Enter a number, or nothing to skip.")));
