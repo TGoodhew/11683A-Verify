@@ -101,12 +101,19 @@ public static class ConsoleUi
     }
 
     /// <summary>
+    /// Set while the caller keeps its own status on the current line (a failed step read again): <see cref="Busy"/>
+    /// then shows no spinner, which would leave the cursor a line further down when it ends.
+    /// </summary>
+    public static bool NoSpinner { get; set; }
+
+    /// <summary>
     /// Runs <paramref name="work"/> under a spinner saying what the app is doing, so the operator can see a step was
-    /// taken and need not press anything; the status can be updated as it goes. Without a console it just runs.
+    /// taken and need not press anything; the status can be updated as it goes. Without a console, or while
+    /// <see cref="NoSpinner"/> is set, it just runs.
     /// </summary>
     public static T Busy<T>(string doing, Func<Action<string>, T> work)
     {
-        if (!Interactive)
+        if (!Interactive || NoSpinner)
             return work(_ => { });
         var started = DateTime.Now;
         string Text(string what) => $"{Markup.Escape(what)} [grey]({(DateTime.Now - started).TotalSeconds:0} s — working, no need to press anything)[/]";

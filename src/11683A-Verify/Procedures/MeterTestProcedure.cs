@@ -184,33 +184,54 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     /// <summary>
     /// Takes a row's reading with <paramref name="read"/> and, while it is outside the limits, offers at the console to
     /// read the row again at once (the operator can check the 11683A and the meter first). The last reading counts.
+    /// With <paramref name="ownLine"/> (a bus reading, which asks nothing), the retries keep to one line, rewritten
+    /// in place; otherwise each reading's own prompt follows.
     /// </summary>
-    private double? ReadRow(MeterTest test, string channel, MeterTestPoint point, ReadingSource source, Func<double?> read)
+    private double? ReadRow(MeterTest test, string channel, MeterTestPoint point, ReadingSource source, bool ownLine, Func<double?> read)
     {
         var reading = read();
-        for (var count = 2; reading is { } r && new MeterPointResult(point, source, r, false).Pass == false && OfferReread(test, channel, point, r, count - 1); count++)
+        var reread = false;
+        for (var count = 2; reading is { } r && new MeterPointResult(point, source, r, false).Pass == false && OfferReread(test, channel, point, r, count - 1, ownLine); count++)
         {
             bench.Log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {r.ToString("R", CultureInfo.InvariantCulture)} {point.Unit} is outside its limits; read again (reading {count})");
             _rereads[(test.Id, channel, point.Label)] = count;
-            reading = read();
+            reread = true;
+            ConsoleUi.NoSpinner = ownLine;
+            try
+            {
+                reading = read();
+            }
+            finally
+            {
+                ConsoleUi.NoSpinner = false;
+            }
         }
+        if (reread && ownLine)
+            Console.Write(ClearLine);   // a passing reading: the row's own result line takes it
         return reading;
     }
 
+    /// <summary>Back to the start of the line, and the line erased.</summary>
+    private const string ClearLine = "\r\u001b[2K";
+
     /// <summary>
-    /// After a reading outside its limits, at the console: read the row again? One line, which the next reading
-    /// overwrites, so retries do not fill the screen: Enter (or Y) reads again, N keeps the reading, X exits. Not
-    /// offered to a scripted run.
+    /// After a reading outside its limits, at the console: read the row again? One line, rewritten by each retry so
+    /// retries do not fill the screen: Enter (or Y) reads again, N keeps the reading, X exits. Not offered to a
+    /// scripted run.
     /// </summary>
     /// <exception cref="OperatorStopException">The operator typed X.</exception>
-    private bool OfferReread(MeterTest test, string channel, MeterTestPoint point, double reading, int readings)
+    private bool OfferReread(MeterTest test, string channel, MeterTestPoint point, double reading, int readings, bool ownLine)
     {
         if (!ConsoleUi.Interactive || _stopped is not null)
             return false;
-        var unit = Markup.Escape(MeterUnits.Display(point.Unit));
+        var unit = MeterUnits.Display(point.Unit);
+        var failed = $"✗ {point.Label}: {Fmt(reading, point)} {unit}, limits {Fmt(point.Min, point)} to {Fmt(point.Max, point)}";
+        var count = readings > 1 ? $" ({readings} readings)" : "";
+        // Kept within the window: a wrapped line could not be rewritten in place.
+        var keys = 2 + failed.Length + count.Length + 41 < Console.WindowWidth ? "Enter: read again   N: keep it   X: exit" : "Enter/N/X";
         ConsoleUi.BeforePrompt();
-        AnsiConsole.Markup($"\r  [red]✗ {Markup.Escape(point.Label)}: {Fmt(reading, point)} {unit}[/], outside {Fmt(point.Min, point)} to {Fmt(point.Max, point)} {unit}"
-            + (readings > 1 ? $" [grey]({readings} readings)[/]" : "") + "   [blue]Enter: read again   N: keep it   X: exit[/] ");
+        Console.Write(ClearLine);
+        AnsiConsole.Markup($"  [red]{Markup.Escape(failed)}[/][grey]{Markup.Escape(count)}[/]   [blue]{Markup.Escape(keys)}[/] ");
         ConsoleKey key;
         do
             key = Console.ReadKey(intercept: true).Key;
@@ -218,7 +239,10 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         ConsoleUi.Answered();
         if (key is ConsoleKey.Enter or ConsoleKey.Y)
         {
-            Console.Write("\r\u001b[2K");   // the next reading takes this line
+            // The same line, until the next reading is in.
+            Console.Write(ClearLine);
+            if (ownLine)
+                AnsiConsole.Markup($"  [grey]{Markup.Escape(point.Label)}: reading again ({readings + 1})…[/]");
             return true;
         }
         AnsiConsole.WriteLine();
@@ -441,7 +465,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                     }
                 }
 
-                var reading = ReadRow(test, channel, point, source, Take);
+                var reading = ReadRow(test, channel, point, source, ownLine: false, Take);
                 var result = new MeterPointResult(point, source, reading, simulated);
                 results.Add(result);
                 bench.Log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {reading?.ToString("R", CultureInfo.InvariantCulture) ?? "skipped"} {point.Unit} "
@@ -522,7 +546,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                     if (!control.CanSetCalFactor && (point.CalFactorPercent ?? 100) != _calFactorSwitch)
                         SetCalFactorSwitch(point.CalFactorPercent ?? 100);
                     var settings = baseline.With(point.Meter);
-                    reading = ReadRow(test, channel, point, source, () => ConsoleUi.Attempt($"Reading '{point.Label}'", () =>
+                    reading = ReadRow(test, channel, point, source, ownLine: source != ReadingSource.Operator, () => ConsoleUi.Attempt($"Reading '{point.Label}'", () =>
                     {
                         if (settings.StoreReference || applied != (settings, point.CalFactorPercent))
                         {
