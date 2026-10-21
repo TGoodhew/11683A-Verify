@@ -247,8 +247,12 @@ reading and min/max limits, and the page each one came from.
 | E4419B | The E4418B's tests and limits, on channels A and B | As the E4418B, per channel |
 
 **With the meter on the bus you only set the 11683A.** The app presets the meter and makes every setting the
-manual asks for: units, range, filter, resolution, cal factor, zero (with the 11683A in STANDBY, after its 60 s
-drift) and CAL (on the 11683A's 1 mW, not the meter's own POWER REF). It asks you to set the 11683A only when a
+manual asks for: units, range, filter, resolution, cal factor, zero and CAL. For the zero, the 11683A is in
+STANDBY, and the app waits at least 60 s and then until the meter's readings stop drifting: within 1.5% of the
+zero range's full scale per minute (47 nW/min at 3 µW), fitted over the last minute, for at most 5 minutes. The
+countdown shows the reading and the drift, and Enter goes on at any time. After a big range change, such as
+100 mW down to 3 µW when the cable moves to the next channel, the 11683A can take minutes. The CAL is on the
+11683A's 1 mW, not the meter's own POWER REF. It asks you to set the 11683A only when a
 row changes it: the zero carryover rows, which change only the meter's range, run straight through. A bus DC
 calibrator (`--dc-source 5440B`) is set by the app too. Each reading is repeated until two agree, because the
 meter's own settling doesn't cover the 11683A's.

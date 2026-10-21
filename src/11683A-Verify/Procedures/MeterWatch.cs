@@ -6,7 +6,7 @@ namespace Verify11683A.App.Procedures;
 /// Reads a power meter over and over on a thread of its own, so the countdown while the 11683A settles can show what
 /// the meter sees. A reading starts only while the time left is longer than the last one took, so a slow filter (an
 /// E441x at 512 takes about 26 s) does not hold the countdown up. A failed reading ends the watch quietly: the step
-/// that follows meets the fault and reports it.
+/// that follows meets the fault and reports it. The readings are kept with their times, so the drift can be judged.
 /// </summary>
 public sealed class MeterWatch : IDisposable
 {
@@ -14,10 +14,9 @@ public sealed class MeterWatch : IDisposable
     private readonly Func<TimeSpan> _timeLeft;
     private readonly Thread _thread;
     private readonly Lock _lock = new();
+    private readonly long _started = Stopwatch.GetTimestamp();
+    private readonly List<(TimeSpan At, double Value)> _history = [];
     private volatile bool _stopping;
-    private double? _latest;
-    private double? _previous;
-    private int _count;
 
     public MeterWatch(Func<double> read, Func<TimeSpan> timeLeft)
     {
@@ -33,8 +32,39 @@ public sealed class MeterWatch : IDisposable
         get
         {
             lock (_lock)
-                return (_latest, _previous, _count);
+                return (_history.Count > 0 ? _history[^1].Value : null, _history.Count > 1 ? _history[^2].Value : null, _history.Count);
         }
+    }
+
+    /// <summary>The window the drift is judged over: long enough that a reading's noise does not pass for drift.</summary>
+    public static readonly TimeSpan DriftWindow = TimeSpan.FromMinutes(1);
+
+    /// <summary>How fast the readings are moving, per minute, over the last <see cref="DriftWindow"/>; null until it is covered.</summary>
+    public double? DriftPerMinute
+    {
+        get
+        {
+            lock (_lock)
+                return Drift(_history, DriftWindow);
+        }
+    }
+
+    /// <summary>
+    /// The least-squares slope of the readings in the last <paramref name="window"/>, per minute: null until there are
+    /// three readings spanning at least two-thirds of it. A fit, not the last two readings, so the noise averages out.
+    /// </summary>
+    public static double? Drift(IReadOnlyList<(TimeSpan At, double Value)> readings, TimeSpan window)
+    {
+        if (readings.Count == 0)
+            return null;
+        var from = readings[^1].At - window;
+        var recent = readings.Where(r => r.At >= from).ToList();
+        if (recent.Count < 3 || recent[^1].At - recent[0].At < window * 2 / 3)
+            return null;
+        var meanT = recent.Average(r => r.At.TotalMinutes);
+        var meanV = recent.Average(r => r.Value);
+        var sxx = recent.Sum(r => Math.Pow(r.At.TotalMinutes - meanT, 2));
+        return recent.Sum(r => (r.At.TotalMinutes - meanT) * (r.Value - meanV)) / sxx;
     }
 
     /// <summary>What ended the watch, if a reading failed.</summary>
@@ -57,11 +87,7 @@ public sealed class MeterWatch : IDisposable
             {
                 var value = _read();
                 lock (_lock)
-                {
-                    _previous = _latest;
-                    _latest = value;
-                    _count++;
-                }
+                    _history.Add((Stopwatch.GetElapsedTime(_started), value));
             }
             catch (Exception ex)
             {
