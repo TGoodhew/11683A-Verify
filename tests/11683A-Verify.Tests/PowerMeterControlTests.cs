@@ -47,6 +47,7 @@ public class PowerMeterControlTests
             "UNIT1:POW W", "SENS1:AVER:STAT ON;:SENS1:AVER:COUN:AUTO OFF;:SENS1:AVER:COUN 512", "DISP:WIND1:RES 4", "SENS1:CORR:CFAC 100",
             "CAL1:ZERO:AUTO ONCE",
             "CAL1:RCF 100", "CAL1:AUTO ONCE",
+            "INIT1:CONT OFF",
         ], session.Commands);
         Assert.DoesNotContain(session.Sent, c => c.StartsWith("CAL1:ALL", StringComparison.Ordinal));   // would zero with 1 mW applied
     }
@@ -81,6 +82,19 @@ public class PowerMeterControlTests
         Assert.Equal(20000, session.TimeoutMilliseconds);
 
         Assert.Equal(-1e-9, meter.Read());   // the retry
+    }
+
+    [Fact]
+    public void E441x_turns_free_run_off_before_every_reading()
+    {
+        // A front-panel key puts the meter in local, which sets free run, and READ? then hangs with -213 INIT ignored.
+        var session = E441x("E4419B").Answer("READ2? DEF,DEF,(@2)", "-1.0E-009");
+        var meter = new E441xPowerMeter(session, 2);
+        meter.Identify();
+        meter.Read();
+        meter.Read();
+        var sent = session.Sent.Where(c => c.StartsWith("INIT2", StringComparison.Ordinal) || c.StartsWith("READ2", StringComparison.Ordinal));
+        Assert.Equal(["INIT2:CONT OFF", "READ2? DEF,DEF,(@2)", "INIT2:CONT OFF", "READ2? DEF,DEF,(@2)"], sent);
     }
 
     [Fact]

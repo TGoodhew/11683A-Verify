@@ -164,6 +164,9 @@ public sealed class E441xPowerMeter(IVisaSession session, int channel = 1) : IPo
         session.TimeoutMilliseconds = Math.Max(timeout, (int)(2000 * _filter / ReadingsPerSecond) + 10000);
         try
         {
+            // READ? hangs with "-213 INIT ignored" in free run (p. 2-35), and any front-panel key puts the meter in
+            // local, which sets free run (p. 15-3): seen on the bench, channel B, while a retry waited.
+            session.Write($"INIT{channel}:CONT OFF");
             var value = ScpiNumber.Parse(session.Query(_twoChannel ? $"READ{channel}? DEF,DEF,(@{channel})" : $"READ{channel}?"), "a power reading");
             CheckError();
             return value;
