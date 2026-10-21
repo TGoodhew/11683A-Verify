@@ -76,26 +76,11 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                     () => OpenIdentified(useBus, channel), bench.Log, canSkip: false)!;
                 identity = meter.Description;
                 bench.Log.Write($"Meter test {test.Id} channel {channel}: {meter.Description}");
-                var heading = ShortTitle(test) + (test.PerChannel && definition.Channels.Count > 1 ? $" — channel {channel}" : "");
-                screens.Begin(StepName(test, channel), heading);
+                screens.Begin(StepName(test, channel), ShortTitle(test) + (test.PerChannel && definition.Channels.Count > 1 ? $" — channel {channel}" : ""));
                 var result = RunTest(test, channel, meter);
                 results.Add(result);
                 AnsiConsole.WriteLine();
-                // A copy: a rerun replaces result, and the screen keeps the failed attempt's table too.
-                var first = result;
-                screens.Report(() => AnsiConsole.Write(MeterReport.Table(first)));
-                // A failed test can be run again at once, still connected; the last attempt is recorded, and a note says so.
-                for (var attempt = 2; _stopped is null && result.Verdict == Verdict.Fail && OfferRerun(test, channel); attempt++)
-                {
-                    bench.Log.Write($"Meter test {test.Id} channel {channel}: FAIL; run again (attempt {attempt})");
-                    _reruns[(test.Id, channel)] = attempt;
-                    screens.Begin(StepName(test, channel), $"{heading} (attempt {attempt})");
-                    result = RunTest(test, channel, meter);
-                    results[^1] = result;
-                    AnsiConsole.WriteLine();
-                    var shown = result;
-                    screens.Report(() => AnsiConsole.Write(MeterReport.Table(shown)));
-                }
+                screens.Report(() => AnsiConsole.Write(MeterReport.Table(result)));
                 if (_stopped is not null)
                     break;
                 screens.Pause();
@@ -127,10 +112,10 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 results.Add(new MeterTestResult(test.Id, test.Title, test.Source, channel,
                     [.. test.Points.Select(p => new MeterPointResult(p, test.SourceOf(p), null, false))]));
         }
-        foreach (var ((testId, channel), attempts) in _reruns)
+        foreach (var ((testId, channel, label), readings) in _rereads)
         {
             var test = definition.Tests.First(t => t.Id == testId);
-            notes.Add($"{StepName(test, channel)} failed and was run again at once: {attempts} attempts; the last is recorded.");
+            notes.Add($"{StepName(test, channel)}, {label}: outside its limits and read again at once, {readings} readings in all; the last is recorded.");
         }
         if (definition.Ambiguities.Count > 0)
             notes.Add($"Transcription notes for {definition.FileName}: " + string.Join(" ", definition.Ambiguities));
@@ -193,17 +178,35 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         return accept ? last : null;
     }
 
-    /// <summary>The tests run again straight after a FAIL, and how many attempts each had in all.</summary>
-    private readonly Dictionary<(string TestId, string Channel), int> _reruns = [];
+    /// <summary>The rows read again straight after a reading outside their limits, and how many readings each had in all.</summary>
+    private readonly Dictionary<(string TestId, string Channel, string Label), int> _rereads = [];
 
-    /// <summary>After a FAIL, at the console: run the test again now? Not offered to a scripted run.</summary>
-    private bool OfferRerun(MeterTest test, string channel)
+    /// <summary>
+    /// Takes a row's reading with <paramref name="read"/> and, while it is outside the limits, offers at the console to
+    /// read the row again at once (the operator can check the 11683A and the meter first). The last reading counts.
+    /// </summary>
+    private double? ReadRow(MeterTest test, string channel, MeterTestPoint point, ReadingSource source, Func<double?> read)
     {
-        if (!ConsoleUi.Interactive)
+        var reading = read();
+        for (var count = 2; reading is { } r && new MeterPointResult(point, source, r, false).Pass == false && OfferReread(test, channel, point, r); count++)
+        {
+            bench.Log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {r.ToString("R", CultureInfo.InvariantCulture)} {point.Unit} is outside its limits; read again (reading {count})");
+            _rereads[(test.Id, channel, point.Label)] = count;
+            reading = read();
+        }
+        return reading;
+    }
+
+    /// <summary>After a reading outside its limits, at the console: read the row again? Not offered to a scripted run.</summary>
+    private bool OfferReread(MeterTest test, string channel, MeterTestPoint point, double reading)
+    {
+        if (!ConsoleUi.Interactive || _stopped is not null)
             return false;
-        var again = ConsoleUi.Confirm($"{StepName(test, channel)} failed. Run it again now?", defaultValue: true);
+        var unit = Markup.Escape(MeterUnits.Display(point.Unit));
+        AnsiConsole.MarkupLine($"  [red]✗ {Markup.Escape(point.Label)}: {Fmt(reading, point)} {unit}[/], outside {Fmt(point.Min, point)} to {Fmt(point.Max, point)} {unit}.");
+        var again = ConsoleUi.Confirm("Read this step again?", defaultValue: true);
         if (!again)
-            bench.Log.Write($"Meter test {test.Id} channel {channel}: FAIL; not run again");
+            bench.Log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': outside its limits; not read again");
         return again;
     }
 
@@ -382,41 +385,45 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                     AnsiConsole.MarkupLine($"  [grey]DC calibrator set to {Si.Format(volts, "V", 5)}[/]");
                 }
 
-                double? reading;
                 var simulated = false;
-                if (Sim is not null)
+                double? Take()
                 {
-                    if (bench.Walkthrough && source != ReadingSource.Operator
-                        && !AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip, X to exit) [simulator: Enter sets it]"))
+                    if (Sim is not null)
                     {
-                        reading = null;
-                    }
-                    else
-                    {
-                        ApplySimulation(point);
-                        if (source == ReadingSource.Operator)
+                        if (bench.Walkthrough && source != ReadingSource.Operator
+                            && !AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip, X to exit) [simulator: Enter sets it]"))
                         {
-                            // The simulator cannot read a display: it offers the expected value with a last-digit wobble, which the
-                            // walkthrough operator can accept or overtype (and a scripted run just takes).
-                            var display = point.Expected + (point.Max - point.Min) * 0.02 * (_simOperator.NextDouble() - 0.5);
-                            reading = bench.Walkthrough ? AskReading(point, display) : display;
-                            simulated = reading == display;
+                            return null;
                         }
                         else
                         {
-                            reading = Read(point, source, meter);
+                            ApplySimulation(point);
+                            if (source == ReadingSource.Operator)
+                            {
+                                // The simulator cannot read a display: it offers the expected value with a last-digit wobble, which the
+                                // walkthrough operator can accept or overtype (and a scripted run just takes).
+                                var display = point.Expected + (point.Max - point.Min) * 0.02 * (_simOperator.NextDouble() - 0.5);
+                                var typed = bench.Walkthrough ? AskReading(point, display) : display;
+                                simulated = typed == display;
+                                return typed;
+                            }
+                            else
+                            {
+                                return Read(point, source, meter);
+                            }
                         }
                     }
-                }
-                else if (source == ReadingSource.Operator)
-                {
-                    reading = AskReading(point);
-                }
-                else
-                {
-                    reading = AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip, X to exit)") ? Read(point, source, meter) : null;
+                    else if (source == ReadingSource.Operator)
+                    {
+                        return AskReading(point);
+                    }
+                    else
+                    {
+                        return AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip, X to exit)") ? Read(point, source, meter) : null;
+                    }
                 }
 
+                var reading = ReadRow(test, channel, point, source, Take);
                 var result = new MeterPointResult(point, source, reading, simulated);
                 results.Add(result);
                 bench.Log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {reading?.ToString("R", CultureInfo.InvariantCulture) ?? "skipped"} {point.Unit} "
@@ -497,7 +504,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                     if (!control.CanSetCalFactor && (point.CalFactorPercent ?? 100) != _calFactorSwitch)
                         SetCalFactorSwitch(point.CalFactorPercent ?? 100);
                     var settings = baseline.With(point.Meter);
-                    reading = ConsoleUi.Attempt($"Reading '{point.Label}'", () =>
+                    reading = ReadRow(test, channel, point, source, () => ConsoleUi.Attempt($"Reading '{point.Label}'", () =>
                     {
                         if (settings.StoreReference || applied != (settings, point.CalFactorPercent))
                         {
@@ -511,7 +518,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                             ReadingSource.Recorder => Read(point, source, (IPowerMeter)control),
                             _ => ReadSettled(control, point, settings.Display ?? MeterDisplay.Watts),
                         };
-                    }, log, canSkip: true);
+                    }, log, canSkip: true));
                 }
 
                 var result = new MeterPointResult(point, source, reading, false);
