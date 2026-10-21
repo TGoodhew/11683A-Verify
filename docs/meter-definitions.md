@@ -30,6 +30,24 @@ file in this format: the app checks it on load and refuses one it cannot run.
 | `perChannel` | Run once per selected channel. |
 | `equipment`, `setup`, `notes` | Shown to the operator before the rows: the manual's equipment and set-up steps, condensed but faithful. |
 | `points` | The table rows, in the manual's order. |
+| `meter` | The meter's settings after Preset (see *Meter settings*). With it, a meter on the bus is set up by the app and the operator only sets the 11683A; without it, the operator follows `setup`. |
+| `zero` | The zero: `calibrator` (the 11683A's switches for it, normally STANDBY) and `settleSeconds` (e.g. 60 for the STANDBY drift). |
+| `cal` | The CAL: `calibrator` (normally CALIBRATE, 1 mW), `referenceCalFactorPercent` (default 100), and `adjustTo` when CAL is a front-panel adjustment (436A CAL ADJ, e.g. `1.000 ±0.002 mW`): the operator turns it while the app shows the reading. |
+
+## Meter settings
+
+Used by a test's `meter` and a row's `meter`; a row's settings go on top of the test's, and a setting left out is
+left as it is.
+
+| Field | Meaning |
+|---|---|
+| `display` | `Watts`, `Dbm` or `DbRelative`. |
+| `range` | A fixed range, 1 the most sensitive; `0` for autorange. |
+| `filter` | The averaging length; `0` for the meter's automatic filter. |
+| `resolution` | The display resolution in the meter's terms (E441x 1–4). |
+| `storeReference` | Before reading, store the present input as the dB REL reference (436A dB REF, 438A REL). |
+
+A driver refuses a setting it has no bus code for, so a file can't ask for something the meter won't do.
 
 ## Point (row)
 
@@ -40,6 +58,7 @@ file in this format: the app checks it on load and refuses one it cannot run.
 | `meterSetting` | What to set on the meter, in the operator's words. |
 | `meterRange` | The meter's RANGE position where it decides the recorder output's full scale (435A/435B). |
 | `calFactorPercent` | The meter's CAL FACTOR setting, when the test steps it. |
+| `meter` | The row's meter settings over the bus, on top of the test's, e.g. `{"range": 3}` or `{"display": "Dbm"}`. |
 | `expected` | The nominal reading. Where the manual prints only limits, the file says how it was derived. |
 | `unit` | `W`, `mW`, `uW`, `nW`, `dBm`, `dB`, `mV` or `V`. |
 | `min`, `max` | The manual's limits, as printed (a reversed pair is corrected and noted). |
@@ -51,8 +70,9 @@ Rules the loader enforces:
 - `min` ≤ `max`;
 - ranges must be 11683A positions;
 - `Recorder` rows must be in mV or V;
-- `Meter` rows must be in a power unit the bus driver's watts can be converted to (`dB` is relative, so a dB
-  row must be `Operator`).
+- `Meter` rows must match the meter's display: a power unit (or dBm) with `Watts`, dBm with `Dbm`, dB with
+  `DbRelative`;
+- a `zero` or `cal` needs the test's `meter`.
 
 A reading passes when it is within `min`…`max`; there is no guard band, because these are the manuals' own
 acceptance limits.

@@ -30,5 +30,12 @@ public sealed class LoggingVisaSession(IVisaSession inner, Action<string> log) :
         inner.Clear();
     }
 
+    public byte ReadStatusByte()
+    {
+        var status = inner.ReadStatusByte();
+        log($"{ResourceName} -- serial poll: {status}");
+        return status;
+    }
+
     public void Dispose() => inner.Dispose();
 }

@@ -10,7 +10,7 @@
   ],
   "warmupMinutes": 30,
   "notes": [
-    "Over SCPI the app reads UNIT1:POW? and FETC1? without changing the meter's set-up.",
+    "Over SCPI the app presets (SYST:PRES), sets watts, the filter and the resolution, zeroes (CAL1:ZERO:AUTO ONCE) with the 11683A in STANDBY and calibrates (CAL1:AUTO ONCE) on the 11683A's 1 mW, waiting with *OPC?, and takes settled readings with READ1? (Programming Guide E4418-90066, pp. 39-40, 93-95, 237).",
     "For an E4419B, choose the E4419B (data/meters/E4419B.json): it runs each test on both channels."
   ],
   "tests": [
@@ -29,6 +29,18 @@
         "System, Inputs, Input Settings, More, Filter: On, Mode Man, Length 512, Enter.",
         "Zero/Cal, Zero; wait about 10 s, then 30 s more before reading."
       ],
+      "meter": {
+        "display": "Watts",
+        "filter": 512
+      },
+      "zero": {
+        "calibrator": {
+          "range": "3uW",
+          "function": "Standby",
+          "polarity": "Normal"
+        },
+        "settleSeconds": 60
+      },
       "points": [
         {
           "label": "Zero, filter 512",
@@ -38,7 +50,7 @@
             "polarity": "Normal"
           },
           "meterSetting": "W, filter 512, after Zero (no Cal)",
-          "expected": 0.0,
+          "expected": 0,
           "unit": "nW",
           "min": -76.4,
           "max": 76.4,
@@ -65,6 +77,26 @@
         "11683A FUNCTION CALIBRATE, RANGE 1 mW; press Cal.",
         "Set the 11683A RANGE to each row."
       ],
+      "meter": {
+        "display": "Watts",
+        "filter": 512
+      },
+      "zero": {
+        "calibrator": {
+          "range": "3uW",
+          "function": "Standby",
+          "polarity": "Normal"
+        },
+        "settleSeconds": 60
+      },
+      "cal": {
+        "calibrator": {
+          "range": "1mW",
+          "function": "Calibrate",
+          "polarity": "Normal"
+        },
+        "referenceCalFactorPercent": 100
+      },
       "points": [
         {
           "label": "3 µW",
@@ -87,7 +119,7 @@
             "polarity": "Normal"
           },
           "meterSetting": "W, filter 512",
-          "expected": 10.0,
+          "expected": 10,
           "unit": "uW",
           "min": 9.9,
           "max": 10.1
@@ -113,7 +145,7 @@
             "polarity": "Normal"
           },
           "meterSetting": "W, filter 512",
-          "expected": 100.0,
+          "expected": 100,
           "unit": "uW",
           "min": 99.5,
           "max": 100.5
@@ -126,10 +158,10 @@
             "polarity": "Normal"
           },
           "meterSetting": "W, filter 512",
-          "expected": 316.0,
+          "expected": 316,
           "unit": "uW",
           "min": 314.4,
-          "max": 317.0,
+          "max": 317,
           "note": "Keysight edition limits; the Agilent edition prints 314.00/318.00 µW."
         },
         {
@@ -140,7 +172,7 @@
             "polarity": "Normal"
           },
           "meterSetting": "W, filter 512",
-          "expected": 1.0,
+          "expected": 1,
           "unit": "mW",
           "min": 0.995,
           "max": 1.005
@@ -221,6 +253,31 @@
         "DC calibrator 144.93 mV, output '+'; 11683A FUNCTION CALIBRATE; press Cal.",
         "Set the DC calibrator to each row's voltage and the meter filter to the row's value."
       ],
+      "meter": {
+        "display": "Watts",
+        "filter": 512,
+        "resolution": 4
+      },
+      "zero": {
+        "calibrator": {
+          "range": "100mW",
+          "function": "Standby",
+          "polarity": "Normal",
+          "reference": "Ext",
+          "externalVolts": 0
+        },
+        "settleSeconds": 60
+      },
+      "cal": {
+        "calibrator": {
+          "range": "100mW",
+          "function": "Calibrate",
+          "polarity": "Normal",
+          "reference": "Ext",
+          "externalVolts": 0.14493
+        },
+        "referenceCalFactorPercent": 100
+      },
       "points": [
         {
           "label": "0.00045831 V",
@@ -232,6 +289,9 @@
             "externalVolts": 0.00045831
           },
           "meterSetting": "W, filter 256, resolution 4",
+          "meter": {
+            "filter": 256
+          },
           "expected": 3.1623,
           "unit": "uW",
           "min": 3.0977,
@@ -248,7 +308,10 @@
             "externalVolts": 0.0014493
           },
           "meterSetting": "W, filter 256, resolution 4",
-          "expected": 10.0,
+          "meter": {
+            "filter": 256
+          },
+          "expected": 10,
           "unit": "uW",
           "min": 9.904,
           "max": 10.096,
@@ -264,6 +327,9 @@
             "externalVolts": 0.0045831
           },
           "meterSetting": "W, filter 256, resolution 4",
+          "meter": {
+            "filter": 256
+          },
           "expected": 31.6228,
           "unit": "uW",
           "min": 31.428,
@@ -280,7 +346,10 @@
             "externalVolts": 0.014493
           },
           "meterSetting": "W, filter 64, resolution 4",
-          "expected": 100.0,
+          "meter": {
+            "filter": 64
+          },
+          "expected": 100,
           "unit": "uW",
           "min": 99.49,
           "max": 100.51,
@@ -296,6 +365,9 @@
             "externalVolts": 0.045831
           },
           "meterSetting": "W, filter 64, resolution 4",
+          "meter": {
+            "filter": 64
+          },
           "expected": 316.2278,
           "unit": "uW",
           "min": 314.72,
@@ -312,7 +384,10 @@
             "externalVolts": 0.14493
           },
           "meterSetting": "W, filter 16, resolution 4",
-          "expected": 1.0,
+          "meter": {
+            "filter": 16
+          },
+          "expected": 1,
           "unit": "mW",
           "min": 0.9954,
           "max": 1.0047,
@@ -328,6 +403,9 @@
             "externalVolts": 0.45912
           },
           "meterSetting": "W, filter 16, resolution 4",
+          "meter": {
+            "filter": 16
+          },
           "expected": 3.1623,
           "unit": "mW",
           "min": 3.1477,
@@ -344,7 +422,10 @@
             "externalVolts": 1.4588
           },
           "meterSetting": "W, filter 16, resolution 4",
-          "expected": 10.0,
+          "meter": {
+            "filter": 16
+          },
+          "expected": 10,
           "unit": "mW",
           "min": 9.954,
           "max": 10.046,
@@ -360,6 +441,9 @@
             "externalVolts": 4.6872
           },
           "meterSetting": "W, filter 16, resolution 4",
+          "meter": {
+            "filter": 16
+          },
           "expected": 31.6228,
           "unit": "mW",
           "min": 31.477,
@@ -376,7 +460,10 @@
             "externalVolts": 15.588
           },
           "meterSetting": "W, filter 16, resolution 4",
-          "expected": 100.0,
+          "meter": {
+            "filter": 16
+          },
+          "expected": 100,
           "unit": "mW",
           "min": 99.54,
           "max": 100.46,

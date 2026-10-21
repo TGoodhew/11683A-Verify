@@ -53,6 +53,17 @@ public sealed class ScriptedVisaSession : IVisaSession
 
     public void Clear() => Clears++;
 
+    /// <summary>Status bytes for successive serial polls; 0 once they are used up.</summary>
+    public Queue<byte> StatusBytes { get; } = new();
+
+    public int SerialPolls { get; private set; }
+
+    public byte ReadStatusByte()
+    {
+        SerialPolls++;
+        return StatusBytes.Count > 0 ? StatusBytes.Dequeue() : (byte)0;
+    }
+
     public void Dispose() { }
 
     /// <summary>The commands sent, without the queries.</summary>

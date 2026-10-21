@@ -165,7 +165,15 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     {
         if (Sim is { } sim)
         {
-            _simMeter = new SimulatedPowerMeter(sim) { RangeResponse = RangeResponse(), Description = $"SIMULATED {definition.Model}" };
+            // A simulated 436A plays its front-panel-only CAL ADJ and CAL FACTOR switch too.
+            var frontPanelCal = definition.BusDriver == "436A";
+            _simMeter = new SimulatedPowerMeter(sim)
+            {
+                RangeResponse = RangeResponse(),
+                Description = $"SIMULATED {definition.Model}",
+                CanCalibrate = !frontPanelCal,
+                CanSetCalFactor = !frontPanelCal,
+            };
             return _simMeter;
         }
         if (!useBus)
@@ -193,6 +201,9 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
 
     private MeterTestResult? RunTest(MeterTest test, string channel, IPowerMeter meter)
     {
+        if (test.Automated && meter.OverBus && meter is IPowerMeterControl control)
+            return RunAutomated(test, channel, control);
+
         AnsiConsole.MarkupLine($"[grey]{Markup.Escape(test.Source)}[/]");
         AnsiConsole.MarkupLine($"Equipment: {Markup.Escape(string.Join("; ", test.Equipment))}");
         for (var i = 0; i < test.Setup.Count; i++)
@@ -283,6 +294,255 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             _simMeter.CalFactorPercent = 100;
         dc?.Standby();
         return new MeterTestResult(test.Id, test.Title, test.Source, channel, results);
+    }
+
+    /// <summary>
+    /// A test whose meter steps the app makes over the bus: Preset and the test's settings, the zero and the CAL, then
+    /// each row's settings and a settled reading. The operator is asked only to set the 11683A, and only when a row
+    /// changes it; a 436A's CAL ADJ and CAL FACTOR switch are the exceptions, being front-panel only.
+    /// </summary>
+    private MeterTestResult RunAutomated(MeterTest test, string channel, IPowerMeterControl control)
+    {
+        AnsiConsole.MarkupLine($"[grey]{Markup.Escape(test.Source)}[/]");
+        AnsiConsole.MarkupLine($"Equipment: {Markup.Escape(string.Join("; ", test.Equipment))}");
+        AnsiConsole.MarkupLine("[grey]The manual's steps. The app makes the meter's settings, zero and CAL over the bus; you set the 11683A when asked.[/]");
+        for (var i = 0; i < test.Setup.Count; i++)
+            AnsiConsole.MarkupLine($"[grey]  {i + 1}. {Markup.Escape(test.Setup[i])}[/]");
+        foreach (var note in test.Notes)
+            AnsiConsole.MarkupLine($"[grey]  • {Markup.Escape(note)}[/]");
+
+        var dc = test.Points.Any(p => p.Calibrator?.ExternalVolts is not null) ? DcSource() : null;
+        if (dc is not null)
+        {
+            dc.Standby();
+            AnsiConsole.MarkupLine($"The app sets the DC calibrator ([bold]{Markup.Escape(dc.Description)}[/]): connect its [bold]OUTPUT HI/LO[/] to REF EXT. It is in Standby.");
+        }
+        if ((Sim is null || bench.Walkthrough) && !AskGo("Make the connections above, then press Enter (S to skip this test)"))
+            return new MeterTestResult(test.Id, test.Title, test.Source, channel, []);
+
+        _calibratorNow = null;
+        _calFactorSwitch = 100;
+        var baseline = test.Meter!;
+        control.Preset();
+        control.Apply(baseline, null);
+        (MeterSettings, double?)? applied = (baseline, null);
+        bench.Log.Write($"{definition.Model} {test.Id} {channel}: preset; {baseline}");
+
+        if (test.Zero is { } zero)
+        {
+            SetCalibrator(zero.Calibrator, dc, "for the zero", allowSkip: false);
+            Settle(zero.SettleSeconds);
+            Busy("Zeroing the meter", control.Zero);
+            AnsiConsole.MarkupLine("[green]✓[/] Meter zeroed.");
+        }
+        if (test.Cal is { } cal)
+        {
+            SetCalibrator(cal.Calibrator, dc, "for the CAL", allowSkip: false);
+            Settle(cal.SettleSeconds);
+            if (control.CanCalibrate)
+            {
+                Busy("CAL on the 11683A", () => control.Calibrate(cal.ReferenceCalFactorPercent));
+                AnsiConsole.MarkupLine($"[green]✓[/] Meter calibrated (reference cal factor {cal.ReferenceCalFactorPercent.ToString("0.#", CultureInfo.InvariantCulture)}%).");
+            }
+            else
+            {
+                AdjustByHand(control, cal.AdjustTo ?? "1.000 mW");
+            }
+        }
+
+        var results = new List<MeterPointResult>();
+        foreach (var point in test.Points)
+        {
+            var source = test.SourceOf(point);
+            AnsiConsole.MarkupLine($"[bold]{Markup.Escape(point.Label)}[/]  [grey]meter:[/] {Markup.Escape(point.MeterSetting)}");
+            double? reading = null;
+            if (SetCalibrator(point.Calibrator, dc, null, allowSkip: true))
+            {
+                if (!control.CanSetCalFactor && (point.CalFactorPercent ?? 100) != _calFactorSwitch)
+                    SetCalFactorSwitch(point.CalFactorPercent ?? 100);
+                var settings = baseline.With(point.Meter);
+                if (settings.StoreReference || applied != (settings, point.CalFactorPercent))
+                {
+                    control.Apply(settings, point.CalFactorPercent);
+                    applied = (settings, point.CalFactorPercent);
+                    bench.Log.Write($"{definition.Model} settings for '{point.Label}': {settings}, cal factor {point.CalFactorPercent?.ToString(CultureInfo.InvariantCulture) ?? "100"}");
+                }
+                reading = source switch
+                {
+                    ReadingSource.Operator => AskReading(point),
+                    ReadingSource.Recorder => Read(point, source, (IPowerMeter)control),
+                    _ => ReadSettled(control, point, settings.Display ?? MeterDisplay.Watts),
+                };
+            }
+
+            var result = new MeterPointResult(point, source, reading, false);
+            results.Add(result);
+            bench.Log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {reading?.ToString("R", CultureInfo.InvariantCulture) ?? "skipped"} {point.Unit} "
+                + $"[{point.Min}, {point.Max}] {source}, automated");
+            AnsiConsole.MarkupLine(reading is { } r
+                ? $"  {(result.Pass == true ? "[green]✓[/]" : "[red]✗[/]")} {Fmt(r, point)} {Markup.Escape(MeterUnits.Display(point.Unit))} "
+                  + $"[grey](limits {Fmt(point.Min, point)} to {Fmt(point.Max, point)})[/]"
+                : "  [yellow]skipped[/]");
+        }
+
+        if (_calFactorSwitch != 100)
+            SetCalFactorSwitch(100);
+        dc?.Standby();
+        return new MeterTestResult(test.Id, test.Title, test.Source, channel, results);
+    }
+
+    /// <summary>The 11683A's switches as the operator last set them in this test; null before the first.</summary>
+    private CalibratorSetting? _calibratorNow;
+
+    /// <summary>A 436A's CAL FACTOR switch, as the operator last set it.</summary>
+    private double _calFactorSwitch = 100;
+
+    /// <summary>
+    /// Has the operator set the 11683A to <paramref name="setting"/>, unless it is already so; a bus DC calibrator is
+    /// set by the app. Returns false if the operator skipped the row.
+    /// </summary>
+    private bool SetCalibrator(CalibratorSetting? setting, IDcSource? dc, string? purpose, bool allowSkip)
+    {
+        if (setting is null)
+            return true;
+        var knobs = setting with { ExternalVolts = null };
+        if (_calibratorNow is not null && _calibratorNow with { ExternalVolts = null } == knobs && (dc is not null || _calibratorNow == setting))
+        {
+            ApplyDcSource(setting, dc);
+            _calibratorNow = setting;
+            return true;
+        }
+
+        AnsiConsole.MarkupLine($"Set the 11683A{(purpose is null ? "" : " " + purpose)}: [bold]{Markup.Escape(Describe(setting, dc))}[/]");
+        if ((Sim is null || bench.Walkthrough))
+        {
+            var prompt = "Press Enter when set" + (allowSkip ? " (S to skip this row)" : "") + (bench.Walkthrough ? " [simulator: Enter sets it]" : "");
+            if (allowSkip ? !AskGo(prompt) : !Ask(prompt))
+                return false;
+        }
+        if (Sim is { } sim)
+        {
+            sim.LinePowered = setting.Reference == ReferenceSwitch.Int;
+            sim.SetReference(setting.Reference);
+            sim.SetPolarity(setting.Polarity);
+            sim.SetRange(setting.Range);
+            sim.SetFunction(setting.Function);
+            if (dc is null && setting.ExternalVolts is { } v)
+                sim.ExternalSourceVolts = v * (1 + 3e-6);   // a hand-set calibrator a few ppm off
+        }
+        ApplyDcSource(setting, dc);
+        _calibratorNow = setting;
+        return true;
+    }
+
+    /// <summary>The 11683A's switches for the operator; with a bus calibrator its voltage is the app's to set.</summary>
+    private static string Describe(CalibratorSetting setting, IDcSource? dc) =>
+        dc is null ? setting.ToString() : (setting with { ExternalVolts = null }).ToString().Replace(", DC calibrator 0 V", "", StringComparison.Ordinal);
+
+    private void ApplyDcSource(CalibratorSetting setting, IDcSource? dc)
+    {
+        if (dc is null || setting.Reference != ReferenceSwitch.Ext)
+            return;
+        if (setting.ExternalVolts is { } v and not 0)
+        {
+            dc.Output(v);
+            bench.Log.Write($"DC calibrator set to {v.ToString("R", CultureInfo.InvariantCulture)} V");
+            AnsiConsole.MarkupLine($"  [grey]DC calibrator set to {Si.Format(v, "V", 5)}[/]");
+        }
+        else
+        {
+            dc.Standby();
+            AnsiConsole.MarkupLine("  [grey]DC calibrator in Standby (0 V)[/]");
+        }
+    }
+
+    /// <summary>Waits for the 11683A to settle (its STANDBY drift takes up to 60 s), with a countdown.</summary>
+    private void Settle(int seconds)
+    {
+        if (seconds <= 0 || Sim is not null)
+            return;
+        AnsiConsole.Status().Start($"Letting the 11683A settle: {seconds} s", ctx =>
+        {
+            for (var left = seconds; left > 0; left--)
+            {
+                ctx.Status($"Letting the 11683A settle: {left} s");
+                Thread.Sleep(1000);
+            }
+        });
+    }
+
+    private static void Busy(string what, Action action)
+    {
+        if (ConsoleUi.Interactive)
+            AnsiConsole.Status().Start(what + "…", _ => action());
+        else
+            action();
+    }
+
+    /// <summary>
+    /// Readings until two in a row agree to within a fifth of the half-tolerance (the meter's own settling covers its
+    /// filter, not the 11683A's), and their mean; at most eight.
+    /// </summary>
+    private double? ReadSettled(IPowerMeterControl control, MeterTestPoint point, MeterDisplay display)
+    {
+        double Next()
+        {
+            var value = control.Read();
+            return display == MeterDisplay.Watts ? MeterUnits.FromWatts(point.Unit, value)!.Value : value;
+        }
+
+        var band = Math.Max((point.Max - point.Min) / 2 * 0.2, 1e-12);
+        var previous = Next();
+        for (var i = 0; i < 7; i++)
+        {
+            var next = Next();
+            if (Math.Abs(next - previous) <= band)
+                return (previous + next) / 2;
+            previous = next;
+        }
+        bench.Log.Write($"'{point.Label}': readings did not agree to within {band} {point.Unit}; the last is used");
+        AnsiConsole.MarkupLine("  [yellow]The readings kept changing; the last one is recorded.[/]");
+        return previous;
+    }
+
+    /// <summary>CAL as a front-panel adjustment (436A CAL ADJ): the operator turns it while the reading updates.</summary>
+    private void AdjustByHand(IPowerMeterControl control, string target)
+    {
+        AnsiConsole.MarkupLine($"Adjust the meter's [bold]CAL ADJ[/] for [bold]{Markup.Escape(target)}[/] (it has no bus control).");
+        if (Sim is not null)
+        {
+            bench.Step("Press Enter when adjusted", _ => _simMeter!.Cal());
+            return;
+        }
+        if (!ConsoleUi.Interactive)
+            throw new InvalidOperationException("CAL ADJ needs an operator at the console.");
+        AnsiConsole.Live(new Text("")).Start(ctx =>
+        {
+            while (true)
+            {
+                var watts = control.Read();
+                ctx.UpdateTarget(new Markup($"Meter: [bold]{Si.Format(watts, "W", 5)}[/]  [blue]Adjust CAL ADJ, then press Enter.[/]"));
+                ctx.Refresh();
+                if (Console.KeyAvailable && Console.ReadKey(intercept: true).Key == ConsoleKey.Enter)
+                    break;
+            }
+        });
+        bench.Log.Write($"CAL ADJ set by the operator for {target}");
+    }
+
+    /// <summary>A CAL FACTOR switch the bus cannot set (436A): the operator turns it.</summary>
+    private void SetCalFactorSwitch(double percent)
+    {
+        AnsiConsole.MarkupLine($"Set the meter's [bold]CAL FACTOR[/] switch to [bold]{percent.ToString("0.#", CultureInfo.InvariantCulture)}%[/].");
+        bench.Step("Press Enter when set", _ => _simMeter!.CalFactorPercent = percent);
+        _calFactorSwitch = percent;
+    }
+
+    private static bool Ask(string message)
+    {
+        if (ConsoleUi.Interactive)
+            AnsiConsole.Prompt(new TextPrompt<string>($"[blue]{Markup.Escape(message)}[/]").AllowEmpty());
+        return true;
     }
 
     /// <summary>

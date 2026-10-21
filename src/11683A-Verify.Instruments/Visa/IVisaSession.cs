@@ -19,6 +19,9 @@ public interface IVisaSession : IDisposable
     /// <summary>Device clear (SDC).</summary>
     void Clear();
 
+    /// <summary>Serial poll: the status byte, read without sending the instrument a command (one would abort a 437B or 438A CAL).</summary>
+    byte ReadStatusByte();
+
     string Query(string command)
     {
         Write(command);

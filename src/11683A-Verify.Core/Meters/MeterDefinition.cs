@@ -32,6 +32,60 @@ public sealed record CalibratorSetting
         + (Reference == ReferenceSwitch.Ext ? $", REF EXT, DC calibrator {(ExternalVolts ?? 0).ToString("G5", CultureInfo.InvariantCulture)} V" : "");
 }
 
+/// <summary>What a power meter shows: watts, dBm, or dB relative to a stored reference.</summary>
+public enum MeterDisplay
+{
+    Watts,
+    Dbm,
+    DbRelative,
+}
+
+/// <summary>
+/// The power meter's settings, as the app makes them over the bus: a test's settings after Preset, and a row's
+/// changes to them. Null leaves a setting as it is.
+/// </summary>
+public sealed record MeterSettings
+{
+    public MeterDisplay? Display { get; init; }
+
+    /// <summary>A fixed range, 1 the most sensitive; 0 for autorange.</summary>
+    public int? Range { get; init; }
+
+    /// <summary>The averaging (filter) length; 0 for the meter's automatic filter.</summary>
+    public int? Filter { get; init; }
+
+    /// <summary>The display resolution, in the meter's own terms (E441x: 1 to 4).</summary>
+    public int? Resolution { get; init; }
+
+    /// <summary>Before reading, store the present input as the dB REL reference (436A dB REF, 438A REL).</summary>
+    public bool StoreReference { get; init; }
+
+    /// <summary>These settings with <paramref name="row"/>'s on top.</summary>
+    public MeterSettings With(MeterSettings? row) => row is null ? this : new()
+    {
+        Display = row.Display ?? Display,
+        Range = row.Range ?? Range,
+        Filter = row.Filter ?? Filter,
+        Resolution = row.Resolution ?? Resolution,
+        StoreReference = row.StoreReference,
+    };
+}
+
+/// <summary>A zero or a CAL the app does on the meter, with the 11683A set as the manual says.</summary>
+public sealed record MeterStep
+{
+    public CalibratorSetting Calibrator { get; init; } = new();
+
+    /// <summary>Seconds to wait after the 11683A is set, e.g. for its downward drift in STANDBY to stop.</summary>
+    public int SettleSeconds { get; init; }
+
+    /// <summary>CAL: the reference cal factor (the 11683A's 1 mW is the reference, at 100%).</summary>
+    public double ReferenceCalFactorPercent { get; init; } = 100;
+
+    /// <summary>CAL on a meter whose CAL is a front-panel adjustment (436A CAL ADJ): what the operator sets it to.</summary>
+    public string? AdjustTo { get; init; }
+}
+
 /// <summary>One row of a manual's performance test table.</summary>
 public sealed record MeterTestPoint
 {
@@ -48,6 +102,9 @@ public sealed record MeterTestPoint
 
     /// <summary>The meter's CAL FACTOR setting for this row, when the test steps it.</summary>
     public double? CalFactorPercent { get; init; }
+
+    /// <summary>The meter's settings for this row over the bus, on top of the test's.</summary>
+    public MeterSettings? Meter { get; init; }
 
     /// <summary>The expected (nominal) reading. Where the manual prints only limits it is noted in the file.</summary>
     public double Expected { get; init; }
@@ -78,6 +135,18 @@ public sealed record MeterTest
     public List<string> Setup { get; init; } = [];
     public List<MeterTestPoint> Points { get; init; } = [];
     public List<string> Notes { get; init; } = [];
+
+    /// <summary>
+    /// The meter's settings after Preset. With <see cref="Zero"/> and <see cref="Cal"/>, a meter on the bus is set up
+    /// by the app and the operator only sets the 11683A; without them the operator follows <see cref="Setup"/>.
+    /// </summary>
+    public MeterSettings? Meter { get; init; }
+
+    public MeterStep? Zero { get; init; }
+    public MeterStep? Cal { get; init; }
+
+    /// <summary>The app can do this test's meter steps over the bus.</summary>
+    public bool Automated => Meter is not null;
 
     /// <summary>True if any point uses the 11683A's Option H01 REF EXT input.</summary>
     public bool NeedsH01 => Points.Any(p => p.Calibrator?.Reference == ReferenceSwitch.Ext);
@@ -156,9 +225,16 @@ public sealed class MeterDefinition
             var source = test.SourceOf(p);
             if (source == ReadingSource.Recorder && !MeterUnits.IsVolts(p.Unit))
                 throw new InvalidDataException($"{where}: a recorder-output reading must be in mV or V.");
-            if (source == ReadingSource.Meter && !MeterUnits.FromWatts(p.Unit, 1e-3).HasValue)
-                throw new InvalidDataException($"{where}: a meter reading in '{p.Unit}' cannot come from the bus; mark it \"reading\": \"Operator\".");
+            if (source != ReadingSource.Meter)
+                continue;
+            var display = (test.Meter ?? new()).With(p.Meter).Display ?? MeterDisplay.Watts;
+            var expected = display switch { MeterDisplay.Dbm => "dBm", MeterDisplay.DbRelative => "dB", _ => null };
+            if (expected is null ? !MeterUnits.FromWatts(p.Unit, 1e-3).HasValue : p.Unit != expected)
+                throw new InvalidDataException($"{where}: a meter reading in '{p.Unit}' cannot come from the meter's {display} display; "
+                    + "set the row's \"meter\": {\"display\": ...} or mark it \"reading\": \"Operator\".");
         }
+        foreach (var test in Tests.Where(t => !t.Automated && (t.Zero is not null || t.Cal is not null)))
+            throw new InvalidDataException($"{FileName} {test.Id}: a zero or CAL step needs the test's \"meter\" settings.");
     }
 }
 

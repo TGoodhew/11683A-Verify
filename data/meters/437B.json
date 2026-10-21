@@ -10,7 +10,7 @@
   ],
   "warmupMinutes": 30,
   "notes": [
-    "Over HP-IB the app sends LN (watts), TR2 (one settled reading) and TR3 (free run again).",
+    "Over HP-IB the app presets (PR) and sets watts (LN), the range (RMnEN, or RA), the filter (FA) and cal factor 100% (KB100EN); zeroes with CSZE and calibrates on the 11683A with CSCL100EN, watching the status byte's Cal/Zero Complete bit (pp. 3-46 to 3-50, 3-106 to 3-108); and reads with TR2 (one settled reading), then TR3 (free run).",
     "Half-hour warm-up (p. 4-1). Perform the tests in the order given; record on Table 4-1 (p. 4-12)."
   ],
   "tests": [
@@ -29,6 +29,18 @@
         "Press ZERO and wait about 15 s for ZEROING to clear; the display should read 0.00 ±0.06 µW.",
         "For each row press SET RANGE, choose RNG n with the arrow keys and press ENTER."
       ],
+      "meter": {
+        "display": "Watts",
+        "filter": 0
+      },
+      "zero": {
+        "calibrator": {
+          "range": "3uW",
+          "function": "Standby",
+          "polarity": "Normal"
+        },
+        "settleSeconds": 60
+      },
       "points": [
         {
           "label": "RNG 1",
@@ -38,7 +50,10 @@
             "polarity": "Normal"
           },
           "meterSetting": "SET RANGE: RNG 1",
-          "expected": 0.0,
+          "meter": {
+            "range": 1
+          },
+          "expected": 0,
           "unit": "uW",
           "min": -0.05,
           "max": 0.05
@@ -51,7 +66,10 @@
             "polarity": "Normal"
           },
           "meterSetting": "SET RANGE: RNG 2",
-          "expected": 0.0,
+          "meter": {
+            "range": 2
+          },
+          "expected": 0,
           "unit": "uW",
           "min": -0.1,
           "max": 0.1
@@ -64,7 +82,10 @@
             "polarity": "Normal"
           },
           "meterSetting": "SET RANGE: RNG 3",
-          "expected": 0.0,
+          "meter": {
+            "range": 3
+          },
+          "expected": 0,
           "unit": "mW",
           "min": -0.001,
           "max": 0.001
@@ -77,7 +98,10 @@
             "polarity": "Normal"
           },
           "meterSetting": "SET RANGE: RNG 4",
-          "expected": 0.0,
+          "meter": {
+            "range": 4
+          },
+          "expected": 0,
           "unit": "mW",
           "min": -0.01,
           "max": 0.01
@@ -90,7 +114,10 @@
             "polarity": "Normal"
           },
           "meterSetting": "SET RANGE: RNG 5",
-          "expected": 0.0,
+          "meter": {
+            "range": 5
+          },
+          "expected": 0,
           "unit": "mW",
           "min": -0.1,
           "max": 0.1
@@ -117,6 +144,27 @@
         "Press CAL FAC (SHIFT FREQ), set 100.0%, ENTER. The display should read 1.000 ±0.001 mW.",
         "Set the 11683A RANGE to each row."
       ],
+      "meter": {
+        "display": "Watts",
+        "range": 0,
+        "filter": 0
+      },
+      "zero": {
+        "calibrator": {
+          "range": "3uW",
+          "function": "Standby",
+          "polarity": "Normal"
+        },
+        "settleSeconds": 60
+      },
+      "cal": {
+        "calibrator": {
+          "range": "1mW",
+          "function": "Calibrate",
+          "polarity": "Normal"
+        },
+        "referenceCalFactorPercent": 100
+      },
       "points": [
         {
           "label": "3 µW",
@@ -139,7 +187,7 @@
             "polarity": "Normal"
           },
           "meterSetting": "Watts, autorange",
-          "expected": 10.0,
+          "expected": 10,
           "unit": "uW",
           "min": 9.9,
           "max": 10.1
@@ -165,7 +213,7 @@
             "polarity": "Normal"
           },
           "meterSetting": "Watts, autorange",
-          "expected": 100.0,
+          "expected": 100,
           "unit": "uW",
           "min": 99.5,
           "max": 100.5
@@ -191,7 +239,7 @@
             "polarity": "Normal"
           },
           "meterSetting": "Watts, autorange",
-          "expected": 1.0,
+          "expected": 1,
           "unit": "mW",
           "min": 0.995,
           "max": 1.005
@@ -217,7 +265,7 @@
             "polarity": "Normal"
           },
           "meterSetting": "Watts, autorange",
-          "expected": 10.0,
+          "expected": 10,
           "unit": "mW",
           "min": 9.95,
           "max": 10.05
@@ -243,7 +291,7 @@
             "polarity": "Normal"
           },
           "meterSetting": "Watts, autorange",
-          "expected": 100.0,
+          "expected": 100,
           "unit": "mW",
           "min": 99.5,
           "max": 100.5
