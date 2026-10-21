@@ -584,7 +584,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             return;
         if (setting.ExternalVolts is { } v and not 0)
         {
-            ConsoleUi.Attempt($"Setting the DC calibrator to {Si.Format(v, "V", 5)}", () => dc.Output(v), bench.Log);
+            ConsoleUi.Attempt($"Setting the DC calibrator to {Si.Format(v, "V", 5)}", () => Busy($"Setting the DC calibrator to {Si.Format(v, "V", 5)}", () => dc.Output(v)), bench.Log);
             bench.Log.Write($"DC calibrator set to {v.ToString("R", CultureInfo.InvariantCulture)} V");
             AnsiConsole.MarkupLine($"  [grey]DC calibrator set to {Si.Format(v, "V", 5)}[/]");
         }
@@ -618,13 +618,11 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         });
     }
 
-    private static void Busy(string what, Action action)
+    private static void Busy(string what, Action action) => ConsoleUi.Busy(what, _ =>
     {
-        if (ConsoleUi.Interactive)
-            AnsiConsole.Status().Start(what + "…", _ => action());
-        else
-            action();
-    }
+        action();
+        return 0;
+    });
 
     /// <summary>
     /// Readings until two in a row agree to within a fifth of the half-tolerance (the meter's own settling covers its
@@ -632,24 +630,33 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     /// </summary>
     private double? ReadSettled(IPowerMeterControl control, MeterTestPoint point, MeterDisplay display)
     {
-        double Next()
-        {
-            var value = control.Read();
-            return display == MeterDisplay.Watts ? MeterUnits.FromWatts(point.Unit, value)!.Value : value;
-        }
-
         var band = Math.Max((point.Max - point.Min) / 2 * 0.2, 1e-12);
-        var previous = Next();
-        for (var i = 0; i < 7; i++)
+        // Under a spinner: an E441x reading with a 512 filter takes about 26 s, and nothing else would show it is busy.
+        var (value, settled) = ConsoleUi.Busy($"Measuring {point.Label}", status =>
         {
-            var next = Next();
-            if (Math.Abs(next - previous) <= band)
-                return (previous + next) / 2;
-            previous = next;
+            double Next(int n)
+            {
+                status($"Measuring {point.Label}: reading {n}");
+                var reading = control.Read();
+                return display == MeterDisplay.Watts ? MeterUnits.FromWatts(point.Unit, reading)!.Value : reading;
+            }
+
+            var previous = Next(1);
+            for (var i = 2; i <= 8; i++)
+            {
+                var next = Next(i);
+                if (Math.Abs(next - previous) <= band)
+                    return ((previous + next) / 2, true);
+                previous = next;
+            }
+            return (previous, false);
+        });
+        if (!settled)
+        {
+            bench.Log.Write($"'{point.Label}': readings did not agree to within {band} {point.Unit}; the last is used");
+            AnsiConsole.MarkupLine("  [yellow]The readings kept changing; the last one is recorded.[/]");
         }
-        bench.Log.Write($"'{point.Label}': readings did not agree to within {band} {point.Unit}; the last is used");
-        AnsiConsole.MarkupLine("  [yellow]The readings kept changing; the last one is recorded.[/]");
-        return previous;
+        return value;
     }
 
     /// <summary>CAL as a front-panel adjustment (436A CAL ADJ): the operator turns it while the reading updates.</summary>
@@ -687,8 +694,10 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
 
     private static bool Ask(string message)
     {
-        if (ConsoleUi.Interactive)
-            AnsiConsole.Prompt(new TextPrompt<string>($"[blue]{Markup.Escape(message)}[/]").AllowEmpty());
+        if (!ConsoleUi.Interactive)
+            return true;
+        ConsoleUi.DiscardTypeAhead();
+        AnsiConsole.Prompt(new TextPrompt<string>($"[blue]{Markup.Escape(message)}[/]").AllowEmpty());
         return true;
     }
 
@@ -813,6 +822,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     {
         if (!ConsoleUi.Interactive)
             return true;
+        ConsoleUi.DiscardTypeAhead();
         var text = AnsiConsole.Prompt(new TextPrompt<string>($"[blue]{Markup.Escape(message)}[/]").AllowEmpty());
         return !text.Trim().Equals("s", StringComparison.OrdinalIgnoreCase);
     }
@@ -821,6 +831,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     {
         if (!ConsoleUi.Interactive)
             throw new OperatorException("A typed reading needs an operator at the console.");
+        ConsoleUi.DiscardTypeAhead();
         var shown = simulatedDisplay is { } d ? Fmt(d, point) : null;
         var prompt = new TextPrompt<string>($"Reading in {Markup.Escape(MeterUnits.Display(point.Unit))} "
                 + (shown is null ? "[grey](Enter to skip)[/]:" : $"[grey](the simulated display shows {shown}; Enter accepts it)[/]:"))

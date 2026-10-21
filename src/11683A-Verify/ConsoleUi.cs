@@ -22,6 +22,7 @@ public static class ConsoleUi
 
     public static void Prompt(string message)
     {
+        DiscardTypeAhead();
         AnsiConsole.Markup($"[blue]{Markup.Escape(message)}[/] ");
         if (!Console.IsInputRedirected)
             Console.ReadLine();
@@ -29,15 +30,58 @@ public static class ConsoleUi
             AnsiConsole.WriteLine();
     }
 
+    /// <summary>
+    /// Drops keys pressed while the app was busy, such as Enter pressed again during a long reading, so they can't answer
+    /// the next prompt before the operator has done what it asks. Every prompt calls it first.
+    /// </summary>
+    public static void DiscardTypeAhead()
+    {
+        if (Console.IsInputRedirected)
+            return;
+        while (Console.KeyAvailable)
+            Console.ReadKey(intercept: true);
+    }
+
     /// <summary>Yes/no; yes when input is redirected, so scripted and simulated runs go straight through.</summary>
-    public static bool Confirm(string question, bool defaultValue = true) =>
-        Console.IsInputRedirected ? defaultValue : AnsiConsole.Confirm(question, defaultValue);
+    public static bool Confirm(string question, bool defaultValue = true)
+    {
+        if (Console.IsInputRedirected)
+            return defaultValue;
+        DiscardTypeAhead();
+        return AnsiConsole.Confirm(question, defaultValue);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> under a spinner saying what the app is doing, so the operator can see a step was
+    /// taken and need not press anything; the status can be updated as it goes. Without a console it just runs.
+    /// </summary>
+    public static T Busy<T>(string doing, Func<Action<string>, T> work)
+    {
+        if (!Interactive)
+            return work(_ => { });
+        var started = DateTime.Now;
+        string Text(string what) => $"{Markup.Escape(what)} [grey]({(DateTime.Now - started).TotalSeconds:0} s — working, no need to press anything)[/]";
+        return AnsiConsole.Status().Spinner(Spinner.Known.Dots).Start(Text(doing), ctx =>
+        {
+            // The seconds keep counting through a long instrument read, so it is plainly still going.
+            var current = doing;
+            using var tick = new Timer(_ => ctx.Status(Text(current)), null, 1000, 1000);
+            return work(what =>
+            {
+                current = what;
+                ctx.Status(Text(what));
+            });
+        });
+    }
 
     /// <summary>A choice; <paramref name="whenRedirected"/> when input is redirected.</summary>
-    public static string Choose(string title, IReadOnlyList<string> choices, string whenRedirected) =>
-        Console.IsInputRedirected
-            ? whenRedirected
-            : AnsiConsole.Prompt(new SelectionPrompt<string>().Title(Markup.Escape(title)).AddChoices(choices));
+    public static string Choose(string title, IReadOnlyList<string> choices, string whenRedirected)
+    {
+        if (Console.IsInputRedirected)
+            return whenRedirected;
+        DiscardTypeAhead();
+        return AnsiConsole.Prompt(new SelectionPrompt<string>().Title(Markup.Escape(title)).AddChoices(choices));
+    }
 
     /// <summary>What to set before a step, as a panel: one knob or connection per row, so it can be checked at a glance.</summary>
     public static Panel Settings(string header, params (string Name, string Value)[] rows)
@@ -104,6 +148,7 @@ public static class ConsoleUi
                     throw;
                 AnsiConsole.MarkupLine($"[red]✗ {Markup.Escape(what)}: {Markup.Escape(ex.Message)}[/]");
                 var choices = canSkip ? new[] { "Retry", "Skip", "Stop" } : ["Retry", "Stop"];
+                DiscardTypeAhead();
                 var choice = AnsiConsole.Prompt(new SelectionPrompt<string>().Title("What now?").AddChoices(choices));
                 log.Write($"Operator chose {choice}");
                 if (choice == "Skip")
