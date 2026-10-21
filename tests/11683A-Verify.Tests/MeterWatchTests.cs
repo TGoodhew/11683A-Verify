@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Verify11683A.App.Procedures;
 using Verify11683A.Instruments.PowerMeter;
 
@@ -20,14 +21,15 @@ public class MeterWatchTests
     [Fact]
     public void Starts_no_reading_that_would_outlast_the_countdown()
     {
-        // Each reading takes 50 ms; with 120 ms left, two fit and a third would run past the end.
-        var started = DateTime.UtcNow;
+        // Each reading takes 50 ms; with 120 ms left, two fit and a third would run past the end. The countdown starts
+        // when the watch first asks, so a slow thread start cannot use up the time.
+        Stopwatch? clock = null;
         var count = 0;
         using var watch = new MeterWatch(() =>
         {
             Thread.Sleep(50);
             return ++count;
-        }, () => TimeSpan.FromMilliseconds(120) - (DateTime.UtcNow - started));
+        }, () => TimeSpan.FromMilliseconds(120) - (clock ??= Stopwatch.StartNew()).Elapsed);
         Assert.True(SpinWait.SpinUntil(() => watch.Done, 5000));
         Assert.InRange(watch.Readings.Count, 1, 2);
     }
