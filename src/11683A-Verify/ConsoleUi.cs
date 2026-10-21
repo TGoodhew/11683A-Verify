@@ -22,22 +22,114 @@ public static class ConsoleUi
 
     public static void Prompt(string message)
     {
-        AnsiConsole.Markup($"[blue]{Markup.Escape(message)}[/] ");
-        if (!Console.IsInputRedirected)
-            Console.ReadLine();
-        else
+        if (Console.IsInputRedirected)
+        {
+            AnsiConsole.Markup($"[blue]{Markup.Escape(message)}[/] ");
             AnsiConsole.WriteLine();
+            return;
+        }
+        BeforePrompt();
+        AnsiConsole.Markup($"[blue]{Markup.Escape(message)}[/] ");
+        Console.ReadLine();
+        Answered();
+    }
+
+    /// <summary>Every question to the operator goes through here: stray keys dropped, a beep if the app has been busy, the answer timed.</summary>
+    public static T Ask<T>(IPrompt<T> prompt)
+    {
+        BeforePrompt();
+        var answer = AnsiConsole.Prompt(prompt);
+        Answered();
+        return answer;
+    }
+
+    /// <summary>A short beep when the app needs the operator (Settings: "beep"). On by default.</summary>
+    public static bool BeepEnabled { get; set; } = true;
+
+    /// <summary>The app has been working at least this long since the last answer: the operator may be looking away.</summary>
+    private static readonly TimeSpan AttentionAfter = TimeSpan.FromSeconds(3);
+
+    private static DateTime _lastAnswer = DateTime.Now;
+
+    /// <summary>Before the operator is needed (a prompt, or a live view they adjust from): stray keys dropped, and a beep if the app has been busy.</summary>
+    public static void BeforePrompt()
+    {
+        DiscardTypeAhead();
+        if (DateTime.Now - _lastAnswer > AttentionAfter)
+            Attention();
+    }
+
+    /// <summary>The operator has answered (or finished a live adjustment): the clock for the next beep starts again.</summary>
+    public static void Answered() => _lastAnswer = DateTime.Now;
+
+    /// <summary>A short beep, so an operator at the bench knows to look back at the screen.</summary>
+    public static void Attention()
+    {
+        if (!BeepEnabled || !Interactive)
+            return;
+        try
+        {
+            if (OperatingSystem.IsWindows())
+                Console.Beep(1000, 150);
+            else
+                Console.Write('\a');
+        }
+        catch (Exception ex) when (ex is IOException or PlatformNotSupportedException or InvalidOperationException)
+        {
+            // No beeper: the screen still shows the prompt.
+        }
+    }
+
+    /// <summary>
+    /// Drops keys pressed while the app was busy, such as Enter pressed again during a long reading, so they can't answer
+    /// the next prompt before the operator has done what it asks. Every prompt calls it first.
+    /// </summary>
+    public static void DiscardTypeAhead()
+    {
+        if (Console.IsInputRedirected)
+            return;
+        while (Console.KeyAvailable)
+            Console.ReadKey(intercept: true);
     }
 
     /// <summary>Yes/no; yes when input is redirected, so scripted and simulated runs go straight through.</summary>
-    public static bool Confirm(string question, bool defaultValue = true) =>
-        Console.IsInputRedirected ? defaultValue : AnsiConsole.Confirm(question, defaultValue);
+    public static bool Confirm(string question, bool defaultValue = true)
+    {
+        if (Console.IsInputRedirected)
+            return defaultValue;
+        return Ask(new ConfirmationPrompt(question) { DefaultValue = defaultValue });
+    }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> under a spinner saying what the app is doing, so the operator can see a step was
+    /// taken and need not press anything; the status can be updated as it goes. Without a console it just runs.
+    /// </summary>
+    public static T Busy<T>(string doing, Func<Action<string>, T> work)
+    {
+        if (!Interactive)
+            return work(_ => { });
+        var started = DateTime.Now;
+        string Text(string what) => $"{Markup.Escape(what)} [grey]({(DateTime.Now - started).TotalSeconds:0} s — working, no need to press anything)[/]";
+        return AnsiConsole.Status().Spinner(Spinner.Known.Dots).Start(Text(doing), ctx =>
+        {
+            // The seconds keep counting through a long instrument read, so it is plainly still going.
+            var current = doing;
+            using var tick = new Timer(_ => ctx.Status(Text(current)), null, 1000, 1000);
+            return work(what =>
+            {
+                current = what;
+                ctx.Status(Text(what));
+            });
+        });
+    }
 
     /// <summary>A choice; <paramref name="whenRedirected"/> when input is redirected.</summary>
-    public static string Choose(string title, IReadOnlyList<string> choices, string whenRedirected) =>
-        Console.IsInputRedirected
-            ? whenRedirected
-            : AnsiConsole.Prompt(new SelectionPrompt<string>().Title(Markup.Escape(title)).AddChoices(choices));
+    public static string Choose(string title, IReadOnlyList<string> choices, string whenRedirected)
+    {
+        if (Console.IsInputRedirected)
+            return whenRedirected;
+        return Ask(new SelectionPrompt<string>().Title(Markup.Escape(title)).AddChoices(choices));
+    }
 
     /// <summary>What to set before a step, as a panel: one knob or connection per row, so it can be checked at a glance.</summary>
     public static Panel Settings(string header, params (string Name, string Value)[] rows)
@@ -104,7 +196,7 @@ public static class ConsoleUi
                     throw;
                 AnsiConsole.MarkupLine($"[red]✗ {Markup.Escape(what)}: {Markup.Escape(ex.Message)}[/]");
                 var choices = canSkip ? new[] { "Retry", "Skip", "Stop" } : ["Retry", "Stop"];
-                var choice = AnsiConsole.Prompt(new SelectionPrompt<string>().Title("What now?").AddChoices(choices));
+                var choice = Ask(new SelectionPrompt<string>().Title("What now?").AddChoices(choices));
                 log.Write($"Operator chose {choice}");
                 if (choice == "Skip")
                     return default;

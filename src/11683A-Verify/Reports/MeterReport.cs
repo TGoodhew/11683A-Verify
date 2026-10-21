@@ -15,23 +15,27 @@ public static class MeterReport
 {
     static MeterReport() => QuestPDF.Settings.License = LicenseType.Community;
 
-    public static Table Table(MeterTestResult result)
+    /// <param name="pendingFrom">While a test runs: rows from this index on are still to come, shown as … rather than skipped.</param>
+    public static Table Table(MeterTestResult result, int? pendingFrom = null)
     {
         var table = new Table().Border(TableBorder.Rounded)
             .Title($"[bold]{Markup.Escape(result.Title)}[/]" + (result.Channel is "" or "A" ? "" : $" — channel {Markup.Escape(result.Channel)}"))
             .AddColumn("Row").AddColumn("11683A").AddColumn(new TableColumn("Min").RightAligned())
             .AddColumn(new TableColumn("Actual").RightAligned()).AddColumn(new TableColumn("Max").RightAligned()).AddColumn("Unit").AddColumn("");
-        foreach (var p in result.Points)
+        for (var i = 0; i < result.Points.Count; i++)
         {
+            var p = result.Points[i];
             var point = p.Point;
+            var pending = i >= pendingFrom;
+            string Dim(string text) => pending ? $"[grey]{text}[/]" : text;
             table.AddRow(
-                Markup.Escape(point.Label),
-                Markup.Escape(point.Calibrator is { } c ? Calibrator(c) : "—"),
+                Dim(Markup.Escape(point.Label)),
+                Dim(Markup.Escape(point.Calibrator is { } c ? Calibrator(c) : "—")),
                 MeterTestProcedure.Fmt(point.Min, point),
-                p.Reading is { } r ? $"[bold]{MeterTestProcedure.Fmt(r, point)}[/]" + (p.Simulated ? " [grey]s[/]" : "") : "[yellow]—[/]",
+                pending ? "[grey]…[/]" : p.Reading is { } r ? $"[bold]{MeterTestProcedure.Fmt(r, point)}[/]" + (p.Simulated ? " [grey]s[/]" : "") : "[yellow]—[/]",
                 MeterTestProcedure.Fmt(point.Max, point),
                 Markup.Escape(MeterUnits.Display(point.Unit)),
-                p.Pass switch { true => "[green]PASS[/]", false => "[red]FAIL[/]", _ => "[yellow]skipped[/]" });
+                pending ? "" : p.Pass switch { true => "[green]PASS[/]", false => "[red]FAIL[/]", _ => "[yellow]skipped[/]" });
         }
         return table;
     }

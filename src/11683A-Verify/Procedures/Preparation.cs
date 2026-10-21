@@ -36,7 +36,7 @@ public static class Preparation
         if (session.AmbientC is not null || (session.Bench.IsSimulation && !session.Bench.Walkthrough) || Console.IsInputRedirected)
             return;
         var band = session.Specs.CalibrationBandC;
-        var text = AnsiConsole.Prompt(new TextPrompt<string>(
+        var text = ConsoleUi.Ask(new TextPrompt<string>(
                 $"Ambient temperature in °C [grey](Enter to skip; outside {band[0]:0}–{band[1]:0} °C adds the temperature coefficient)[/]:")
             .AllowEmpty()
             .Validate(t => t.Trim() == "" || double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && v is > -20 and < 60
@@ -98,7 +98,7 @@ public static class Preparation
     }
 
     private static double AskMinutes(string question, double warmedUp) =>
-        AnsiConsole.Prompt(new TextPrompt<double>($"{Markup.Escape(question)} [grey](Enter = {warmedUp:0}, already warm)[/]")
+        ConsoleUi.Ask(new TextPrompt<double>($"{Markup.Escape(question)} [grey](Enter = {warmedUp:0}, already warm)[/]")
             .DefaultValue(warmedUp).HideDefaultValue()
             .Validate(v => v >= 0 ? ValidationResult.Success() : ValidationResult.Error("Minutes cannot be negative.")));
 }

@@ -72,6 +72,7 @@ public static class SupplyAdjustmentProcedure
         }
         else
         {
+            ConsoleUi.BeforePrompt();
             AnsiConsole.Live(new Text("")).Start(ctx =>
             {
                 while (true)
@@ -100,6 +101,7 @@ public static class SupplyAdjustmentProcedure
                     }
                 }
             });
+            ConsoleUi.Answered();
         }
 
         var final = AdjustmentReading.For(recent.Count > 0 ? recent.Average() : last!.Volts, limits);

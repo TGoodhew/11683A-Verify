@@ -31,6 +31,9 @@ public sealed class CommandLine
     /// <summary>verify: run Part 4 without asking.</summary>
     public bool Part4 { get; private set; }
 
+    /// <summary>meter-test: run again only the tests the meter's last run did not pass, without asking.</summary>
+    public bool Retest { get; private set; }
+
     /// <summary>A results file to rebuild the PDF report from (--regen-pdf).</summary>
     public string? RegeneratePdf { get; private set; }
 
@@ -81,6 +84,9 @@ public sealed class CommandLine
           --part4              verify: also run Part 4 without asking.
           --meter <model>      meter-test: the power meter, e.g. 437B.
           --meter-resource <r> meter-test: its VISA resource (overrides powerMeter.resource).
+          --retest             meter-test: run again only the tests the meter's last run (same serial)
+                               failed or left incomplete; the record keeps that run's passing tests.
+                               Offered anyway when there is such a run.
           --dc-source <model>  The DC calibrator on REF EXT (Part 4, E4418B Procedure 2): manual, or 5440B
                                for the app to set it over the bus (overrides dcSource.model).
           --dc-source-resource <r>
@@ -155,6 +161,9 @@ public sealed class CommandLine
                     break;
                 case "--dc-source-resource":
                     result.DcSourceResource = Value();
+                    break;
+                case "--retest":
+                    result.Retest = true;
                     break;
                 case "--part4":
                     result.Part4 = true;

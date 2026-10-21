@@ -308,6 +308,7 @@ public static class Part4Procedure
         private void WatchByHand(double target)
         {
             var dvm = session.Dvm;
+            ConsoleUi.BeforePrompt();
             AnsiConsole.Live(new Text("")).Start(ctx =>
             {
                 while (true)
@@ -322,6 +323,7 @@ public static class Part4Procedure
                         break;
                 }
             });
+            ConsoleUi.Answered();
         }
 
         private double MeanAtTee(int count, double range)

@@ -13,6 +13,7 @@ using Verify11683A.Measurement;
 using Verify11683A.Meters;
 using Verify11683A.Results;
 using Verify11683A.Specs;
+using Verify11683A.Uncertainty;
 
 namespace Verify11683A.App.Procedures;
 
@@ -39,16 +40,33 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         var started = bench.Clock.Now;
         Header();
 
-        var tests = ChooseTests();
         var serial = AskSerial();
-        var channels = ChooseChannels(tests);
+        var retest = OfferRetest(serial);
+        List<(MeterTest Test, string Channel)> planned;
+        if (retest is not null)
+        {
+            // Only what the last run did not pass, still channel by channel.
+            var redo = retest.ToRerun;
+            var channelOrder = definition.Channels;
+            planned = [.. redo
+                .Select(r => (Test: definition.Tests.FirstOrDefault(t => t.Id == r.TestId), r.Channel))
+                .Where(p => p.Test is not null)
+                .Select(p => (p.Test!, p.Channel))
+                .OrderBy(p => channelOrder.IndexOf(p.Channel)).ThenBy(p => definition.Tests.IndexOf(p.Item1))];
+        }
+        else
+        {
+            var tests = ChooseTests();
+            var channels = ChooseChannels(tests);
+            // Every test on one channel before the cable moves to the next: A, then B.
+            planned = [.. channels.SelectMany((c, i) => tests.Where(t => t.PerChannel || i == 0).Select(t => (t, c)))];
+        }
         var useBus = definition.BusDriver is not null && (Sim is not null
             || ConsoleUi.Confirm($"Read the {definition.Model} over the bus at {Resource}?", defaultValue: true));
-        screens.SetSteps([.. tests.SelectMany(t => (t.PerChannel ? channels : [channels[0]]).Select(c => StepName(t, c))), "Results"]);
+        screens.SetSteps([.. planned.Select(p => StepName(p.Test, p.Channel)), "Results"]);
 
         var results = new List<MeterTestResult>();
         var identity = "";
-        var planned = tests.SelectMany(t => (t.PerChannel ? channels : [channels[0]]).Select(c => (Test: t, Channel: c))).ToList();
         try
         {
             foreach (var (test, channel) in planned)
@@ -57,7 +75,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                     () => OpenIdentified(useBus, channel), bench.Log, canSkip: false)!;
                 identity = meter.Description;
                 bench.Log.Write($"Meter test {test.Id} channel {channel}: {meter.Description}");
-                screens.Begin(StepName(test, channel), test.Title + (test.PerChannel ? $" — channel {channel}" : ""));
+                screens.Begin(StepName(test, channel), ShortTitle(test) + (test.PerChannel && definition.Channels.Count > 1 ? $" — channel {channel}" : ""));
                 var result = RunTest(test, channel, meter);
                 results.Add(result);
                 AnsiConsole.WriteLine();
@@ -97,6 +115,13 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             notes.Add($"Transcription notes for {definition.FileName}: " + string.Join(" ", definition.Ambiguities));
         if (_dcSource is not null)
             notes.Add($"The DC calibrator on REF EXT ({_dcSource.Description}) was set by the app over the bus, on its OUTPUT terminals.");
+        IReadOnlyList<MeterTestResult> recorded = results;
+        if (retest is not null)
+        {
+            notes.Insert(0, retest.Note(results));
+            recorded = retest.Merge(results);
+            bench.Log.Write(retest.Note(results));
+        }
 
         var recorderUsed = results.Any(r => r.Points.Any(p => p.Source == ReadingSource.Recorder));
         var defPath = Path.Combine(MeterDefinition.DefaultDirectory, definition.FileName);
@@ -115,10 +140,36 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 ? new DvmRecord(config.Dvm.Details(id), bench.Dvm.ResourceName, id.Raw, config.Dvm.Details(id).StateOn(DateOnly.FromDateTime(started.Date)))
                 : null,
             SimulationScenario = Sim?.Scenario.Name,
-            Tests = results,
+            Tests = recorded,
             NotRun = definition.NotCovered,
             Notes = notes,
         };
+    }
+
+    /// <summary>
+    /// If this meter's last run (same model and serial) did not pass everything, offers to run again only the tests it
+    /// failed or left incomplete; their new results then replace the old in a combined record. --retest accepts without
+    /// asking.
+    /// </summary>
+    private MeterRetest? OfferRetest(string serial)
+    {
+        var last = MeterRetest.Latest(config.ResultsDirectory, definition.Model, serial, Sim is not null);
+        if (last is null || last.ToRerun.Count == 0)
+            return null;
+        var grid = new Grid().AddColumn(new GridColumn().PadRight(3)).AddColumn();
+        foreach (var t in last.ToRerun)
+            grid.AddRow(Markup.Escape(StepName(definition.Tests.FirstOrDefault(d => d.Id == t.TestId) ?? new MeterTest { Title = t.Title, PerChannel = true }, t.Channel)),
+                !t.Complete && t.Verdict != Verdict.Fail ? "[yellow]INCOMPLETE[/]" : ConsoleUi.VerdictMarkup(t.Verdict));
+        var header = $" Last run of this {definition.Model}: {last.Previous.Started:yyyy-MM-dd HH:mm} ";
+        var widest = last.ToRerun.Max(t => StepName(definition.Tests.FirstOrDefault(d => d.Id == t.TestId) ?? new MeterTest { Title = t.Title }, t.Channel).Length) + 3 + 12 + 4;
+        AnsiConsole.Write(new Panel(grid) { Width = Math.Max(widest, header.Length + 6) }
+            .Header(Markup.Escape(header))
+            .Border(BoxBorder.Rounded).BorderColor(Color.Yellow));
+        var accept = options.Retest || (ConsoleUi.Interactive && ConsoleUi.Confirm("Run only these again (the passing tests are kept from that run)?", defaultValue: true));
+        bench.Log.Write(accept
+            ? $"Retest of {Path.GetFileName(last.PreviousPath)}: {string.Join(", ", last.ToRerun.Select(t => $"{t.TestId} {t.Channel}"))}"
+            : "Retest offered and declined");
+        return accept ? last : null;
     }
 
     /// <summary>Why the run stopped early (an instrument error with no one to retry it, or the operator's Stop); null if it did not.</summary>
@@ -149,7 +200,11 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
 
     /// <summary>The test's name in the step tracker, with the channel when it is run on each.</summary>
     private string StepName(MeterTest test, string channel) =>
-        test.Title + (test.PerChannel && definition.Channels.Count > 1 ? $" {channel}" : "");
+        (test.PerChannel && definition.Channels.Count > 1 ? $"{channel}: " : "") + ShortTitle(test);
+
+    /// <summary>"Instrument Accuracy Test, Procedure 1 (standard 11683A; for indication)" without the parenthesis.</summary>
+    private static string ShortTitle(MeterTest test) =>
+        test.Title.IndexOf(" (", StringComparison.Ordinal) is > 0 and var cut ? test.Title[..cut] : test.Title;
 
     private string Resource => options.MeterResource ?? (config.PowerMeter.Model.Equals("manual", StringComparison.OrdinalIgnoreCase)
         ? definition.DefaultResource
@@ -186,14 +241,14 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             .AddChoices(available);
         foreach (var t in available.Where(t => !t.NeedsH01))
             prompt.Select(t);
-        return AnsiConsole.Prompt(prompt);
+        return ConsoleUi.Ask(prompt);
     }
 
     private string AskSerial()
     {
         if (!ConsoleUi.Interactive)
             return Sim is not null ? "SIM0001" : "";
-        return AnsiConsole.Prompt(new TextPrompt<string>($"{Markup.Escape(definition.Model)} serial number:").AllowEmpty()).Trim();
+        return ConsoleUi.Ask(new TextPrompt<string>($"{Markup.Escape(definition.Model)} serial number:").AllowEmpty()).Trim();
     }
 
     private List<string> ChooseChannels(List<MeterTest> tests)
@@ -203,7 +258,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         var prompt = new MultiSelectionPrompt<string>().Title("Which channels?").AddChoices(definition.Channels);
         foreach (var c in definition.Channels)
             prompt.Select(c);
-        var chosen = AnsiConsole.Prompt(prompt);
+        var chosen = ConsoleUi.Ask(prompt);
         return chosen.Count == 0 ? [definition.Channels[0]] : chosen;
     }
 
@@ -268,7 +323,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         }
 
         if ((Sim is null || bench.Walkthrough) && !AskGo(
-                (dc is null ? "Press Enter when the setup above is done" : "Press Enter when the connections above are made") + " (S to skip this test)"
+                (dc is null ? "Press Enter when the setup above is done" : "Press Enter when the connections above are made") + " (S to skip this test, X to exit)"
                 + (bench.Walkthrough && dc is null ? " [simulator: Enter does the zero and CAL]" : "")))
             return new MeterTestResult(test.Id, test.Title, test.Source, channel, []);
         if (Sim is not null)
@@ -296,7 +351,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             if (Sim is not null)
             {
                 if (bench.Walkthrough && source != ReadingSource.Operator
-                    && !AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip) [simulator: Enter sets it]"))
+                    && !AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip, X to exit) [simulator: Enter sets it]"))
                 {
                     reading = null;
                 }
@@ -323,7 +378,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             }
             else
             {
-                reading = AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip)") ? Read(point, source, meter) : null;
+                reading = AskGo("Set as shown, wait for the reading to settle, then press Enter (S to skip, X to exit)") ? Read(point, source, meter) : null;
             }
 
             var result = new MeterPointResult(point, source, reading, simulated);
@@ -349,64 +404,47 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     /// </summary>
     private MeterTestResult RunAutomated(MeterTest test, string channel, IPowerMeterControl control)
     {
-        AnsiConsole.MarkupLine($"[grey]{Markup.Escape(test.Source)}[/]");
-        AnsiConsole.MarkupLine($"Equipment: {Markup.Escape(string.Join("; ", test.Equipment))}");
-        AnsiConsole.MarkupLine("[grey]The manual's steps. The app makes the meter's settings, zero and CAL over the bus; you set the 11683A when asked.[/]");
-        for (var i = 0; i < test.Setup.Count; i++)
-            AnsiConsole.MarkupLine($"[grey]  {i + 1}. {Markup.Escape(test.Setup[i])}[/]");
-        foreach (var note in test.Notes)
-            AnsiConsole.MarkupLine($"[grey]  • {Markup.Escape(note)}[/]");
-
         var dc = test.Points.Any(p => p.Calibrator?.ExternalVolts is not null) ? DcSource() : null;
-        if (dc is not null)
-        {
-            dc.Standby();
-            AnsiConsole.MarkupLine($"The app sets the DC calibrator ([bold]{Markup.Escape(dc.Description)}[/]): connect its [bold]OUTPUT HI/LO[/] to REF EXT. It is in Standby.");
-        }
-        if ((Sim is null || bench.Walkthrough) && !AskGo("Make the connections above, then press Enter (S to skip this test)"))
+        dc?.Standby();
+        if (!Connect(Connections(test, channel, dc)))
             return new MeterTestResult(test.Id, test.Title, test.Source, channel, []);
 
-        _calibratorNow = null;
         _calFactorSwitch = 100;
         var baseline = test.Meter!;
         var log = bench.Log;
         var results = new List<MeterPointResult>();
         try
         {
-            ConsoleUi.Attempt("Presetting the meter", () =>
-            {
-                control.Preset();
-                control.Apply(baseline, null);
-            }, log);
-            (MeterSettings, double?)? applied = (baseline, null);
-            log.Write($"{definition.Model} {test.Id} {channel}: preset; {baseline}");
-
+            ConsoleUi.Attempt("Presetting the meter", control.Preset, log);
+            // The STANDBY check comes before the test's settings, while a reading is quick (an E441x at filter 512 takes 26 s).
             if (test.Zero is { } zero)
             {
                 SetCalibrator(zero.Calibrator, dc, "for the zero", allowSkip: false);
                 Settle(zero.SettleSeconds);
-                ConsoleUi.Attempt("Zeroing the meter", () => Busy("Zeroing the meter", control.Zero), log);
-                AnsiConsole.MarkupLine("[green]✓[/] Meter zeroed.");
+                CheckStandby(control, zero);
             }
+            ConsoleUi.Attempt("Setting up the meter", () => control.Apply(baseline, null), log);
+            (MeterSettings, double?)? applied = (baseline, null);
+            log.Write($"{definition.Model} {test.Id} {channel}: preset; {baseline}");
+
+            if (test.Zero is not null)
+                ZeroMeter(control);
             if (test.Cal is { } cal)
             {
-                SetCalibrator(cal.Calibrator, dc, "for the CAL", allowSkip: false);
-                Settle(cal.SettleSeconds);
                 if (control.CanCalibrate)
-                {
-                    ConsoleUi.Attempt("CAL on the 11683A", () => Busy("CAL on the 11683A", () => control.Calibrate(cal.ReferenceCalFactorPercent)), log);
-                    AnsiConsole.MarkupLine($"[green]✓[/] Meter calibrated (reference cal factor {cal.ReferenceCalFactorPercent.ToString("0.#", CultureInfo.InvariantCulture)}%).");
-                }
+                    CalibrateMeter(control, test, cal, dc);
                 else
                 {
+                    SetCalibrator(cal.Calibrator, dc, "for the CAL", allowSkip: false);
+                    Settle(cal.SettleSeconds);
                     ConsoleUi.Attempt("CAL ADJ", () => AdjustByHand(control, cal.AdjustTo ?? "1.000 mW"), log);
                 }
             }
 
             foreach (var point in test.Points)
             {
+                ShowProgress(test, channel, results);
                 var source = test.SourceOf(point);
-                AnsiConsole.MarkupLine($"[bold]{Markup.Escape(point.Label)}[/]  [grey]meter:[/] {Markup.Escape(point.MeterSetting)}");
                 double? reading = null;
                 if (SetCalibrator(point.Calibrator, dc, null, allowSkip: true))
                 {
@@ -434,10 +472,8 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 results.Add(result);
                 log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {reading?.ToString("R", CultureInfo.InvariantCulture) ?? "skipped"} {point.Unit} "
                     + $"[{point.Min}, {point.Max}] {source}, automated");
-                AnsiConsole.MarkupLine(reading is { } r
-                    ? $"  {(result.Pass == true ? "[green]✓[/]" : "[red]✗[/]")} {Fmt(r, point)} {Markup.Escape(MeterUnits.Display(point.Unit))} "
-                      + $"[grey](limits {Fmt(point.Min, point)} to {Fmt(point.Max, point)})[/]"
-                    : "  [yellow]skipped[/]");
+                if (!screens.Clearing)
+                    RowLine(point, result, reading);
             }
 
             if (_calFactorSwitch != 100)
@@ -455,6 +491,100 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             StandbyQuietly(dc);
         }
         return new MeterTestResult(test.Id, test.Title, test.Source, channel, results);
+    }
+
+    private void ZeroMeter(IPowerMeterControl control)
+    {
+        ConsoleUi.Attempt("Zeroing the meter", () => Busy("Zeroing the meter", control.Zero), bench.Log);
+        AnsiConsole.MarkupLine("[green]✓[/] Meter zeroed.");
+    }
+
+    /// <summary>
+    /// Before the zero: the meter should see next to nothing with the 11683A in STANDBY. If it sees power, FUNCTION is
+    /// most likely still in CALIBRATE, and a zero now would take that power as zero and make the CAL fail; the operator
+    /// is told, and can check again, zero anyway or exit. The limit is a quarter of the zero range's full scale.
+    /// </summary>
+    private void CheckStandby(IPowerMeterControl control, MeterStep zero)
+    {
+        var limit = 0.25 * Simulated11683A.TrueFullScaleWatts(RangeSwitch.Get(zero.Calibrator.Range));
+        while (true)
+        {
+            var watts = ConsoleUi.Attempt("Checking the 11683A is in STANDBY",
+                () => (double?)ConsoleUi.Busy("Checking the 11683A is in STANDBY", _ => control.Read()), bench.Log, canSkip: true);
+            if (watts is not { } w || Math.Abs(w) <= limit)
+                return;
+            bench.Log.Write($"Before the zero the meter read {w.ToString("R", CultureInfo.InvariantCulture)} W (limit {limit} W): the 11683A looks to be in CALIBRATE");
+            AnsiConsole.MarkupLine($"[red]✗ The meter reads {Si.Format(w, "W", 4)} with the 11683A meant to be in STANDBY: FUNCTION looks to be in CALIBRATE.[/]");
+            AnsiConsole.MarkupLine("[grey]Zeroing now would take that power as zero, and the CAL would then fail.[/]");
+            var choice = ConsoleUi.Choose("Set FUNCTION to STANDBY, then:", ["Check again", "Zero anyway", "Exit"], "Zero anyway");
+            bench.Log.Write($"Operator chose {choice}");
+            if (choice == "Exit")
+                throw new OperatorStopException("Exited by the operator before the zero.");
+            if (choice == "Zero anyway")
+                return;
+        }
+    }
+
+    /// <summary>
+    /// The CAL, and if the meter refuses it (CAL ERROR, the 1 mW it sees is too far off), what it sees and the likely
+    /// cause; the operator can redo the zero and then the CAL (a zero taken in CALIBRATE is the usual cause), retry the
+    /// CAL, or exit.
+    /// </summary>
+    private void CalibrateMeter(IPowerMeterControl control, MeterTest test, MeterStep cal, IDcSource? dc)
+    {
+        while (true)
+        {
+            SetCalibrator(cal.Calibrator, dc, "for the CAL", allowSkip: false);
+            Settle(cal.SettleSeconds);
+            try
+            {
+                Busy("CAL on the 11683A", () => control.Calibrate(cal.ReferenceCalFactorPercent));
+                AnsiConsole.MarkupLine($"[green]✓[/] Meter calibrated (reference cal factor {cal.ReferenceCalFactorPercent.ToString("0.#", CultureInfo.InvariantCulture)}%).");
+                return;
+            }
+            catch (InstrumentException ex)
+            {
+                bench.Log.Write($"CAL failed: {ex.Message}");
+                if (!ConsoleUi.Interactive)
+                    throw;
+                AnsiConsole.MarkupLine($"[red]✗ The CAL failed: {Markup.Escape(ex.Message)}[/]");
+                AnsiConsole.MarkupLine(Markup.Escape(CalDiagnosis(control)));
+                var choice = ConsoleUi.Choose("What now?", ["Redo the zero, then the CAL", "Retry the CAL", "Exit"], "Exit");
+                bench.Log.Write($"Operator chose {choice}");
+                if (choice == "Exit")
+                    throw new OperatorStopException("Exited by the operator after the CAL failed.", ex);
+                _calibratorNow = null;   // ask for the 11683A's switches again, whatever was set
+                if (choice.StartsWith("Redo", StringComparison.Ordinal) && test.Zero is { } zero)
+                {
+                    SetCalibrator(zero.Calibrator, dc, "for the zero", allowSkip: false);
+                    Settle(zero.SettleSeconds);
+                    CheckStandby(control, zero);
+                    ZeroMeter(control);
+                }
+            }
+        }
+    }
+
+    /// <summary>What the meter sees after a failed CAL, and what that most likely means.</summary>
+    private string CalDiagnosis(IPowerMeterControl control)
+    {
+        double watts;
+        try
+        {
+            watts = ConsoleUi.Busy("Checking what the meter sees", _ => control.Read());
+        }
+        catch (InstrumentException)
+        {
+            return "Check the 11683A is at RANGE 1 mW, FUNCTION CALIBRATE.";
+        }
+        bench.Log.Write($"After the failed CAL the meter read {watts.ToString("R", CultureInfo.InvariantCulture)} W");
+        var seen = Si.Format(watts, "W", 4);
+        if (watts < 0.1e-3)
+            return $"The meter sees almost no power ({seen}): FUNCTION may still be in STANDBY, or the zero was taken with the 11683A in CALIBRATE.";
+        if (Math.Abs(watts / 1e-3 - 1) > 0.05)
+            return $"The meter sees {seen} instead of about 1 mW. Check RANGE 1 mW and FUNCTION CALIBRATE; if they are right, the zero was "
+                + "most likely taken with the 11683A in CALIBRATE: redo the zero.";
+        return $"The meter sees about 1 mW ({seen}), so the 11683A looks right: retry the CAL.";
     }
 
     /// <summary>The DC calibrator to Standby, even after an error; a failure is reported, not thrown over the first one.</summary>
@@ -493,10 +623,10 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             return true;
         }
 
-        AnsiConsole.MarkupLine($"Set the 11683A{(purpose is null ? "" : " " + purpose)}: [bold]{Markup.Escape(Describe(setting, dc))}[/]");
+        AnsiConsole.Write(SwitchPanel(setting, _calibratorNow, dc, "Set the 11683A" + (purpose is null ? "" : " " + purpose)));
         if ((Sim is null || bench.Walkthrough))
         {
-            var prompt = "Press Enter when set" + (allowSkip ? " (S to skip this row)" : "") + (bench.Walkthrough ? " [simulator: Enter sets it]" : "");
+            var prompt = "Press Enter when set" + (allowSkip ? " (S to skip this row, X to exit)" : " (X to exit)") + (bench.Walkthrough ? " [simulator: Enter sets it]" : "");
             if (allowSkip ? !AskGo(prompt) : !Ask(prompt))
                 return false;
         }
@@ -515,9 +645,80 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         return true;
     }
 
-    /// <summary>The 11683A's switches for the operator; with a bus calibrator its voltage is the app's to set.</summary>
-    private static string Describe(CalibratorSetting setting, IDcSource? dc) =>
-        dc is null ? setting.ToString() : (setting with { ExternalVolts = null }).ToString().Replace(", DC calibrator 0 V", "", StringComparison.Ordinal);
+    /// <summary>
+    /// The 11683A's switches as a panel, each on its own line; the ones that differ from <paramref name="before"/> are
+    /// highlighted and the rest greyed, so what to turn stands out. A hand-set DC calibrator is a line of its own.
+    /// </summary>
+    private static Panel SwitchPanel(CalibratorSetting setting, CalibratorSetting? before, IDcSource? dc, string header)
+    {
+        var rows = new List<(string Name, string Value, bool Changed)>
+        {
+            ("RANGE", RangeSwitch.Get(setting.Range).Label, before?.Range != setting.Range),
+            ("FUNCTION", setting.Function.ToString().ToUpperInvariant(), before?.Function != setting.Function),
+            ("POLARITY", setting.Polarity.ToString().ToUpperInvariant(), before?.Polarity != setting.Polarity),
+            ("REF", setting.Reference == ReferenceSwitch.Ext ? "EXT" : "INT", before?.Reference != setting.Reference),
+        };
+        if (dc is null && setting.Reference == ReferenceSwitch.Ext)
+            rows.Add(("DC calibrator", setting.ExternalVolts is { } v and not 0 ? Si.Format(v, "V", 5) : "0 V, output off", before?.ExternalVolts != setting.ExternalVolts));
+        return Highlighted(rows, header);
+    }
+
+    /// <summary>A panel of name/value lines, the changed values highlighted and the rest greyed.</summary>
+    private static Panel Highlighted(IEnumerable<(string Name, string Value, bool Changed)> rows, string header)
+    {
+        var list = rows.ToList();
+        var grid = new Grid().AddColumn(new GridColumn().PadRight(3)).AddColumn();
+        foreach (var (name, value, changed) in list)
+            grid.AddRow($"[grey]{Markup.Escape(name)}[/]", changed ? $"[bold yellow]{Markup.Escape(value)}[/]" : $"[grey]{Markup.Escape(value)}[/]");
+        // Wide enough for the header, which a panel otherwise cuts to its contents' width.
+        var content = list.Max(r => r.Name.Length) + 3 + list.Max(r => r.Value.Length) + 4;
+        return new Panel(grid) { Width = Math.Max(content, header.Length + 6) }
+            .Header($" {Markup.Escape(header)} ").Border(BoxBorder.Rounded).BorderColor(Color.Blue);
+    }
+
+    /// <summary>The connections as they are now; the operator is asked only when they change.</summary>
+    private IReadOnlyList<(string Name, string Value)>? _connectionsNow;
+
+    /// <summary>What is connected to what for <paramref name="test"/> on <paramref name="channel"/>.</summary>
+    private IReadOnlyList<(string Name, string Value)> Connections(MeterTest test, string channel, IDcSource? dc)
+    {
+        var input = definition.Channels.Count < 2 ? "sensor input"
+            : (definition.BusDriver == "438A" ? "SENSOR " : "CHANNEL ") + channel;
+        var rows = new List<(string, string)> { ("11730A cable", $"11683A POWER METER → {definition.Model} {input}") };
+        if (test.NeedsH01)
+        {
+            rows.Add(("DC calibrator", (dc is null ? "HI/LO" : "OUTPUT HI/LO") + " → 11683A REF EXT (Guard, LO floating)"));
+            rows.Add(("11683A power", "unplugged (keep the power meter connected)"));
+        }
+        else
+        {
+            rows.Add(("11683A power", "plugged in, LINE ON"));
+        }
+        return rows;
+    }
+
+    /// <summary>Shows the connections and waits for them, if they differ from the last test's. False if the operator skips the test.</summary>
+    private bool Connect(IReadOnlyList<(string Name, string Value)> connections)
+    {
+        var before = _connectionsNow;
+        if (before is not null && before.SequenceEqual(connections))
+            return true;
+        AnsiConsole.Write(Highlighted(connections.Select(c => (c.Name, c.Value, before is null || !before.Contains(c))), "Connect"));
+        if ((Sim is null || bench.Walkthrough) && !AskGo("Press Enter when connected (S to skip this test, X to exit)"))
+            return false;
+        _connectionsNow = connections;
+        return true;
+    }
+
+    /// <summary>One line per row: its name, the reading, its limits.</summary>
+    private static void RowLine(MeterTestPoint point, MeterPointResult result, double? reading)
+    {
+        var label = Markup.Escape(point.Label.PadRight(18));
+        AnsiConsole.MarkupLine(reading is { } r
+            ? $"  {(result.Pass == true ? "[green]✓[/]" : "[red]✗[/]")} {label} [bold]{Fmt(r, point)}[/] {Markup.Escape(MeterUnits.Display(point.Unit))}  "
+              + $"[grey]{Fmt(point.Min, point)} to {Fmt(point.Max, point)}[/]"
+            : $"  [yellow]–[/] {label} [yellow]skipped[/]");
+    }
 
     private void ApplyDcSource(CalibratorSetting setting, IDcSource? dc)
     {
@@ -525,7 +726,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             return;
         if (setting.ExternalVolts is { } v and not 0)
         {
-            ConsoleUi.Attempt($"Setting the DC calibrator to {Si.Format(v, "V", 5)}", () => dc.Output(v), bench.Log);
+            ConsoleUi.Attempt($"Setting the DC calibrator to {Si.Format(v, "V", 5)}", () => Busy($"Setting the DC calibrator to {Si.Format(v, "V", 5)}", () => dc.Output(v)), bench.Log);
             bench.Log.Write($"DC calibrator set to {v.ToString("R", CultureInfo.InvariantCulture)} V");
             AnsiConsole.MarkupLine($"  [grey]DC calibrator set to {Si.Format(v, "V", 5)}[/]");
         }
@@ -559,13 +760,11 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         });
     }
 
-    private static void Busy(string what, Action action)
+    private static void Busy(string what, Action action) => ConsoleUi.Busy(what, _ =>
     {
-        if (ConsoleUi.Interactive)
-            AnsiConsole.Status().Start(what + "…", _ => action());
-        else
-            action();
-    }
+        action();
+        return 0;
+    });
 
     /// <summary>
     /// Readings until two in a row agree to within a fifth of the half-tolerance (the meter's own settling covers its
@@ -573,24 +772,33 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     /// </summary>
     private double? ReadSettled(IPowerMeterControl control, MeterTestPoint point, MeterDisplay display)
     {
-        double Next()
-        {
-            var value = control.Read();
-            return display == MeterDisplay.Watts ? MeterUnits.FromWatts(point.Unit, value)!.Value : value;
-        }
-
         var band = Math.Max((point.Max - point.Min) / 2 * 0.2, 1e-12);
-        var previous = Next();
-        for (var i = 0; i < 7; i++)
+        // Under a spinner: an E441x reading with a 512 filter takes about 26 s, and nothing else would show it is busy.
+        var (value, settled) = ConsoleUi.Busy($"Measuring {point.Label}", status =>
         {
-            var next = Next();
-            if (Math.Abs(next - previous) <= band)
-                return (previous + next) / 2;
-            previous = next;
+            double Next(int n)
+            {
+                status($"Measuring {point.Label}: reading {n}");
+                var reading = control.Read();
+                return display == MeterDisplay.Watts ? MeterUnits.FromWatts(point.Unit, reading)!.Value : reading;
+            }
+
+            var previous = Next(1);
+            for (var i = 2; i <= 8; i++)
+            {
+                var next = Next(i);
+                if (Math.Abs(next - previous) <= band)
+                    return ((previous + next) / 2, true);
+                previous = next;
+            }
+            return (previous, false);
+        });
+        if (!settled)
+        {
+            bench.Log.Write($"'{point.Label}': readings did not agree to within {band} {point.Unit}; the last is used");
+            AnsiConsole.MarkupLine("  [yellow]The readings kept changing; the last one is recorded.[/]");
         }
-        bench.Log.Write($"'{point.Label}': readings did not agree to within {band} {point.Unit}; the last is used");
-        AnsiConsole.MarkupLine("  [yellow]The readings kept changing; the last one is recorded.[/]");
-        return previous;
+        return value;
     }
 
     /// <summary>CAL as a front-panel adjustment (436A CAL ADJ): the operator turns it while the reading updates.</summary>
@@ -604,6 +812,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         }
         if (!ConsoleUi.Interactive)
             throw new OperatorException("CAL ADJ needs an operator at the console.");
+        ConsoleUi.BeforePrompt();
         AnsiConsole.Live(new Text("")).Start(ctx =>
         {
             while (true)
@@ -615,6 +824,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                     break;
             }
         });
+        ConsoleUi.Answered();
         bench.Log.Write($"CAL ADJ set by the operator for {target}");
     }
 
@@ -626,11 +836,29 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         _calFactorSwitch = percent;
     }
 
+    /// <summary>Enter to go on; X to exit the run.</summary>
+    /// <exception cref="OperatorStopException">The operator typed X.</exception>
     private static bool Ask(string message)
     {
-        if (ConsoleUi.Interactive)
-            AnsiConsole.Prompt(new TextPrompt<string>($"[blue]{Markup.Escape(message)}[/]").AllowEmpty());
+        if (!ConsoleUi.Interactive)
+            return true;
+        var text = ConsoleUi.Ask(new TextPrompt<string>($"[blue]{Markup.Escape(message)}[/]").AllowEmpty()).Trim();
+        if (text.Equals("x", StringComparison.OrdinalIgnoreCase))
+            throw new OperatorStopException("Exited by the operator.");
         return true;
+    }
+
+    /// <summary>
+    /// On a clearing console, the test's screen redrawn with its table so far: the rows measured, with PASS or FAIL,
+    /// and the rows to come. A redirected console gets one line per row instead.
+    /// </summary>
+    private void ShowProgress(MeterTest test, string channel, IReadOnlyList<MeterPointResult> done)
+    {
+        if (!screens.Clearing)
+            return;
+        screens.Redraw();
+        var all = done.Concat(test.Points.Skip(done.Count).Select(p => new MeterPointResult(p, test.SourceOf(p), null, false))).ToList();
+        AnsiConsole.Write(MeterReport.Table(new MeterTestResult(test.Id, ShortTitle(test), test.Source, channel, all), pendingFrom: done.Count));
     }
 
     /// <summary>
@@ -750,12 +978,16 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         sim.ExternalDvmSource = () => meter.DisplayedWatts() / fullScale;   // RECORDER OUTPUT: 1 V at full scale
     }
 
+    /// <summary>Enter to go on (true), S to skip (false), X to exit the run: what is measured so far is saved.</summary>
+    /// <exception cref="OperatorStopException">The operator typed X.</exception>
     private static bool AskGo(string message)
     {
         if (!ConsoleUi.Interactive)
             return true;
-        var text = AnsiConsole.Prompt(new TextPrompt<string>($"[blue]{Markup.Escape(message)}[/]").AllowEmpty());
-        return !text.Trim().Equals("s", StringComparison.OrdinalIgnoreCase);
+        var text = ConsoleUi.Ask(new TextPrompt<string>($"[blue]{Markup.Escape(message)}[/]").AllowEmpty()).Trim();
+        if (text.Equals("x", StringComparison.OrdinalIgnoreCase))
+            throw new OperatorStopException("Exited by the operator.");
+        return !text.Equals("s", StringComparison.OrdinalIgnoreCase);
     }
 
     private static double? AskReading(MeterTestPoint point, double? simulatedDisplay = null)
@@ -768,7 +1000,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             .AllowEmpty();
         if (shown is not null)
             prompt = prompt.DefaultValue(shown).HideDefaultValue();
-        var text = AnsiConsole.Prompt(prompt
+        var text = ConsoleUi.Ask(prompt
             .Validate(t => t.Trim() == "" || double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out _)
                 ? ValidationResult.Success()
                 : ValidationResult.Error("Enter a number, or nothing to skip.")));

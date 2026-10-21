@@ -53,6 +53,7 @@ try
 
     var config = AppConfig.Load(options.ConfigPath);
     options.ApplyTo(config);
+    ConsoleUi.BeepEnabled = config.Beep;
 
     if (options.Command is { } command)
         return RunCommand(command, config, options);
@@ -71,6 +72,7 @@ try
             // Fresh config each time, so an edit to appsettings.local.json takes effect without restarting.
             var fresh = AppConfig.Load(options.ConfigPath);
             options.ApplyTo(fresh);
+            ConsoleUi.BeepEnabled = fresh.Beep;
             RunCommand(choice, fresh, options);
         }
         catch (Exception ex)
@@ -152,6 +154,6 @@ static string ChooseFromMenu(CommandLine options)
         ["Print a saved report"] = "print",
         ["Exit"] = "exit",
     };
-    var choice = AnsiConsole.Prompt(new SelectionPrompt<string>().Title("What would you like to do?").AddChoices(choices.Keys));
+    var choice = ConsoleUi.Ask(new SelectionPrompt<string>().Title("What would you like to do?").AddChoices(choices.Keys));
     return choices[choice];
 }
