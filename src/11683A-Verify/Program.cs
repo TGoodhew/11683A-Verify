@@ -55,32 +55,38 @@ try
     options.ApplyTo(config);
     ConsoleUi.BeepEnabled = config.Beep;
 
-    if (options.Command is { } command)
+    // Scripted: the named command, and its exit code.
+    if (options.Command is { } command && !ConsoleUi.Interactive)
         return RunCommand(command, config, options);
 
     if (Console.IsInputRedirected)
         throw new UsageException("Name a command: the menu needs an operator at the console.");
 
-    // The menu: run a command, then come back, until Exit.
+    // At the console: the named command or a menu choice, then "What next?", until Exit.
+    var next = options.Command;
+    var named = next is not null;
+    var exitCode = 0;
     while (true)
     {
-        var choice = ChooseFromMenu(options);
-        if (choice == "exit")
-            return 0;
+        next ??= ChooseFromMenu(options);
+        if (next == "exit")
+            return exitCode;
         try
         {
             // Fresh config each time, so an edit to appsettings.local.json takes effect without restarting.
             var fresh = AppConfig.Load(options.ConfigPath);
             options.ApplyTo(fresh);
             ConsoleUi.BeepEnabled = fresh.Beep;
-            RunCommand(choice, fresh, options);
+            exitCode = RunCommand(next, fresh, options);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!(named && ex is UsageException))
         {
             ConsoleUi.Failure(ex);
+            exitCode = 3;
         }
+        named = false;
         AnsiConsole.WriteLine();
-        ConsoleUi.Prompt("Press Enter to return to the menu");
+        next = WhatNext(next, options);
         AnsiConsole.Clear();
     }
 }
@@ -131,6 +137,23 @@ static int PrintCommand(AppConfig config)
     var names = saved.Take(20).Select(Path.GetFileName).OfType<string>().ToList();
     var name = ConsoleUi.Choose("Which report? (newest first)", names, names[0]);
     return Printing.PrintSaved(saved[names.IndexOf(name)], null);
+}
+
+/// <summary>
+/// After a run: another of the same kind where that has a menu of its own (a power meter test goes back to "Which
+/// power meter?"), the main menu (null), or exit. The command line's per-run picks (--meter, --retest) are dropped,
+/// so the menus ask again.
+/// </summary>
+static string? WhatNext(string command, CommandLine options)
+{
+    options.ForgetRunChoices();
+    var choices = new Dictionary<string, string?>();
+    if (command == "meter-test")
+        choices["Another power meter test"] = "meter-test";
+    choices["Main menu"] = null;
+    choices["Exit"] = "exit";
+    var choice = ConsoleUi.Ask(new SelectionPrompt<string>().Title("What next?").AddChoices(choices.Keys));
+    return choices[choice];
 }
 
 static string ChooseFromMenu(CommandLine options)
