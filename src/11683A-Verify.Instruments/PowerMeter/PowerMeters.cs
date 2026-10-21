@@ -168,9 +168,43 @@ public sealed class E441xPowerMeter(IVisaSession session, int channel = 1) : IPo
             CheckError();
             return value;
         }
+        catch (InstrumentTimeoutException ex)
+        {
+            session.TimeoutMilliseconds = timeout;
+            throw new InstrumentTimeoutException(ex.Message + Recover(), ex);
+        }
         finally
         {
             session.TimeoutMilliseconds = timeout;
+        }
+    }
+
+    /// <summary>
+    /// After a reading that never came: a device clear halts the measurement, returns the trigger to idle and empties
+    /// the buffers, leaving every setting and the error queue as they were (Programming Guide pp. 1-91 to 1-92), so a
+    /// retry starts clean rather than queueing behind a stuck READ?. The error queue then says what the meter made of
+    /// it. Returns what to add to the message.
+    /// </summary>
+    private string Recover()
+    {
+        try
+        {
+            session.Clear();
+            var errors = new List<string>();
+            for (var i = 0; i < 5; i++)
+            {
+                var error = session.Query("SYST:ERR?").Trim();
+                if (IsNoError(error))
+                    break;
+                errors.Add(error);
+            }
+            return errors.Count == 0
+                ? " The app has cleared the meter (device clear), and it reports no error."
+                : $" The app has cleared the meter (device clear). Its error queue: {string.Join("; ", errors)}.";
+        }
+        catch (InstrumentException)
+        {
+            return " It did not answer a device clear either.";
         }
     }
 

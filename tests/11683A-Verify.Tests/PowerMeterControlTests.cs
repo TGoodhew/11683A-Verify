@@ -1,4 +1,5 @@
 using Verify11683A.Instruments.PowerMeter;
+using Verify11683A.Instruments.Visa;
 using Verify11683A.Meters;
 using Verify11683A.Tests.Fakes;
 
@@ -60,6 +61,26 @@ public class PowerMeterControlTests
         session.TimeoutMilliseconds = 20000;
         meter.Read();
         Assert.Equal(20000, session.TimeoutMilliseconds);   // restored after the read
+    }
+
+    [Fact]
+    public void E441x_clears_a_stuck_reading_so_a_retry_starts_clean()
+    {
+        // E4419B on the bench, channel B: a READ2? at filter 512 never answered, and the Retry queued behind it.
+        var session = E441x("E4419B").TimeOutOnce("READ2? DEF,DEF,(@2)").Answer("READ2? DEF,DEF,(@2)", "-1.0E-009");
+        var meter = new E441xPowerMeter(session, 2);
+        meter.Identify();
+        meter.Apply(new MeterSettings { Filter = 512 }, null);
+        session.TimeoutMilliseconds = 20000;
+        session.AnswerOnce("SYST:ERR?", "-213,\"Init ignored\"");
+
+        var ex = Assert.Throws<InstrumentTimeoutException>(() => meter.Read());
+        Assert.Equal(1, session.Clears);
+        Assert.Contains("device clear", ex.Message);
+        Assert.Contains("-213,\"Init ignored\"", ex.Message);
+        Assert.Equal(20000, session.TimeoutMilliseconds);
+
+        Assert.Equal(-1e-9, meter.Read());   // the retry
     }
 
     [Fact]
