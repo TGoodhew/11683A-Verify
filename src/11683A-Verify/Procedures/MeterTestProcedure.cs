@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using Spectre.Console;
@@ -420,7 +421,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             if (test.Zero is { } zero)
             {
                 SetCalibrator(zero.Calibrator, dc, "for the zero", allowSkip: false);
-                Settle(zero.SettleSeconds);
+                Settle(zero.SettleSeconds, control, MeterDisplay.Watts);   // just preset: watts
                 CheckStandby(control, zero);
             }
             ConsoleUi.Attempt("Setting up the meter", () => control.Apply(baseline, null), log);
@@ -436,7 +437,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 else
                 {
                     SetCalibrator(cal.Calibrator, dc, "for the CAL", allowSkip: false);
-                    Settle(cal.SettleSeconds);
+                    Settle(cal.SettleSeconds, control, baseline.Display ?? MeterDisplay.Watts);
                     ConsoleUi.Attempt("CAL ADJ", () => AdjustByHand(control, cal.AdjustTo ?? "1.000 mW"), log);
                 }
             }
@@ -535,7 +536,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         while (true)
         {
             SetCalibrator(cal.Calibrator, dc, "for the CAL", allowSkip: false);
-            Settle(cal.SettleSeconds);
+            Settle(cal.SettleSeconds, control, test.Meter!.Display ?? MeterDisplay.Watts);
             try
             {
                 Busy("CAL on the 11683A", () => control.Calibrate(cal.ReferenceCalFactorPercent));
@@ -557,7 +558,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 if (choice.StartsWith("Redo", StringComparison.Ordinal) && test.Zero is { } zero)
                 {
                     SetCalibrator(zero.Calibrator, dc, "for the zero", allowSkip: false);
-                    Settle(zero.SettleSeconds);
+                    Settle(zero.SettleSeconds, control, test.Meter!.Display ?? MeterDisplay.Watts);
                     CheckStandby(control, zero);
                     ZeroMeter(control);
                 }
@@ -737,28 +738,57 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         }
     }
 
-    /// <summary>Waits for the 11683A to settle (its STANDBY drift takes up to 60 s), with a countdown.</summary>
-    private void Settle(int seconds)
+    /// <summary>
+    /// Waits for the 11683A to settle (its STANDBY drift takes up to 60 s), with a countdown and, beside it, what the
+    /// meter reads meanwhile in <paramref name="display"/>'s units, so the drift can be seen dying away.
+    /// </summary>
+    private void Settle(int seconds, IPowerMeterControl control, MeterDisplay display)
     {
         if (seconds <= 0 || Sim is not null)
             return;
+        var clock = Stopwatch.StartNew();
+        var total = TimeSpan.FromSeconds(seconds);
+        TimeSpan Left() => total - clock.Elapsed;
         AnsiConsole.Status().Start($"Letting the 11683A settle: {seconds} s", ctx =>
         {
-            for (var left = seconds; left > 0; left--)
+            using var watch = new MeterWatch(control.Read, Left);
+            while (Left() > TimeSpan.Zero)
             {
-                ctx.Status($"Letting the 11683A settle: {left} s [grey](Enter to go on now)[/]");
-                for (var tick = 0; tick < 10; tick++)
+                ctx.Status($"Letting the 11683A settle: {Math.Ceiling(Left().TotalSeconds):0} s   {Watching(watch, display)}   [grey](Enter to go on now)[/]");
+                if (ConsoleUi.Interactive && Console.KeyAvailable && Console.ReadKey(intercept: true).Key == ConsoleKey.Enter)
                 {
-                    if (ConsoleUi.Interactive && Console.KeyAvailable && Console.ReadKey(intercept: true).Key == ConsoleKey.Enter)
-                    {
-                        bench.Log.Write($"Settling cut short by the operator with {left} s to go");
-                        return;
-                    }
-                    Thread.Sleep(100);
+                    bench.Log.Write($"Settling cut short by the operator with {Math.Ceiling(Left().TotalSeconds):0} s to go");
+                    break;
                 }
+                Thread.Sleep(100);
             }
+            if (watch.Busy)
+                ctx.Status($"Finishing the meter's reading   {Watching(watch, display)}");
+            watch.Dispose();
+            var (latest, _, count) = watch.Readings;
+            bench.Log.Write(watch.Error is { } error
+                ? $"While settling the meter stopped answering: {error.Message}"
+                : $"While settling the meter read {latest?.ToString("R", CultureInfo.InvariantCulture) ?? "nothing"} {display} last ({count} readings)");
         });
     }
+
+    /// <summary>The meter's last reading and the one before it, for the settling countdown.</summary>
+    private static string Watching(MeterWatch watch, MeterDisplay display)
+    {
+        if (watch.Error is not null)
+            return "[yellow]meter not answering[/]";
+        var (latest, previous, _) = watch.Readings;
+        if (latest is not { } now)
+            return "[grey]meter: reading…[/]";
+        return $"meter [bold]{Markup.Escape(Shown(now, display))}[/]" + (previous is { } was ? $" [grey](was {Markup.Escape(Shown(was, display))})[/]" : "");
+    }
+
+    private static string Shown(double value, MeterDisplay display) => display switch
+    {
+        MeterDisplay.Watts => Si.Format(value, "W", 4),
+        MeterDisplay.Dbm => value.ToString("0.000", CultureInfo.InvariantCulture) + " dBm",
+        _ => value.ToString("0.000", CultureInfo.InvariantCulture) + " dB",
+    };
 
     private static void Busy(string what, Action action) => ConsoleUi.Busy(what, _ =>
     {

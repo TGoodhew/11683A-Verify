@@ -184,6 +184,13 @@ public sealed class CommandLine
         return result;
     }
 
+    /// <summary>Drops the picks that belong to one run (--meter, --retest), so the next run from the menu asks for them.</summary>
+    public void ForgetRunChoices()
+    {
+        Meter = null;
+        Retest = false;
+    }
+
     public void ApplyTo(AppConfig config)
     {
         if (DvmModel is not null) config.Dvm.Model = DvmModel;
