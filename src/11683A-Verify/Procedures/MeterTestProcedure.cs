@@ -13,6 +13,7 @@ using Verify11683A.Measurement;
 using Verify11683A.Meters;
 using Verify11683A.Results;
 using Verify11683A.Specs;
+using Verify11683A.Uncertainty;
 
 namespace Verify11683A.App.Procedures;
 
@@ -39,13 +40,29 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         var started = bench.Clock.Now;
         Header();
 
-        var tests = ChooseTests();
         var serial = AskSerial();
-        var channels = ChooseChannels(tests);
+        var retest = OfferRetest(serial);
+        List<(MeterTest Test, string Channel)> planned;
+        if (retest is not null)
+        {
+            // Only what the last run did not pass, still channel by channel.
+            var redo = retest.ToRerun;
+            var channelOrder = definition.Channels;
+            planned = [.. redo
+                .Select(r => (Test: definition.Tests.FirstOrDefault(t => t.Id == r.TestId), r.Channel))
+                .Where(p => p.Test is not null)
+                .Select(p => (p.Test!, p.Channel))
+                .OrderBy(p => channelOrder.IndexOf(p.Channel)).ThenBy(p => definition.Tests.IndexOf(p.Item1))];
+        }
+        else
+        {
+            var tests = ChooseTests();
+            var channels = ChooseChannels(tests);
+            // Every test on one channel before the cable moves to the next: A, then B.
+            planned = [.. channels.SelectMany((c, i) => tests.Where(t => t.PerChannel || i == 0).Select(t => (t, c)))];
+        }
         var useBus = definition.BusDriver is not null && (Sim is not null
             || ConsoleUi.Confirm($"Read the {definition.Model} over the bus at {Resource}?", defaultValue: true));
-        // Every test on one channel before the cable moves to the next: A, then B.
-        var planned = channels.SelectMany((c, i) => tests.Where(t => t.PerChannel || i == 0).Select(t => (Test: t, Channel: c))).ToList();
         screens.SetSteps([.. planned.Select(p => StepName(p.Test, p.Channel)), "Results"]);
 
         var results = new List<MeterTestResult>();
@@ -98,6 +115,13 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             notes.Add($"Transcription notes for {definition.FileName}: " + string.Join(" ", definition.Ambiguities));
         if (_dcSource is not null)
             notes.Add($"The DC calibrator on REF EXT ({_dcSource.Description}) was set by the app over the bus, on its OUTPUT terminals.");
+        IReadOnlyList<MeterTestResult> recorded = results;
+        if (retest is not null)
+        {
+            notes.Insert(0, retest.Note(results));
+            recorded = retest.Merge(results);
+            bench.Log.Write(retest.Note(results));
+        }
 
         var recorderUsed = results.Any(r => r.Points.Any(p => p.Source == ReadingSource.Recorder));
         var defPath = Path.Combine(MeterDefinition.DefaultDirectory, definition.FileName);
@@ -116,10 +140,36 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 ? new DvmRecord(config.Dvm.Details(id), bench.Dvm.ResourceName, id.Raw, config.Dvm.Details(id).StateOn(DateOnly.FromDateTime(started.Date)))
                 : null,
             SimulationScenario = Sim?.Scenario.Name,
-            Tests = results,
+            Tests = recorded,
             NotRun = definition.NotCovered,
             Notes = notes,
         };
+    }
+
+    /// <summary>
+    /// If this meter's last run (same model and serial) did not pass everything, offers to run again only the tests it
+    /// failed or left incomplete; their new results then replace the old in a combined record. --retest accepts without
+    /// asking.
+    /// </summary>
+    private MeterRetest? OfferRetest(string serial)
+    {
+        var last = MeterRetest.Latest(config.ResultsDirectory, definition.Model, serial, Sim is not null);
+        if (last is null || last.ToRerun.Count == 0)
+            return null;
+        var grid = new Grid().AddColumn(new GridColumn().PadRight(3)).AddColumn();
+        foreach (var t in last.ToRerun)
+            grid.AddRow(Markup.Escape(StepName(definition.Tests.FirstOrDefault(d => d.Id == t.TestId) ?? new MeterTest { Title = t.Title, PerChannel = true }, t.Channel)),
+                !t.Complete && t.Verdict != Verdict.Fail ? "[yellow]INCOMPLETE[/]" : ConsoleUi.VerdictMarkup(t.Verdict));
+        var header = $" Last run of this {definition.Model}: {last.Previous.Started:yyyy-MM-dd HH:mm} ";
+        var widest = last.ToRerun.Max(t => StepName(definition.Tests.FirstOrDefault(d => d.Id == t.TestId) ?? new MeterTest { Title = t.Title }, t.Channel).Length) + 3 + 12 + 4;
+        AnsiConsole.Write(new Panel(grid) { Width = Math.Max(widest, header.Length + 6) }
+            .Header(Markup.Escape(header))
+            .Border(BoxBorder.Rounded).BorderColor(Color.Yellow));
+        var accept = options.Retest || (ConsoleUi.Interactive && ConsoleUi.Confirm("Run only these again (the passing tests are kept from that run)?", defaultValue: true));
+        bench.Log.Write(accept
+            ? $"Retest of {Path.GetFileName(last.PreviousPath)}: {string.Join(", ", last.ToRerun.Select(t => $"{t.TestId} {t.Channel}"))}"
+            : "Retest offered and declined");
+        return accept ? last : null;
     }
 
     /// <summary>Why the run stopped early (an instrument error with no one to retry it, or the operator's Stop); null if it did not.</summary>

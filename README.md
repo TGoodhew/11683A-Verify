@@ -267,11 +267,16 @@ How a run goes:
    - from the DVM, for the 435s, which the manual reads at the RECORDER OUTPUT;
    - typed in, for meters without a bus, or if you answer No to reading the meter over the bus (you then
      follow the manual's set-up steps yourself).
-5. Each reading is checked against the manual's limits. Type S to skip a row or a test.
+5. Each reading is checked against the manual's limits. Type S to skip a row or a test, X to exit (what was
+   measured is saved, marked INCOMPLETE).
 6. Results go to `results\<model>_<serial>_<stamp>.json`, with a PDF test record in the manual's
    Min / Actual / Max layout and the session log beside it.
 7. Tests the 11683A can't do, such as the Power Reference Level tests (432A and thermistor mount), are
    listed on the record as not run.
+8. **Retest.** If the meter's last run (same model and serial) failed a test or left one incomplete, the app
+   lists those and offers to run only them again (`--retest` accepts without asking). Each reruns whole, with its
+   zero and CAL. The new record has the retested results in place of the old, the passing tests from the earlier
+   run, and a note saying which is which.
 
 Where editions or OCR disagree, each file's `ambiguities` list says which value was used and why. The PDF
 repeats those notes. The format is described in [docs/meter-definitions.md](docs/meter-definitions.md),
