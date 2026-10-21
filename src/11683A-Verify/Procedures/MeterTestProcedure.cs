@@ -76,11 +76,24 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                     () => OpenIdentified(useBus, channel), bench.Log, canSkip: false)!;
                 identity = meter.Description;
                 bench.Log.Write($"Meter test {test.Id} channel {channel}: {meter.Description}");
-                screens.Begin(StepName(test, channel), ShortTitle(test) + (test.PerChannel && definition.Channels.Count > 1 ? $" — channel {channel}" : ""));
+                var heading = ShortTitle(test) + (test.PerChannel && definition.Channels.Count > 1 ? $" — channel {channel}" : "");
+                screens.Begin(StepName(test, channel), heading);
                 var result = RunTest(test, channel, meter);
                 results.Add(result);
                 AnsiConsole.WriteLine();
                 screens.Report(() => AnsiConsole.Write(MeterReport.Table(result)));
+                // A failed test can be run again at once, still connected; the last attempt is recorded, and a note says so.
+                for (var attempt = 2; _stopped is null && result.Verdict == Verdict.Fail && OfferRerun(test, channel); attempt++)
+                {
+                    bench.Log.Write($"Meter test {test.Id} channel {channel}: FAIL; run again (attempt {attempt})");
+                    _reruns[(test.Id, channel)] = attempt;
+                    screens.Begin(StepName(test, channel), $"{heading} (attempt {attempt})");
+                    result = RunTest(test, channel, meter);
+                    results[^1] = result;
+                    AnsiConsole.WriteLine();
+                    var shown = result;
+                    screens.Report(() => AnsiConsole.Write(MeterReport.Table(shown)));
+                }
                 if (_stopped is not null)
                     break;
                 screens.Pause();
@@ -111,6 +124,11 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             foreach (var (test, channel) in planned.Skip(results.Count))
                 results.Add(new MeterTestResult(test.Id, test.Title, test.Source, channel,
                     [.. test.Points.Select(p => new MeterPointResult(p, test.SourceOf(p), null, false))]));
+        }
+        foreach (var ((testId, channel), attempts) in _reruns)
+        {
+            var test = definition.Tests.First(t => t.Id == testId);
+            notes.Add($"{StepName(test, channel)} failed and was run again at once: {attempts} attempts; the last is recorded.");
         }
         if (definition.Ambiguities.Count > 0)
             notes.Add($"Transcription notes for {definition.FileName}: " + string.Join(" ", definition.Ambiguities));
@@ -171,6 +189,20 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             ? $"Retest of {Path.GetFileName(last.PreviousPath)}: {string.Join(", ", last.ToRerun.Select(t => $"{t.TestId} {t.Channel}"))}"
             : "Retest offered and declined");
         return accept ? last : null;
+    }
+
+    /// <summary>The tests run again straight after a FAIL, and how many attempts each had in all.</summary>
+    private readonly Dictionary<(string TestId, string Channel), int> _reruns = [];
+
+    /// <summary>After a FAIL, at the console: run the test again now? Not offered to a scripted run.</summary>
+    private bool OfferRerun(MeterTest test, string channel)
+    {
+        if (!ConsoleUi.Interactive)
+            return false;
+        var again = ConsoleUi.Confirm($"{StepName(test, channel)} failed. Run it again now?", defaultValue: true);
+        if (!again)
+            bench.Log.Write($"Meter test {test.Id} channel {channel}: FAIL; not run again");
+        return again;
     }
 
     /// <summary>Why the run stopped early (an instrument error with no one to retry it, or the operator's Stop); null if it did not.</summary>
