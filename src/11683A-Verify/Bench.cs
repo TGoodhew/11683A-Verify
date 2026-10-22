@@ -187,7 +187,42 @@ public sealed class Bench : IDisposable
             throw;
         }
         Log.Write($"DC calibrator: {source.Description}" + (Simulator is null ? $" at {config.Resource}" : ""));
+        if (Simulator is null)
+            OfferInternalCalibration(source, config.Model);
         return source;
+    }
+
+    /// <summary>
+    /// At a console, offers the DC calibrator's internal calibration before it is used: on the bench (2026-10-21) the
+    /// 5440B's output read 33 to 80 µV low until it was run, enough to fail the lowest REF EXT rows. Its leads must be
+    /// off the front terminals meanwhile, so this comes before any connections are asked for.
+    /// </summary>
+    private void OfferInternalCalibration(IDcSource source, string model)
+    {
+        if (!source.HasInternalCalibration || !ConsoleUi.Interactive)
+            return;
+        AnsiConsole.MarkupLine($"[grey]The {Markup.Escape(model)}'s internal calibration corrects its zero and gain drift. Its manual asks for it daily, "
+            + "after the 2 h warm-up; it takes about 6 minutes. Without it the lowest REF EXT voltages can be tens of µV off.[/]");
+        if (!ConsoleUi.Confirm($"Run the {model}'s internal calibration now?", defaultValue: true))
+        {
+            Log.Write($"{model} internal calibration offered and declined");
+            return;
+        }
+        ConsoleUi.Prompt($"Disconnect every lead from the {model}'s front terminals, then press Enter");
+        var started = DateTime.Now;
+        var done = ConsoleUi.Attempt($"{model} internal calibration", () => ConsoleUi.Busy($"{model} internal calibration", status =>
+        {
+            source.RunInternalCalibration(step => status($"{model} internal calibration: step {step}"));
+            return true;
+        }), Log, canSkip: true);
+        if (!done)
+        {
+            Log.Write($"{model} internal calibration skipped after an error");
+            return;
+        }
+        var minutes = (DateTime.Now - started).TotalMinutes;
+        Log.Write($"{model} internal calibration done in {minutes:0.0} min: {source.Description}");
+        AnsiConsole.MarkupLine($"[green]✓[/] {Markup.Escape(model)} internal calibration done ({minutes:0} min). Its leads go back on when the connections are shown.");
     }
 
     /// <summary>Closes everything even if a session fails to close, so the error that got here is the one reported.</summary>

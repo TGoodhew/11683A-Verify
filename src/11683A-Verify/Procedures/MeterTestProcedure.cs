@@ -782,7 +782,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         var rows = new List<(string, string)> { ("11730A cable", $"11683A POWER METER → {definition.Model} {input}") };
         if (test.NeedsH01)
         {
-            rows.Add(("DC calibrator", (dc is null ? "HI/LO" : "OUTPUT HI/LO") + " → 11683A REF EXT (Guard, LO floating)"));
+            rows.Add(("DC calibrator", (dc is null ? "HI/LO" : "OUTPUT HI/LO") + " → 11683A REF EXT (GROUND–GUARD link off, LO floating)"));
             rows.Add(("11683A power", "unplugged (keep the power meter connected)"));
         }
         else

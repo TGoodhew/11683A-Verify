@@ -22,7 +22,7 @@ public interface IDcSource : IDisposable
     /// <summary>What the log and report say the calibrator was, e.g. "Fluke 5440B, software 2.1".</summary>
     string Description { get; }
 
-    /// <summary>Confirms the calibrator answers as the expected model, in Voltage mode with internal sense.</summary>
+    /// <summary>Confirms the calibrator is the expected model and sets it up: Standby at 0 V, Voltage mode, internal sense and guard.</summary>
     void Identify();
 
     /// <summary>The terminals <see cref="Output"/> uses for <paramref name="volts"/>, so the operator can be told to move the leads first.</summary>
@@ -33,6 +33,15 @@ public interface IDcSource : IDisposable
 
     /// <summary>Output off (Standby) and set to 0 V.</summary>
     void Standby();
+
+    /// <summary>True when the calibrator has an internal calibration the app can run (the 5440B's, User Manual 3-5).</summary>
+    bool HasInternalCalibration { get; }
+
+    /// <summary>
+    /// Runs the calibrator's internal calibration with every lead off its front terminals, telling
+    /// <paramref name="progress"/> each step it reports, then sets it up again as <see cref="Identify"/> does.
+    /// </summary>
+    void RunInternalCalibration(Action<int>? progress = null);
 }
 
 public sealed class DcSourceException(string message) : InstrumentException(message);
@@ -67,14 +76,76 @@ public sealed class Fluke5440B(IVisaSession session, bool useDivider = true, Act
         var version = session.Query("GVRS").Trim();
         if (!double.TryParse(version, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
             throw new DcSourceException($"{session.ResourceName}: expected a Fluke 5440B, but GVRS returned '{version}'.");
+        // Front or rear terminals is a change inside the 5440B (User Manual 2-27, Figure 2-8), not a bus setting, and
+        // the leads go on the front OUTPUT and DIVIDER terminals.
+        if ((Status() & RearOutputCode) != 0)
+            throw new DcSourceException($"{session.ResourceName}: the 5440B's output is on its rear terminals; the app uses the front "
+                + "OUTPUT and DIVIDER terminals. Change it back to the front (5440B User Manual 2-27, Figure 2-8).");
+        SetUp();
+        Description = $"Fluke 5440B, software {version}";
+    }
+
+    /// <summary>
+    /// Everything else is set here (Table 4-7), Standby first so nothing comes out until Output: Voltage mode (boost
+    /// off), internal sense (REF EXT is a two-wire connection) and internal guard (GUARD on OUTPUT LO, which floats once
+    /// the GROUND-GUARD shorting link is off, as the Service Guide's Figure 2-3 needs). Then checked in GSTS.
+    /// </summary>
+    private void SetUp()
+    {
+        Send("STBY,BSTO,DIVN,SOUT 0,ISNS,IGRD");
         var status = Status();
-        if ((status & VoltageModeCode) == 0)
-            throw new DcSourceException($"{session.ResourceName}: the 5440B is in a Boost mode (GSTS {status}); set it to Voltage mode.");
-        // The connection to REF EXT is two-wire, so internal sense; and nothing comes out until Output.
-        Send("STBY,DIVN,SOUT 0,ISNS");
-        Description = $"Fluke 5440B, software {version}"
-            + ((status & InternalGuardCode) == 0 ? ", external guard" : "")
-            + ((status & RearOutputCode) != 0 ? ", rear outputs" : "");
+        const int wanted = VoltageModeCode | InternalSenseCode | InternalGuardCode;
+        if ((status & wanted) != wanted)
+            throw new DcSourceException($"{session.ResourceName}: the 5440B did not take Voltage mode, internal sense and internal guard "
+                + $"(GSTS {status}, expected {wanted} set; Table 4-5).");
+    }
+
+    public bool HasInternalCalibration => true;
+
+    /// <summary>How often the internal calibration's progress is asked for.</summary>
+    public static readonly TimeSpan CalibrationPoll = TimeSpan.FromSeconds(2);
+
+    /// <summary>The longest the internal calibration may take: about 5 min by the manual, 5.6 on the bench.</summary>
+    public static readonly TimeSpan CalibrationLimit = TimeSpan.FromMinutes(20);
+
+    /// <summary>
+    /// Internal Calibration (User Manual 3-5, p. 3-2): corrects the 5440B's zero and gain drift, and is recommended daily
+    /// after its 2 h warm-up, with every lead off the front terminals. On the bench (2026-10-21) the OUTPUT read 33 to
+    /// 80 µV low at 458 µV to 459 mV until it was run, and +6 µV after. CALI starts it; GDNG (Get Doing, para. 4-20,
+    /// printed "GONG" in the OCR'd manual, which times out) gives the step, 0 when idle. Then the set-up again.
+    /// </summary>
+    public void RunInternalCalibration(Action<int>? progress = null)
+    {
+        Send("STBY,SOUT 0");
+        session.Write("CALI");
+        var started = false;
+        var waited = TimeSpan.Zero;
+        while (true)
+        {
+            _sleep(CalibrationPoll);
+            waited += CalibrationPoll;
+            var step = (int)ScpiNumber.Parse(session.Query("GDNG"), "the 5440B's Get Doing state");
+            if (step != 0)
+            {
+                started = true;
+                progress?.Invoke(step);
+            }
+            else if (started)
+            {
+                break;
+            }
+            else if (waited >= TimeSpan.FromSeconds(10))
+            {
+                throw new DcSourceException($"{session.ResourceName}: the 5440B's internal calibration did not start (GDNG stayed 0).");
+            }
+            if (waited >= CalibrationLimit)
+                throw new DcSourceException($"{session.ResourceName}: the 5440B's internal calibration did not finish within {CalibrationLimit.TotalMinutes:0} min.");
+        }
+        var code = session.Query("GERR").Trim();
+        if (!double.TryParse(code, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) || value != 0)
+            throw new DcSourceException($"{session.ResourceName}: the 5440B's internal calibration ended with error {code} (5440B User Manual, Section 2).");
+        SetUp();
+        Description += $", internal calibration run {DateTime.Now:yyyy-MM-dd HH:mm}";
     }
 
     public DcTerminals TerminalsFor(double volts) =>

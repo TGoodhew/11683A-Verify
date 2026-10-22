@@ -333,8 +333,15 @@ yourself while the DVM shows the error live. Set it to `5440B` (or pass `--dc-so
 Fluke 5440B over the bus at `dcSource.resource` (default `GPIB0::7::INSTR`, the 5440B's factory address; or
 `--dc-source-resource`):
 
-- The app checks the 5440B answers `GVRS` and is in Voltage mode. It selects internal sense and leaves it in
-  Standby at 0 V until a voltage is needed.
+- The app checks the 5440B answers `GVRS`, then sets it up itself and reads the status back to confirm:
+  Standby at 0 V, Voltage mode (boost off), internal sense and internal guard. It stays in Standby until a
+  voltage is needed. Only two things are yours: the leads, and the GROUND–GUARD shorting link (below). Front
+  or rear terminals is an internal change, so the app only checks for front and refuses rear.
+- Before it is used, the app offers the 5440B's **internal calibration** (User Manual 3-5). It corrects the
+  5440B's zero and gain drift, and the manual asks for it daily after the 2 h warm-up. Answer Yes, take every lead
+  off its front terminals, and the app starts it (`CALI`) and follows it (`GDNG`) to the end, about 6 minutes, then
+  sets the 5440B up again. On the bench, before it was run, the OUTPUT read 33–80 µV low from 458 µV to 459 mV, which
+  is enough to fail the lowest Procedure 2 rows; after, +6 µV. The record's calibrator description says when it was run.
 - For each voltage it sets the output, waits the 5 s the 5440B takes to settle to 2 ppm, and reads the DVM on the
   tee. Then it corrects the setting by the DVM's error until the tee is within ±20 ppm (or 1 µV).
 - With `dcSource.useDivider` (the default), 2.2 V and below come from the 5440B's **DIVIDER** terminals: finer
@@ -343,8 +350,10 @@ Fluke 5440B over the bus at `dcSource.resource` (default `GPIB0::7::INSTR`, the 
   calibrator in Standby and tells you when to move the leads.
 - Zeroing is done with the calibrator in Standby. At the end it is left in Standby: press LOCAL to use its front
   panel again.
-- Guard and LO must still float. Leave GUARD internal (tied to LO), and don't strap LO or GUARD to the rear
-  earth post.
+- Guard and LO must float. The 5440B is shipped with a shorting link between its GROUND and GUARD terminals
+  (5440B User Manual p. 2-14). With internal guard, GUARD is OUTPUT LO, so the link would earth LO: **remove
+  it**, and connect nothing else to GUARD or GROUND. A plain BNC cable from OUTPUT HI/LO (centre HI, shell LO)
+  to REF EXT is all the connection needs.
 
 The same setting drives the E4418B's Procedure 2 in `meter-test`. No DVM watches the calibrator there, so the
 app uses the OUTPUT terminals and sets each row's voltage exactly, with the zero and CAL steps in between.
