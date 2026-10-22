@@ -50,7 +50,11 @@ public static class MeterReport
                 (!t.Complete && t.Verdict != Verdict.Fail ? "[yellow bold]INCOMPLETE[/]" : ConsoleUi.VerdictMarkup(t.Verdict))
                 + $" [grey]{t.Points.Count(p => p.Pass == true)}/{t.Points.Count} rows within limits[/]");
         if (path is not null)
+        {
             grid.AddRow("[grey]Results[/]", Markup.Escape(Path.GetFullPath(path)));
+            if (Printing.PdfBeside(path) is { } pdf)
+                grid.AddRow("[grey]Report (PDF)[/]", Markup.Escape(pdf));
+        }
         var overall = !run.Complete && run.Verdict != Verdict.Fail ? "[yellow bold]INCOMPLETE[/]" : ConsoleUi.VerdictMarkup(run.Verdict);
         AnsiConsole.Write(new Panel(grid).Header($" {Markup.Escape(run.Meter.Model)} performance test: {overall} ").Border(BoxBorder.Double));
     }

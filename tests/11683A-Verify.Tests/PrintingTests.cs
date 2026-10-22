@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Drawing.Printing;
 using System.Runtime.Versioning;
+using Spectre.Console.Testing;
 using Verify11683A.App;
 using Verify11683A.App.Reports;
 using Verify11683A.Results;
@@ -67,6 +68,43 @@ public class PrintingTests : IDisposable
         var other = Path.Combine(_dir, "other.json");
         File.WriteAllText(other, """{ "schema": "something-else" }""");
         Assert.Throws<OperatorException>(() => Printing.DocumentFor(other));
+    }
+
+    [Fact]
+    public void The_pdf_beside_a_results_file_is_found_or_written()
+    {
+        var meter = MeterRunTests.Sample().Save(_dir);
+        Assert.Null(Printing.PdfBeside(meter));
+
+        // Printing a saved report that has no PDF leaves one beside it, so the printout is not the only copy.
+        var pdf = Printing.PdfFor(meter, Printing.DocumentFor(meter));
+        Assert.Equal(Path.ChangeExtension(Path.GetFullPath(meter), ".pdf"), pdf);
+        Assert.True(new FileInfo(pdf!).Length > 1000);
+        Assert.Equal(pdf, Printing.PdfBeside(meter));
+
+        var written = File.GetLastWriteTimeUtc(pdf!);
+        Assert.Equal(pdf, Printing.PdfFor(meter, Printing.DocumentFor(meter)));   // an existing PDF is kept
+        Assert.Equal(written, File.GetLastWriteTimeUtc(pdf!));
+    }
+
+    [Fact]
+    public void The_summaries_name_the_pdf()
+    {
+        var console = new TestConsole().Width(400);
+        Spectre.Console.AnsiConsole.Console = console;
+        var meterRun = MeterRunTests.Sample();
+        var meter = meterRun.Save(_dir);
+        MeterReport.WriteBeside(meterRun, meter);
+        MeterReport.Summary(meterRun, meter);
+        var run = ResultsFileTests.SampleRun();
+        var verification = ResultsFile.Save(run, _dir);
+        PdfReport.WriteBeside(run, verification);
+        ConsoleReport.Summary(run, verification);
+
+        var output = console.Output;
+        Assert.Contains("Report (PDF)", output);
+        Assert.Contains(Path.GetFileName(Path.ChangeExtension(meter, ".pdf")), output);
+        Assert.Contains(Path.GetFileName(Path.ChangeExtension(verification, ".pdf")), output);
     }
 
     [Fact]
