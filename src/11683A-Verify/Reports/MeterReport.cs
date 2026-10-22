@@ -21,7 +21,7 @@ public static class MeterReport
         var table = new Table().Border(TableBorder.Rounded)
             .Title($"[bold]{Markup.Escape(result.Title)}[/]" + (result.Channel is "" or "A" ? "" : $" — channel {Markup.Escape(result.Channel)}"))
             .AddColumn("Row").AddColumn("11683A").AddColumn(new TableColumn("Min").RightAligned())
-            .AddColumn(new TableColumn("Actual").RightAligned()).AddColumn(new TableColumn("Max").RightAligned()).AddColumn("Unit").AddColumn("");
+            .AddColumn(new TableColumn("Actual").RightAligned()).AddColumn(new TableColumn("Max").RightAligned()).AddColumn("Unit").AddColumn("Pass/Fail");
         for (var i = 0; i < result.Points.Count; i++)
         {
             var p = result.Points[i];
@@ -169,7 +169,7 @@ public static class MeterReport
             });
             t.Header(h =>
             {
-                foreach (var title in new[] { "Row", "11683A", "Meter", "Min.", "Actual", "Max.", "Unit", "" })
+                foreach (var title in new[] { "Row", "11683A", "Meter", "Min.", "Actual", "Max.", "Unit", "Pass/Fail" })
                     h.Cell().Background(PdfColors.Grey.Lighten3).Border(0.5f).BorderColor(PdfColors.Grey.Lighten1).Padding(2).Text(title).SemiBold().FontSize(7.5f);
             });
             foreach (var p in test.Points)
