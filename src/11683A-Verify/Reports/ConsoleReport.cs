@@ -158,7 +158,11 @@ public static class ConsoleReport
         if (run.Part1?.SupplyAdjustmentRecommended == true)
             grid.AddRow("", "[yellow]Power Supply Adjustment (A2R1) recommended, then repeat Part 1.[/]");
         if (resultsPath is not null)
+        {
             grid.AddRow("[grey]Results[/]", Markup.Escape(Path.GetFullPath(resultsPath)));
+            if (Printing.PdfBeside(resultsPath) is { } pdf)
+                grid.AddRow("[grey]Report (PDF)[/]", Markup.Escape(pdf));
+        }
 
         var overall = !run.Complete && run.Verdict != Verdict.Fail ? "[yellow bold]INCOMPLETE[/]" : ConsoleUi.VerdictMarkup(run.Verdict);
         AnsiConsole.Write(new Panel(grid).Header($" Range Switch Performance Test: {overall} ").Border(BoxBorder.Double));

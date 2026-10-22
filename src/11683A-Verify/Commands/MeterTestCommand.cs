@@ -53,7 +53,7 @@ public static class MeterTestCommand
         Saving.CopyLog(bench.Log, Path.ChangeExtension(path, ".log"));
         AnsiConsole.WriteLine();
         MeterReport.Summary(run, path);
-        Printing.Offer(() => MeterReport.Build(MeterRun.Load(path), Path.GetFileName(path)), Path.GetFileNameWithoutExtension(path), bench.Log);
+        Printing.Offer(() => MeterReport.Build(MeterRun.Load(path), Path.GetFileName(path)), path, bench.Log);
         ConsoleUi.SessionLogLine(bench.Log);
         return run.Complete && run.Verdict == Verdict.Pass ? 0 : 1;
     }
