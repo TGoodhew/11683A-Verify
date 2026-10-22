@@ -202,7 +202,7 @@ public sealed class Bench : IDisposable
         if (!source.HasInternalCalibration || !ConsoleUi.Interactive)
             return;
         AnsiConsole.MarkupLine($"[grey]The {Markup.Escape(model)}'s internal calibration corrects its zero and gain drift. Its manual asks for it daily, "
-            + "after the 2 h warm-up; it takes about 9 minutes. Without it the lowest REF EXT voltages can be tens of µV off.[/]");
+            + "after the 2 h warm-up; it takes about 6 minutes. Without it the lowest REF EXT voltages can be tens of µV off.[/]");
         if (!ConsoleUi.Confirm($"Run the {model}'s internal calibration now?", defaultValue: true))
         {
             Log.Write($"{model} internal calibration offered and declined");

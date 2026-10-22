@@ -105,7 +105,7 @@ public sealed class Fluke5440B(IVisaSession session, bool useDivider = true, Act
     /// <summary>How often the internal calibration's progress is asked for.</summary>
     public static readonly TimeSpan CalibrationPoll = TimeSpan.FromSeconds(2);
 
-    /// <summary>The longest the internal calibration may take: about 5 min by the manual, about 9 on the bench.</summary>
+    /// <summary>The longest the internal calibration may take: about 5 min by the manual, 5.6 on the bench.</summary>
     public static readonly TimeSpan CalibrationLimit = TimeSpan.FromMinutes(20);
 
     /// <summary>
