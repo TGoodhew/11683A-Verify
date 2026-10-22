@@ -62,6 +62,40 @@ public class Fluke5440BTests
         Assert.Equal(["GVRS", "GSTS"], session.Sent);
     }
 
+    [Fact]
+    public void Internal_calibration_runs_until_GDNG_is_back_to_0_then_sets_it_up_again()
+    {
+        // As on the bench: GDNG 16, 32 ... 224, then 0 (the manual's "GONG" is an OCR misreading and times out).
+        var session = Calibrator().AnswerOnce("GDNG", "16").AnswerOnce("GDNG", "32").AnswerOnce("GDNG", "224").Answer("GDNG", "0");
+        var source = Open(session);
+        source.Identify();
+        session.Sent.Clear();
+        var steps = new List<int>();
+
+        source.RunInternalCalibration(steps.Add);
+
+        Assert.Equal([16, 32, 224], steps);
+        Assert.Equal(["STBY,SOUT 0", "GERR", "CALI", "GDNG", "GDNG", "GDNG", "GDNG", "GERR", "STBY,BSTO,DIVN,SOUT 0,ISNS,IGRD", "GERR", "GSTS"], session.Sent);
+        Assert.StartsWith("Fluke 5440B, software 2.1, internal calibration run ", source.Description);
+    }
+
+    [Fact]
+    public void Internal_calibration_that_never_starts_is_reported()
+    {
+        var session = Calibrator().Answer("GDNG", "0");
+        var ex = Assert.Throws<DcSourceException>(() => Open(session).RunInternalCalibration());
+        Assert.Contains("did not start", ex.Message);
+    }
+
+    [Fact]
+    public void Internal_calibration_that_ends_with_an_error_is_reported()
+    {
+        // GERR 0 for the Standby before CALI, then 155 afterwards.
+        var session = Calibrator().AnswerOnce("GDNG", "16").Answer("GDNG", "0").AnswerOnce("GERR", "0").AnswerOnce("GERR", "155");
+        var ex = Assert.Throws<DcSourceException>(() => Open(session).RunInternalCalibration());
+        Assert.Contains("error 155", ex.Message);
+    }
+
     [Theory]
     [InlineData(0.14493, true, "DIVY,SOUT 0.14493,OPER")]
     [InlineData(0.00045831, true, "DIVY,SOUT 0.00045831,OPER")]

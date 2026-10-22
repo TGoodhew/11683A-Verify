@@ -23,5 +23,10 @@ public sealed class SimulatedDcSource(Simulated11683A target, bool useDivider = 
 
     public void Standby() => target.ExternalSourceVolts = 0;
 
+    public bool HasInternalCalibration => false;
+
+    public void RunInternalCalibration(Action<int>? progress = null) =>
+        throw new NotSupportedException("The simulated calibrator has no internal calibration.");
+
     public void Dispose() => Standby();
 }
