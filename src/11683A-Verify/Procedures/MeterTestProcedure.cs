@@ -515,7 +515,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             if (test.Zero is { } zero)
             {
                 SetCalibrator(zero.Calibrator, dc, "for the zero", allowSkip: false);
-                Settle(zero.SettleSeconds, control, MeterDisplay.Watts);   // just preset: watts
+                SettleForZero(zero, control, MeterDisplay.Watts);   // just preset: watts
                 CheckStandby(control, zero);
             }
             ConsoleUi.Attempt("Setting up the meter", () => control.Apply(baseline, null), log);
@@ -652,7 +652,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 if (choice.StartsWith("Redo", StringComparison.Ordinal) && test.Zero is { } zero)
                 {
                     SetCalibrator(zero.Calibrator, dc, "for the zero", allowSkip: false);
-                    Settle(zero.SettleSeconds, control, test.Meter!.Display ?? MeterDisplay.Watts);
+                    SettleForZero(zero, control, test.Meter!.Display ?? MeterDisplay.Watts);
                     CheckStandby(control, zero);
                     ZeroMeter(control);
                 }
@@ -836,22 +836,49 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     /// Waits for the 11683A to settle (its STANDBY drift takes up to 60 s), with a countdown and, beside it, what the
     /// meter reads meanwhile in <paramref name="display"/>'s units, so the drift can be seen dying away.
     /// </summary>
-    private void Settle(int seconds, IPowerMeterControl control, MeterDisplay display)
+    private void Settle(int seconds, IPowerMeterControl control, MeterDisplay display) => Settle(seconds, control, display, driftLimit: null);
+
+    /// <summary>The longest wait for the 11683A's drift to stop before a zero.</summary>
+    private static readonly TimeSpan MaxZeroSettle = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Before a zero: the countdown, then on until the drift is within 1.5% of the zero range's full scale per minute
+    /// (47 nW/min at 3 µW), at most <see cref="MaxZeroSettle"/>. On the bench (E4419B, 2026-10-21) channel A passed
+    /// its Zero Test at about 40 nW/min; channel B, just switched down from 100 mW, was zeroed while still falling at
+    /// 490 nW/min and failed it (-77 to -98 nW, limits ±76.4 nW). Only in watts: in dBm, near zero, drift means nothing.
+    /// </summary>
+    private void SettleForZero(MeterStep zero, IPowerMeterControl control, MeterDisplay display) =>
+        Settle(zero.SettleSeconds, control, display,
+            display == MeterDisplay.Watts ? 0.015 * Simulated11683A.TrueFullScaleWatts(RangeSwitch.Get(zero.Calibrator.Range)) : null);
+
+    /// <summary>
+    /// The countdown, and with <paramref name="driftLimit"/> (per minute, in the display's units) on after it until
+    /// the readings stop drifting, at most <see cref="MaxZeroSettle"/> in all. Enter goes on at any time.
+    /// </summary>
+    private void Settle(int seconds, IPowerMeterControl control, MeterDisplay display, double? driftLimit)
     {
         if (seconds <= 0 || Sim is not null)
             return;
         var clock = Stopwatch.StartNew();
-        var total = TimeSpan.FromSeconds(seconds);
-        TimeSpan Left() => total - clock.Elapsed;
+        var minimum = TimeSpan.FromSeconds(seconds);
+        var maximum = driftLimit is null ? minimum : MaxZeroSettle > minimum ? MaxZeroSettle : minimum;
+        bool Steady(MeterWatch w) => driftLimit is { } limit && w.DriftPerMinute is { } d && Math.Abs(d) <= limit;
         AnsiConsole.Status().Start($"Letting the 11683A settle: {seconds} s", ctx =>
         {
-            using var watch = new MeterWatch(control.Read, Left);
-            while (Left() > TimeSpan.Zero)
+            using var watch = new MeterWatch(control.Read, () => maximum - clock.Elapsed);
+            var steady = false;
+            while (true)
             {
-                ctx.Status($"Letting the 11683A settle: {Math.Ceiling(Left().TotalSeconds):0} s   {Watching(watch, display)}   [grey](Enter to go on now)[/]");
+                var elapsed = clock.Elapsed;
+                steady = Steady(watch);
+                if (elapsed >= maximum || elapsed >= minimum && (driftLimit is null || steady || watch.Error is not null))
+                    break;
+                ctx.Status(elapsed < minimum
+                    ? $"Letting the 11683A settle: {Math.Ceiling((minimum - elapsed).TotalSeconds):0} s   {Watching(watch, display)}   [grey](Enter to go on now)[/]"
+                    : $"Waiting for the 11683A's drift to stop: {elapsed:m\\:ss} of up to {maximum:m\\:ss}   {Watching(watch, display)}   [grey](Enter to go on now)[/]");
                 if (ConsoleUi.Interactive && Console.KeyAvailable && Console.ReadKey(intercept: true).Key == ConsoleKey.Enter)
                 {
-                    bench.Log.Write($"Settling cut short by the operator with {Math.Ceiling(Left().TotalSeconds):0} s to go");
+                    bench.Log.Write($"Settling cut short by the operator after {elapsed.TotalSeconds:0} s");
                     break;
                 }
                 Thread.Sleep(100);
@@ -860,9 +887,14 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 ctx.Status($"Finishing the meter's reading   {Watching(watch, display)}");
             watch.Dispose();
             var (latest, _, count) = watch.Readings;
+            var drift = watch.DriftPerMinute;
             bench.Log.Write(watch.Error is { } error
                 ? $"While settling the meter stopped answering: {error.Message}"
-                : $"While settling the meter read {latest?.ToString("R", CultureInfo.InvariantCulture) ?? "nothing"} {display} last ({count} readings)");
+                : $"While settling the meter read {latest?.ToString("R", CultureInfo.InvariantCulture) ?? "nothing"} {display} last ({count} readings in {clock.Elapsed.TotalSeconds:0} s"
+                  + (drift is { } d ? $", drift {d.ToString("R", CultureInfo.InvariantCulture)} per minute" : "") + (driftLimit is { } l ? $", limit {l.ToString("R", CultureInfo.InvariantCulture)}" : "") + ")");
+            if (driftLimit is not null && !steady && watch.Error is null && clock.Elapsed >= maximum)
+                AnsiConsole.MarkupLine($"[yellow]The 11683A was still drifting after {maximum.TotalMinutes:0} min ({Markup.Escape(drift is { } x ? Shown(x, display) + " per minute" : "drift not known")}); "
+                    + "the zero is taken anyway, and the Zero Test may show it.[/]");
         });
     }
 
@@ -874,7 +906,8 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         var (latest, previous, _) = watch.Readings;
         if (latest is not { } now)
             return "[grey]meter: reading…[/]";
-        return $"meter [bold]{Markup.Escape(Shown(now, display))}[/]" + (previous is { } was ? $" [grey](was {Markup.Escape(Shown(was, display))})[/]" : "");
+        return $"meter [bold]{Markup.Escape(Shown(now, display))}[/]" + (previous is { } was ? $" [grey](was {Markup.Escape(Shown(was, display))})[/]" : "")
+            + (watch.DriftPerMinute is { } drift ? $" [grey]drift {Markup.Escape(Shown(drift, display))}/min[/]" : "");
     }
 
     private static string Shown(double value, MeterDisplay display) => display switch

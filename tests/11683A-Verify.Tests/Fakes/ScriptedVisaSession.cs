@@ -40,10 +40,21 @@ public sealed class ScriptedVisaSession : IVisaSession
         _pendingQuery = command;
     }
 
+    private readonly HashSet<string> _timeOutOnce = [];
+
+    /// <summary>The next <paramref name="query"/> gets no reply: its read times out, once.</summary>
+    public ScriptedVisaSession TimeOutOnce(string query)
+    {
+        _timeOutOnce.Add(query);
+        return this;
+    }
+
     public string ReadLine()
     {
         var query = _pendingQuery ?? throw new InvalidOperationException("Read with nothing written.");
         _pendingQuery = null;
+        if (_timeOutOnce.Remove(query))
+            throw new InstrumentTimeoutException($"{ResourceName} did not respond within {TimeoutMilliseconds / 1000.0:0.#} s while waiting for the reply to '{query}'.");
         if (_queued.TryGetValue(query, out var queue) && queue.Count > 0)
             return queue.Dequeue();
         if (_defaults.TryGetValue(query, out var reply))
