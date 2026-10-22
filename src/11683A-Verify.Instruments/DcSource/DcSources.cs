@@ -22,7 +22,7 @@ public interface IDcSource : IDisposable
     /// <summary>What the log and report say the calibrator was, e.g. "Fluke 5440B, software 2.1".</summary>
     string Description { get; }
 
-    /// <summary>Confirms the calibrator answers as the expected model, in Voltage mode with internal sense.</summary>
+    /// <summary>Confirms the calibrator is the expected model and sets it up: Standby at 0 V, Voltage mode, internal sense and guard.</summary>
     void Identify();
 
     /// <summary>The terminals <see cref="Output"/> uses for <paramref name="volts"/>, so the operator can be told to move the leads first.</summary>
@@ -67,14 +67,21 @@ public sealed class Fluke5440B(IVisaSession session, bool useDivider = true, Act
         var version = session.Query("GVRS").Trim();
         if (!double.TryParse(version, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
             throw new DcSourceException($"{session.ResourceName}: expected a Fluke 5440B, but GVRS returned '{version}'.");
+        // Front or rear terminals is a change inside the 5440B (User Manual 2-27, Figure 2-8), not a bus setting, and
+        // the leads go on the front OUTPUT and DIVIDER terminals.
+        if ((Status() & RearOutputCode) != 0)
+            throw new DcSourceException($"{session.ResourceName}: the 5440B's output is on its rear terminals; the app uses the front "
+                + "OUTPUT and DIVIDER terminals. Change it back to the front (5440B User Manual 2-27, Figure 2-8).");
+        // Everything else is set here (Table 4-7), Standby first so nothing comes out until Output: Voltage mode (boost
+        // off), internal sense (REF EXT is a two-wire connection) and internal guard (GUARD on OUTPUT LO, which floats
+        // once the GROUND-GUARD shorting link is off, as the Service Guide's Figure 2-3 needs).
+        Send("STBY,BSTO,DIVN,SOUT 0,ISNS,IGRD");
         var status = Status();
-        if ((status & VoltageModeCode) == 0)
-            throw new DcSourceException($"{session.ResourceName}: the 5440B is in a Boost mode (GSTS {status}); set it to Voltage mode.");
-        // The connection to REF EXT is two-wire, so internal sense; and nothing comes out until Output.
-        Send("STBY,DIVN,SOUT 0,ISNS");
-        Description = $"Fluke 5440B, software {version}"
-            + ((status & InternalGuardCode) == 0 ? ", external guard" : "")
-            + ((status & RearOutputCode) != 0 ? ", rear outputs" : "");
+        const int wanted = VoltageModeCode | InternalSenseCode | InternalGuardCode;
+        if ((status & wanted) != wanted)
+            throw new DcSourceException($"{session.ResourceName}: the 5440B did not take Voltage mode, internal sense and internal guard "
+                + $"(GSTS {status}, expected {wanted} set; Table 4-5).");
+        Description = $"Fluke 5440B, software {version}";
     }
 
     public DcTerminals TerminalsFor(double volts) =>

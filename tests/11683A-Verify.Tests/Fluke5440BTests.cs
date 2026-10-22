@@ -19,13 +19,13 @@ public class Fluke5440BTests
         new(session, useDivider, Slept.Add);
 
     [Fact]
-    public void Identify_reads_the_version_and_status_then_puts_it_in_standby_at_0_V_with_internal_sense()
+    public void Identify_sets_standby_at_0_V_voltage_mode_and_internal_sense_and_guard_then_checks_them()
     {
         var session = Calibrator();
         var source = Open(session);
         source.Identify();
 
-        Assert.Equal(["GVRS", "GSTS", "STBY,DIVN,SOUT 0,ISNS", "GERR"], session.Sent);
+        Assert.Equal(["GVRS", "GSTS", "STBY,BSTO,DIVN,SOUT 0,ISNS,IGRD", "GERR", "GSTS"], session.Sent);
         Assert.Equal("Fluke 5440B, software 2.1", source.Description);
     }
 
@@ -37,19 +37,29 @@ public class Fluke5440BTests
     }
 
     [Fact]
-    public void Identify_refuses_a_boost_mode_and_sends_nothing()
+    public void Identify_takes_it_out_of_boost_and_external_guard()
     {
-        var session = Calibrator(status: "84");   // Voltage Boost, internal sense, internal guard
-        Assert.Throws<DcSourceException>(() => Open(session).Identify());
-        Assert.Equal(["GVRS", "GSTS"], session.Sent);
+        // Voltage Boost with external sense and guard (4), then Voltage mode, internal sense and guard (81) once set.
+        var session = Calibrator().AnswerOnce("GSTS", "4").AnswerOnce("GSTS", "81");
+        Open(session).Identify();
+        Assert.Contains("STBY,BSTO,DIVN,SOUT 0,ISNS,IGRD", session.Sent);
     }
 
     [Fact]
-    public void Identify_notes_external_guard_and_the_rear_outputs()
+    public void Identify_says_so_if_the_settings_do_not_take()
     {
-        var source = Open(Calibrator(status: "145"));   // Voltage, internal sense, rear output; guard not shorted to LO
-        source.Identify();
-        Assert.Equal("Fluke 5440B, software 2.1, external guard, rear outputs", source.Description);
+        var session = Calibrator().AnswerOnce("GSTS", "81").AnswerOnce("GSTS", "17");   // still external guard
+        var ex = Assert.Throws<DcSourceException>(() => Open(session).Identify());
+        Assert.Contains("internal guard", ex.Message);
+    }
+
+    [Fact]
+    public void Identify_refuses_the_rear_outputs_and_sends_nothing()
+    {
+        var session = Calibrator(status: "209");   // Voltage, internal sense and guard, rear output
+        var ex = Assert.Throws<DcSourceException>(() => Open(session).Identify());
+        Assert.Contains("rear terminals", ex.Message);
+        Assert.Equal(["GVRS", "GSTS"], session.Sent);
     }
 
     [Theory]
