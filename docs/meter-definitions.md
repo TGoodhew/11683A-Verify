@@ -31,7 +31,7 @@ file in this format: the app checks it on load and refuses one it cannot run.
 | `equipment`, `setup`, `notes` | Shown to the operator before the rows: the manual's equipment and set-up steps, condensed but faithful. |
 | `points` | The table rows, in the manual's order. |
 | `meter` | The meter's settings after Preset (see *Meter settings*). With it, a meter on the bus is set up by the app and the operator only sets the 11683A; without it, the operator follows `setup`. |
-| `zero` | The zero: `calibrator` (the 11683A's switches for it, normally STANDBY) and `settleSeconds` (e.g. 60 for the STANDBY drift). |
+| `zero` | The zero: `calibrator` (the 11683A's switches for it, normally STANDBY), `settleSeconds` (the least wait before it, e.g. 120: twice the manuals' "typically under 60 s" STANDBY drift), and optionally `waitAfterSeconds` (a wait after it before the first reading, e.g. 60 for the E441x Zero Test's 30 s, doubled) and `checkWithinMicrowatts` (after it the meter must read within ± this; outside, the zero is offered again, e.g. 0.05 for E441x Procedures 1 and 2). |
 | `cal` | The CAL: `calibrator` (normally CALIBRATE, 1 mW), `referenceCalFactorPercent` (default 100), and `adjustTo` when CAL is a front-panel adjustment (436A CAL ADJ, e.g. `1.000 ±0.002 mW`): the operator turns it while the app shows the reading. |
 
 ## Meter settings

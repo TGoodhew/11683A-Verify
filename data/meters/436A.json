@@ -38,7 +38,7 @@
           "function": "Standby",
           "polarity": "Normal"
         },
-        "settleSeconds": 60
+        "settleSeconds": 120
       },
       "points": [
         {
@@ -154,7 +154,7 @@
           "function": "Standby",
           "polarity": "Normal"
         },
-        "settleSeconds": 60
+        "settleSeconds": 120
       },
       "cal": {
         "calibrator": {
@@ -437,7 +437,7 @@
           "function": "Standby",
           "polarity": "Normal"
         },
-        "settleSeconds": 60
+        "settleSeconds": 120
       },
       "cal": {
         "calibrator": {

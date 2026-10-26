@@ -79,6 +79,15 @@ public sealed record MeterStep
     /// <summary>Seconds to wait after the 11683A is set, e.g. for its downward drift in STANDBY to stop.</summary>
     public int SettleSeconds { get; init; }
 
+    /// <summary>Zero: seconds to wait after the zero before the meter is read (the E441x Zero Test's step 8).</summary>
+    public int WaitAfterSeconds { get; init; }
+
+    /// <summary>
+    /// Zero: after it (and <see cref="WaitAfterSeconds"/>), the meter should read within ± this many µW; outside, the
+    /// operator is offered the zero again (E441x Procedures 1 and 2, "the display reads 0 ±0.05 µW").
+    /// </summary>
+    public double? CheckWithinMicrowatts { get; init; }
+
     /// <summary>CAL: the reference cal factor (the 11683A's 1 mW is the reference, at 100%).</summary>
     public double ReferenceCalFactorPercent { get; init; } = 100;
 
@@ -235,6 +244,8 @@ public sealed class MeterDefinition
         }
         foreach (var test in Tests.Where(t => !t.Automated && (t.Zero is not null || t.Cal is not null)))
             throw new InvalidDataException($"{FileName} {test.Id}: a zero or CAL step needs the test's \"meter\" settings.");
+        foreach (var test in Tests.Where(t => t.Zero is { CheckWithinMicrowatts: <= 0 } || t.Zero?.WaitAfterSeconds < 0))
+            throw new InvalidDataException($"{FileName} {test.Id}: a zero's wait after it and its check must be positive.");
     }
 }
 

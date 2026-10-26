@@ -123,6 +123,31 @@ public class MeterDefinitionTests
     }
 
     [Fact]
+    public void Every_zero_waits_twice_the_manuals_60_s_for_the_STANDBY_drift()
+    {
+        var zeros = All.SelectMany(d => d.Tests).Where(t => t.Zero is not null).ToList();
+        Assert.NotEmpty(zeros);
+        Assert.All(zeros, t => Assert.Equal(120, t.Zero!.SettleSeconds));
+    }
+
+    [Theory]
+    [InlineData("E4418B")]
+    [InlineData("E4419B")]
+    public void The_E441x_Zero_Test_waits_60_s_after_the_zero_and_procedures_1_and_2_check_it(string model)
+    {
+        var tests = MeterDefinition.LoadModel(model).Tests.ToDictionary(t => t.Id);
+        Assert.Equal(60, tests["zero-test"].Zero!.WaitAfterSeconds);   // the Service Guide's 30 s, doubled
+        Assert.Null(tests["zero-test"].Zero!.CheckWithinMicrowatts);   // the test's own row is the check
+        foreach (var id in new[] { "instrument-accuracy-procedure-1", "instrument-accuracy-procedure-2" })
+        {
+            Assert.Equal(0.05, tests[id].Zero!.CheckWithinMicrowatts);
+            Assert.Equal(0, tests[id].Zero!.WaitAfterSeconds);
+        }
+        Assert.All(All.Where(d => d.Model is not ("E4418B" or "E4419B")).SelectMany(d => d.Tests).Where(t => t.Zero is not null),
+            t => Assert.Equal((0, (double?)null), (t.Zero!.WaitAfterSeconds, t.Zero.CheckWithinMicrowatts)));
+    }
+
+    [Fact]
     public void The_dB_REL_rows_store_their_reference_first()
     {
         foreach (var model in new[] { "436A", "438A" })
@@ -165,6 +190,30 @@ public class MeterDefinitionTests
             File.WriteAllText(path, JsonSerializer.Serialize(bad, Json.Options));
             var ex = Assert.Throws<InvalidDataException>(() => MeterDefinition.Load(path));
             Assert.Contains("recorder-output reading must be in mV or V", ex.Message);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_zero_check_must_be_positive()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "11683A-Verify-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var bad = new
+            {
+                model = "X", tests = new[] { new { id = "t", title = "T", source = "p. 1", meter = new { display = "Watts" },
+                    zero = new { settleSeconds = 120, checkWithinMicrowatts = 0.0 },
+                    points = new[] { new { label = "r", meterSetting = "", expected = 1.0, unit = "mW", min = 0.9, max = 1.1 } } } },
+            };
+            var path = Path.Combine(dir, "X.json");
+            File.WriteAllText(path, JsonSerializer.Serialize(bad, Json.Options));
+            var ex = Assert.Throws<InvalidDataException>(() => MeterDefinition.Load(path));
+            Assert.Contains("must be positive", ex.Message);
         }
         finally
         {

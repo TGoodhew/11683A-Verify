@@ -41,7 +41,8 @@
           "function": "Standby",
           "polarity": "Normal"
         },
-        "settleSeconds": 60
+        "settleSeconds": 120,
+        "waitAfterSeconds": 60
       },
       "points": [
         {
@@ -90,7 +91,8 @@
           "function": "Standby",
           "polarity": "Normal"
         },
-        "settleSeconds": 60
+        "settleSeconds": 120,
+        "checkWithinMicrowatts": 0.05
       },
       "cal": {
         "calibrator": {
@@ -270,7 +272,8 @@
           "reference": "Ext",
           "externalVolts": 0
         },
-        "settleSeconds": 60
+        "settleSeconds": 120,
+        "checkWithinMicrowatts": 0.05
       },
       "cal": {
         "calibrator": {
