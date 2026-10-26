@@ -76,4 +76,11 @@ public class TeeTrimTests
     [InlineData(0.14493, 2.8986e-6)]
     [InlineData(15.588, 311.76e-6)]
     public void The_band_is_20_ppm_or_1_uV(double target, double band) => Assert.Equal(band, TeeTrim.Band(target), 12);
+
+    [Theory]
+    [InlineData(0.24e-6, false)]    // strap off, 11683A on the tee (2026-10-26)
+    [InlineData(-2.1e-6, false)]    // the 5440B and 34401A alone
+    [InlineData(-198e-6, true)]     // GROUND–GUARD strap left on
+    [InlineData(25e-6, true)]
+    public void A_ground_loop_shows_at_0_V(double teeAtZero, bool loop) => Assert.Equal(loop, TeeTrim.LoopSuspected(teeAtZero));
 }

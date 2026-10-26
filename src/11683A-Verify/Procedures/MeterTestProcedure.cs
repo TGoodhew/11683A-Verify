@@ -407,6 +407,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         }
 
         var results = new List<MeterPointResult>();
+        _teeZeroChecked = false;
         try
         {
             if ((Sim is null || bench.Walkthrough) && !AskGo(
@@ -508,6 +509,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         var baseline = test.Meter!;
         var log = bench.Log;
         var results = new List<MeterPointResult>();
+        _teeZeroChecked = false;
         try
         {
             ConsoleUi.Attempt("Presetting the meter", control.Preset, log);
@@ -867,6 +869,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     {
         if (dc is null || setting.Reference != ReferenceSwitch.Ext)
             return;
+        CheckTeeOnce(dc);
         if (setting.ExternalVolts is { } v and not 0)
         {
             ConsoleUi.Attempt($"Setting the DC calibrator to {Si.Format(v, "V", 5)}", () => SetDcSource(dc, v), bench.Log);
@@ -918,7 +921,8 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             dc.Standby();
             _teeVolts = null;
             throw new InstrumentException($"The DVM reads {Si.Format(trim.Tee, "V", 6)} at the REF EXT tee with the calibrator set to "
-                + $"{Si.Format(trim.Setting, "V", 6)}. Check the DVM is on the tee and the calibrator's leads; the calibrator is in Standby.");
+                + $"{Si.Format(trim.Setting, "V", 6)}; the calibrator is in Standby. Check the DVM is on the tee and the calibrator's leads. "
+                + TeeTrim.StrapHint);
         }
         _teeVolts = trim.Tee;
         _teeWatched = true;
@@ -928,6 +932,43 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
 
     /// <summary>The DVM watched the REF EXT tee in this run.</summary>
     private bool _teeWatched;
+
+    /// <summary>The tee has been read at 0 V in this test.</summary>
+    private bool _teeZeroChecked;
+
+    /// <summary>Before the first REF EXT setting of each test (the leads may have been moved between channels).</summary>
+    private void CheckTeeOnce(IDcSource dc)
+    {
+        if (!config.DcSource.TrimAtTee || _teeZeroChecked)
+            return;
+        ConsoleUi.Attempt("Checking the REF EXT tee at 0 V", () => CheckTeeAtZero(dc), bench.Log);
+        _teeZeroChecked = true;
+    }
+
+    /// <summary>
+    /// With the calibrator at 0 V in Operate, the tee should read the 5440B's and the DVM's offsets, a µV or two. More
+    /// than <see cref="TeeTrim.LoopLimitVolts"/> is a ground loop, most likely the calibrator's GROUND–GUARD strap.
+    /// Leaves the calibrator in Standby.
+    /// </summary>
+    private void CheckTeeAtZero(IDcSource dc)
+    {
+        if (Sim is { } sim)
+            sim.DvmAt = DvmPoint.RefExtTee;
+        var dvm = PreparedDvm();   // outside the spinner: the terminals check may ask
+        var tee = ConsoleUi.Busy("Reading the REF EXT tee with the calibrator at 0 V", _ =>
+        {
+            var range = RangePicker.Pick(dvm.Ranges(DvmFunction.DcVoltage), 0);
+            dvm.Configure(DvmFunction.DcVoltage, range, 10);
+            dc.Output(0);
+            return MeanAtTee(dvm, range);
+        });
+        dc.Standby();
+        bench.Log.Write($"REF EXT tee with the calibrator at 0 V: {tee.ToString("R", CultureInfo.InvariantCulture)} V");
+        if (TeeTrim.LoopSuspected(tee))
+            throw new InstrumentException($"The DVM reads {Si.Format(tee, "V", 4)} at the REF EXT tee with the calibrator at 0 V, more than "
+                + $"the ±{Si.Format(TeeTrim.LoopLimitVolts, "V", 2)} its offsets allow; the calibrator is in Standby. " + TeeTrim.StrapHint);
+        AnsiConsole.MarkupLine($"  [grey]REF EXT tee {Si.Format(tee, "V", 4)} with the calibrator at 0 V[/]");
+    }
 
     private static double MeanAtTee(IDvm dvm, double range)
     {
@@ -1157,6 +1198,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     /// <summary>E4418B Procedure 2 steps 9–13 with the calibrator on the bus: zero with it in Standby, CAL at 144.93 mV.</summary>
     private void ZeroAndCal(IDcSource dc)
     {
+        CheckTeeOnce(dc);
         dc.Standby();
         AnsiConsole.MarkupLine("11683A FUNCTION [bold]STANDBY[/]; the calibrator is in Standby at 0 V. Meter filter 512, then [bold]ZERO[/] the meter.");
         bench.Step("Press Enter when the meter is zeroed", s =>

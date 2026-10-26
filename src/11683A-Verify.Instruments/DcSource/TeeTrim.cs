@@ -35,7 +35,22 @@ public static class TeeTrim
     /// </summary>
     public const double GrossFloorVolts = 50e-6;
 
+    /// <summary>
+    /// More than this at the tee with the calibrator at 0 V is a ground loop, not offsets: the 5440B and 34401A agree to
+    /// about 2 µV there. With the 5440B's GROUND–GUARD strap left on (2026-10-26), its LO was earthed, current ran round
+    /// through the 11683A chassis, the sensor cable and the meter's earth, and the tee read about −200 µV at every
+    /// setting. A trim would hide that at the CAL, and the 11683A would still have the loop current in it.
+    /// </summary>
+    public const double LoopLimitVolts = 20e-6;
+
+    /// <summary>What to check when the tee is off by a fixed amount.</summary>
+    public const string StrapHint = "Check the calibrator's GROUND–GUARD strap is off, so its LO and GUARD float (E4418B/E4419B "
+        + "Service Guide, p. 2-12): an earthed LO makes a ground loop through the 11683A and the power meter.";
+
     public static double Band(double target) => Math.Max(BandPpm * 1e-6 * Math.Abs(target), FloorVolts);
+
+    /// <summary>The tee read <paramref name="teeAtZero"/> with the calibrator at 0 V: is that a ground loop?</summary>
+    public static bool LoopSuspected(double teeAtZero) => Math.Abs(teeAtZero) > LoopLimitVolts;
 
     /// <summary>
     /// Trims <paramref name="output"/> until <paramref name="readTee"/> is within <see cref="Band"/> of

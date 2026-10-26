@@ -286,7 +286,8 @@ public static class Part4Procedure
             {
                 bus.Standby();
                 throw new InstrumentException($"The DVM reads {Si.Format(trim.Tee, "V", 6)} at the REF EXT tee with the calibrator set to "
-                    + $"{Si.Format(trim.Setting, "V", 6)} on its {Terminals(terminals)} terminals. Check the leads; the calibrator is in Standby.");
+                    + $"{Si.Format(trim.Setting, "V", 6)} on its {Terminals(terminals)} terminals; the calibrator is in Standby. Check the leads. "
+                    + TeeTrim.StrapHint);
             }
         }
 
