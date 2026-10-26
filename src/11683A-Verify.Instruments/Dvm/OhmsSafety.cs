@@ -29,7 +29,7 @@ public static class OhmsSafety
 
     public static OhmsSafetyCheck Check(IDvm dvm, double thresholdVolts = DefaultThresholdVolts, int maxReadings = DefaultMaxReadings)
     {
-        dvm.Configure(DvmFunction.DcVoltage, 0.1, nplc: 10);
+        dvm.Configure(DvmFunction.DcVoltage, dvm.Ranges(DvmFunction.DcVoltage)[0], nplc: 10);   // the lowest range
         DvmReading reading = default;
         for (var i = 0; i < Math.Max(1, maxReadings); i++)
         {

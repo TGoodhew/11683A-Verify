@@ -5,11 +5,34 @@ namespace Verify11683A.Tests;
 /// <summary>
 /// Spec limits worked by hand from the manuals' tables. 34401A: Service Guide p. 12 (PDF p. 20).
 /// 3458A: User's Guide Appendix A pp. 284 and 286 (PDF pp. 286 and 288).
+/// Keithley 2001: SPEC-2001 Rev. H pp. 2 and 7, and the 2001 Calibration Manual's Table 1-2 (p. 1-5).
 /// </summary>
 public class DvmSpecTableTests
 {
     private static readonly DvmSpecTable Hp34401A = DvmSpecTable.LoadForModel("34401A");
     private static readonly DvmSpecTable Hp3458A = DvmSpecTable.LoadForModel("3458A");
+    private static readonly DvmSpecTable Keithley2001 = DvmSpecTable.LoadForModel("2001");
+
+    [Theory]
+    // The Calibration Manual's 1-year reading limits at 95% of each range, from 37 + 6, 25 + 2, 24 + 4, 38 + 3, 41 + 6 ppm.
+    [InlineData(0.2, 0.19, 8.2e-6)]          // 189.9918 to 190.0082 mV
+    [InlineData(2, 1.9, 51.5e-6)]            // 1.899949 to 1.900052 V
+    [InlineData(20, 19, 536e-6)]             // 18.99946 to 19.00054 V
+    [InlineData(200, 190, 7.82e-3)]          // 189.9922 to 190.0078 V
+    [InlineData(1000, 1000, 47e-3)]          // 999.953 to 1000.047 V
+    public void Keithley2001_1_year_matches_the_calibration_manual(double range, double volts, double limit)
+    {
+        var spec = Keithley2001.Limit(DvmFunction.DcVoltage, range, volts, SpecPeriod.Year1);
+        Assert.Equal(limit, spec.Total, 0.006 * limit);
+    }
+
+    [Fact]
+    public void Keithley2001_1_year_at_1_mW_on_the_200_mV_range()
+    {
+        // 37 ppm × 0.145 V + 6 ppm × 0.2 V = 5.365 µV + 1.2 µV = 6.565 µV
+        var limit = Keithley2001.Limit(DvmFunction.DcVoltage, 0.2, 0.145, SpecPeriod.Year1);
+        Assert.Equal(6.565e-6, limit.Total, 12);
+    }
 
     [Fact]
     public void Hp34401A_1_year_at_1_mW_on_the_1_V_range()
@@ -82,9 +105,13 @@ public class DvmSpecTableTests
     [InlineData("3458A", DvmFunction.DcVoltage, 100, "2y", 14, 0.3)]
     [InlineData("3458A", DvmFunction.FourWireResistance, 100, "1y", 12, 5)]
     [InlineData("3458A", DvmFunction.FourWireResistance, 1e4, "24h", 2, 0.2)]
+    [InlineData("2001", DvmFunction.DcVoltage, 2, "24h", 7, 2)]
+    [InlineData("2001", DvmFunction.DcVoltage, 20, "90d", 18, 4)]
+    [InlineData("2001", DvmFunction.FourWireResistance, 200, "1y", 56, 7)]
+    [InlineData("2001", DvmFunction.FourWireResistance, 2e4, "2y", 80, 4.5)]
     public void Tables_hold_the_printed_values(string model, DvmFunction function, double range, string period, double reading, double rangeTerm)
     {
-        var table = model == "34401A" ? Hp34401A : Hp3458A;
+        var table = model switch { "34401A" => Hp34401A, "3458A" => Hp3458A, _ => Keithley2001 };
         var term = table.RangeEntry(function, range).Accuracy[period];
         Assert.Equal(reading, term.Reading);
         Assert.Equal(rangeTerm, term.Range);

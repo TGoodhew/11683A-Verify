@@ -102,10 +102,10 @@ public static class Part2Procedure
         }
         finally
         {
-            // Leave the DVM on DC volts (10 V, >10 GΩ), so no ohms current flows when FUNCTION goes back to CALIBRATE.
+            // Leave the DVM on DC volts (10 V, or 20 V on a 2001: >10 GΩ), so no ohms current flows when FUNCTION goes back to CALIBRATE.
             try
             {
-                dvm.Configure(DvmFunction.DcVoltage, 10, 1);
+                dvm.Configure(DvmFunction.DcVoltage, RangePicker.Pick(dvm.Ranges(DvmFunction.DcVoltage), 10), 1);
                 session.Log.Write("Part 2 done: DVM left on DC volts.");
             }
             catch (Exception ex)

@@ -1,0 +1,58 @@
+{
+  "model": "2001",
+  "source": "Keithley Model 2001 Multimeter Specifications, SPEC-2001 Rev. H (February 2009): DC Volts p. 2, Ohms p. 7. The 1-year DCV terms agree with the 2001 Calibration Manual's verification limits (Table 1-2, p. 1-5).",
+  "units": "ppm",
+  "calibrationBandC": [ 18.0, 28.0 ],
+  "warmupMinutes": 60,
+  "notes": [
+    "Accuracy is +/-(ppm of reading + ppm of range). 24-hour column is Tcal +/-1 C; 90-day, 1-year and 2-year columns are Tcal +/-5 C (Tcal 23 C from the factory), after a 55-minute warm-up.",
+    "DCV specifications are for 1 PLC, autozero on, 10-reading digital filter [4]. The app reads at 10 PLC with synchronous autozero, and averages 10 PLC readings with the repeating filter when it asks for more than 10.",
+    "200 mV range: specified 'when properly zeroed using REL' [8]. The app does not use REL, so a 200 mV offset is not covered by these terms.",
+    "Ohms specifications are for 1 PLC, 10-reading digital filter, autozero on, 4-wire, offset compensation on for 20 Ohm to 20 kOhm [32]; the app turns offset compensation on for those ranges.",
+    "Temperature coefficient is per C, applied for each degree outside Tcal +/-5 C (taken as 18-28 C). The ohms table heads its tempco column '% of reading + % of range', but its values (8 + 1.5 on 20 Ohm) are ppm like the rest of the sheet, and are used as ppm.",
+    "Input resistance: 200 mV, 2 V and 20 V ranges >10 GOhm; 200 V and 1000 V ranges 10 MOhm +/-1%. Nothing to select.",
+    "Ranges read to 5% past full scale (210 mV, 2.1 V, 21 V, 210 V; 1000 V to 1100 V)."
+  ],
+  "functions": [
+    {
+      "function": "DcVoltage",
+      "ranges": [
+        { "range": 0.2,    "inputResistance": ">10 GOhm", "highImpedanceAvailable": true,
+          "accuracy": { "24h": { "reading": 10, "range": 6 }, "90d": { "reading": 25, "range": 6 }, "1y": { "reading": 37, "range": 6 }, "2y": { "reading": 50, "range": 6 } },
+          "tempcoPerC": { "reading": 3.3, "range": 1.5 } },
+        { "range": 2.0,    "inputResistance": ">10 GOhm", "highImpedanceAvailable": true,
+          "accuracy": { "24h": { "reading": 7, "range": 2 }, "90d": { "reading": 18, "range": 2 }, "1y": { "reading": 25, "range": 2 }, "2y": { "reading": 32, "range": 2 } },
+          "tempcoPerC": { "reading": 2.6, "range": 0.15 } },
+        { "range": 20.0,   "inputResistance": ">10 GOhm", "highImpedanceAvailable": true,
+          "accuracy": { "24h": { "reading": 7, "range": 4 }, "90d": { "reading": 18, "range": 4 }, "1y": { "reading": 24, "range": 4 }, "2y": { "reading": 32, "range": 4 } },
+          "tempcoPerC": { "reading": 2.6, "range": 0.7 } },
+        { "range": 200.0,  "inputResistance": "10 MOhm +/-1%", "highImpedanceAvailable": false,
+          "accuracy": { "24h": { "reading": 13, "range": 3 }, "90d": { "reading": 27, "range": 3 }, "1y": { "reading": 38, "range": 3 }, "2y": { "reading": 52, "range": 3 } },
+          "tempcoPerC": { "reading": 4.3, "range": 1 } },
+        { "range": 1000.0, "inputResistance": "10 MOhm +/-1%", "highImpedanceAvailable": false,
+          "accuracy": { "24h": { "reading": 17, "range": 6 }, "90d": { "reading": 31, "range": 6 }, "1y": { "reading": 41, "range": 6 }, "2y": { "reading": 55, "range": 6 } },
+          "tempcoPerC": { "reading": 4.1, "range": 1 } }
+      ]
+    },
+    {
+      "function": "FourWireResistance",
+      "ranges": [
+        { "range": 20.0,  "testCurrent": "9.2 mA",
+          "accuracy": { "24h": { "reading": 29, "range": 7 }, "90d": { "reading": 52, "range": 7 }, "1y": { "reading": 72, "range": 7 }, "2y": { "reading": 110, "range": 7 } },
+          "tempcoPerC": { "reading": 8, "range": 1.5 } },
+        { "range": 200.0, "testCurrent": "0.98 mA",
+          "accuracy": { "24h": { "reading": 24, "range": 7 }, "90d": { "reading": 36, "range": 7 }, "1y": { "reading": 56, "range": 7 }, "2y": { "reading": 90, "range": 7 } },
+          "tempcoPerC": { "reading": 4, "range": 1.5 } },
+        { "range": 2.0e3, "testCurrent": "0.98 mA",
+          "accuracy": { "24h": { "reading": 22, "range": 4 }, "90d": { "reading": 33, "range": 4 }, "1y": { "reading": 50, "range": 4 }, "2y": { "reading": 80, "range": 4.5 } },
+          "tempcoPerC": { "reading": 3.0, "range": 0.2 } },
+        { "range": 2.0e4, "testCurrent": "89 uA",
+          "accuracy": { "24h": { "reading": 19, "range": 4 }, "90d": { "reading": 32, "range": 4 }, "1y": { "reading": 50, "range": 4 }, "2y": { "reading": 80, "range": 4.5 } },
+          "tempcoPerC": { "reading": 4, "range": 0.2 } },
+        { "range": 2.0e5, "testCurrent": "7 uA",
+          "accuracy": { "24h": { "reading": 20, "range": 4.5 }, "90d": { "reading": 72, "range": 4.5 }, "1y": { "reading": 90, "range": 4.5 }, "2y": { "reading": 130, "range": 5 } },
+          "tempcoPerC": { "reading": 11, "range": 0.2 } }
+      ]
+    }
+  ]
+}

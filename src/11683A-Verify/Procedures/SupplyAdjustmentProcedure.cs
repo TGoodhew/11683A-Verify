@@ -52,7 +52,8 @@ public static class SupplyAdjustmentProcedure
             s.SetFunction(FunctionSwitch.Calibrate);
         });
 
-        dvm.Configure(DvmFunction.DcVoltage, 1, Nplc);
+        var range = RangePicker.Pick(dvm.Ranges(DvmFunction.DcVoltage), 1);   // 1 V, or 2 V on a 2001: room for A2R1's whole travel
+        dvm.Configure(DvmFunction.DcVoltage, range, Nplc);
         var detector = new RangeDetector(DvmFunction.DcVoltage,
             [new ExpectedValue(limits.Range, limits.TargetVolts)], tolerance: 0.25);
         var recent = new Queue<double>();

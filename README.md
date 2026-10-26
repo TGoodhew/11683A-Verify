@@ -72,6 +72,23 @@ git ignores it:
 The 34401A reports its serial as `0` over the bus, and the 3458A doesn't report one, so the report takes
 the serial from `dvm.serial`.
 
+**Keithley 2001.** Set `"model": "2001"` and its address under `dvm` (or pass `--dvm 2001`). It is the bench DVM
+in place of the 34401A, not a second one. The driver follows the 2001 Operator's Manual (2001-900-01 Rev. K),
+and its spec table, [`data/dvm-specs-2001.json`](data/dvm-specs-2001.json), is Keithley's SPEC-2001 Rev. H. Its
+1-year DCV terms agree with the Calibration Manual's verification limits. How it differs from the 34401A:
+
+- Ranges are 200 mV, 2 V, 20 V, 200 V and 1000 V, each reading to 5% past full scale (2.1 V on 2 V), not 20%.
+  The input is >10 GΩ up to 20 V, with nothing to select. Four-wire ohms go from 20 Ω to 200 kΩ, with offset
+  compensation on up to 20 kΩ, as the spec assumes.
+- NPLC stops at 10. When the app asks for more (the default `nplc` is 100), the 2001 averages 10 PLC readings
+  on its repeating digital filter, ten for 100, and the record gives the total. The advanced filter, which `*RST`
+  turns on, is turned off. Autozero is synchronous: a zero with every reading.
+- The 200 mV range is specified "when properly zeroed using REL". The app does not use REL. At 1 mW, 145 mV,
+  check the 2001's offset with its input shorted first.
+- It reports its serial in `*IDN?`, so `dvm.serial` is only a fallback.
+
+None of it has run on a real 2001 yet: see *Keithley 2001: what to try on the bench* below.
+
 ## Wiring
 
 ```
@@ -554,3 +571,18 @@ decline the adjustment by pressing Enter straight away, then decline the rerun.
 5. Optionally run the Table 2-4 rows. Each should be within the table's limits.
 
 Send back the session logs (`results\*.log`) and the PDFs.
+
+## Keithley 2001: what to try on the bench
+
+Every 2001 command is from the Operator's Manual; none has been sent to a real 2001 yet.
+
+1. Find its GPIB address in its front-panel menu and put it in `appsettings.local.json`: `"dvm": { "model": "2001",
+   "resource": "GPIB0::<address>::INSTR", "calibrationDate": "..." }`. Let it warm up for an hour.
+2. Run `11683A-Verify dvm-check`. It should identify the 2001 with its serial and firmware, report FRONT (the
+   INPUTS switch), and configure every DCV and ohms range, reading each setting back. A rejected command shows as
+   an error from the 2001's queue with the command that caused it.
+3. Run `11683A-Verify spec-table` and check the table against SPEC-2001 Rev. H pages 2 and 7.
+4. Short the input with a low-thermal short. Read the 200 mV range at 0 V: the offset should be a µV or two.
+5. Then `verify`, as with the 34401A.
+
+Send back the session log (`results\logs\*.log`): it holds every command and reply.

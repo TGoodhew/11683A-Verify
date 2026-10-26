@@ -39,8 +39,8 @@ public enum DvmTerminals
 public sealed class DvmException(string message) : InstrumentException(message);
 
 /// <summary>
-/// A DVM that measures the 11683A DC REFERENCE OUTPUT. Implemented by the 34401A, the 3458A and the
-/// simulator. Every result is taken on a fixed range; autorange is never used.
+/// A DVM that measures the 11683A DC REFERENCE OUTPUT. Implemented by the 34401A, the 3458A, the Keithley 2001
+/// and the simulator. Every result is taken on a fixed range; autorange is never used.
 /// </summary>
 public interface IDvm : IDisposable
 {
@@ -59,6 +59,9 @@ public interface IDvm : IDisposable
 
     /// <summary>The fixed ranges the driver accepts for a function, smallest first.</summary>
     IReadOnlyList<double> Ranges(DvmFunction function);
+
+    /// <summary>How far past each range's full scale it still reads: 20% on the 34401A and 3458A.</summary>
+    double OverrangeFactor => 1.2;
 
     /// <summary>
     /// Fixed range, the given integration time, autozero on, and (DCV) the high input impedance on every range

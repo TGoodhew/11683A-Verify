@@ -95,13 +95,18 @@ public sealed class Bench : IDisposable
             }
 
             var model = config.Dvm.Model.ToUpperInvariant();
-            if (model is not ("34401A" or "3458A"))
-                throw new OperatorException($"Unsupported DVM model '{config.Dvm.Model}' in the settings. Use 34401A or 3458A.");
+            if (model is not ("34401A" or "3458A" or "2001"))
+                throw new OperatorException($"Unsupported DVM model '{config.Dvm.Model}' in the settings. Use 34401A, 3458A or 2001.");
             log.Write($"Opening {config.Dvm.Model} at {config.Dvm.Resource}, timeout {config.Dvm.TimeoutMs} ms");
             var visa = VisaSession.Open(config.Dvm.Resource, config.Dvm.TimeoutMs);
             log.Write($"VISA implementation: {visa.Implementation}");
             var session = new LoggingVisaSession(visa, log.Write);
-            IDvm real = model == "34401A" ? new Hp34401A(session) : new Hp3458A(session);
+            IDvm real = model switch
+            {
+                "34401A" => new Hp34401A(session),
+                "3458A" => new Hp3458A(session),
+                _ => new Keithley2001(session),
+            };
             return new Bench(real, null, SystemClock.Instance, log);
         }
         catch

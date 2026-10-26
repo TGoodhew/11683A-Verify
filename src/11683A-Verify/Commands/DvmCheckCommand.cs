@@ -113,7 +113,7 @@ public static class DvmCheckCommand
         // The loop ends on 4-wire ohms: back to DC volts before the operator is asked to set CALIBRATE.
         try
         {
-            dvm.Configure(DvmFunction.DcVoltage, 10, config.Measurement.Nplc);
+            dvm.Configure(DvmFunction.DcVoltage, RangePicker.Pick(dvm.Ranges(DvmFunction.DcVoltage), 10), config.Measurement.Nplc);
         }
         catch (InstrumentException ex)
         {
