@@ -30,7 +30,7 @@ public static class MeterReport
             string Dim(string text) => pending ? $"[grey]{text}[/]" : text;
             table.AddRow(
                 Dim(Markup.Escape(point.Label)),
-                Dim(Markup.Escape(point.Calibrator is { } c ? Calibrator(c) : "—")),
+                Dim(Markup.Escape(point.Calibrator is { } c ? Calibrator(c, p.RefExtVolts) : "—")),
                 MeterTestProcedure.Fmt(point.Min, point),
                 pending ? "[grey]…[/]" : p.Reading is { } r ? $"[bold]{MeterTestProcedure.Fmt(r, point)}[/]" + (p.Simulated ? " [grey]s[/]" : "") : "[yellow]—[/]",
                 MeterTestProcedure.Fmt(point.Max, point),
@@ -177,7 +177,7 @@ public static class MeterReport
                 var point = p.Point;
                 IContainer Cell(IContainer x) => x.BorderBottom(0.5f).BorderColor(PdfColors.Grey.Lighten2).PaddingVertical(2).PaddingHorizontal(3);
                 t.Cell().Element(Cell).Text(point.Label);
-                t.Cell().Element(Cell).Text(point.Calibrator is { } cal ? Calibrator(cal) : "not used").FontSize(7.5f);
+                t.Cell().Element(Cell).Text(point.Calibrator is { } cal ? Calibrator(cal, p.RefExtVolts) : "not used").FontSize(7.5f);
                 t.Cell().Element(Cell).Text(point.MeterSetting).FontSize(7.5f);
                 t.Cell().Element(Cell).AlignRight().Text(MeterTestProcedure.Fmt(point.Min, point));
                 t.Cell().Element(Cell).AlignRight().Text(p.Reading is { } r ? MeterTestProcedure.Fmt(r, point) + (p.Simulated ? " s" : "") : "—").SemiBold();
@@ -196,9 +196,14 @@ public static class MeterReport
         });
     });
 
-    private static string Calibrator(CalibratorSetting c) =>
+    /// <summary>
+    /// The 11683A's setting for a row. A REF EXT row the DVM watched adds how far the tee was from the voltage, in µV
+    /// (the tee voltage itself is in the JSON).
+    /// </summary>
+    private static string Calibrator(CalibratorSetting c, double? tee) =>
         c.Reference == Verify11683A.Calibrator.ReferenceSwitch.Ext
             ? $"REF EXT {(c.ExternalVolts ?? 0).ToString("G5", CultureInfo.InvariantCulture)} V"
+              + (tee is { } t ? $", tee {((t - (c.ExternalVolts ?? 0)) * 1e6).ToString("+0.00;-0.00;0.00", CultureInfo.InvariantCulture)} µV" : "")
             : $"{Verify11683A.Calibrator.RangeSwitch.Get(c.Range).Label}, {c.Function.ToString().ToUpperInvariant()}"
               + (c.Polarity == Verify11683A.Calibrator.PolaritySwitch.Reverse ? ", REVERSE" : "");
 

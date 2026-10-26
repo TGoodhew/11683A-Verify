@@ -356,10 +356,20 @@ Fluke 5440B over the bus at `dcSource.resource` (default `GPIB0::7::INSTR`, the 
 - Guard and LO must float. The 5440B is shipped with a shorting link between its GROUND and GUARD terminals
   (5440B User Manual p. 2-14). With internal guard, GUARD is OUTPUT LO, so the link would earth LO: **remove
   it**, and connect nothing else to GUARD or GROUND. A plain BNC cable from OUTPUT HI/LO (centre HI, shell LO)
-  to REF EXT is all the connection needs.
+  to REF EXT is all the connection needs. Left on, it makes a ground loop through the 11683A chassis, the 11730A
+  cable and the power meter's earth. On the bench (2026-10-26) that put about −200 µV on REF EXT at every
+  setting: nothing at 500 mV, half the voltage at 458.31 µV.
 
-The same setting drives the E4418B's Procedure 2 in `meter-test`. No DVM watches the calibrator there, so the
-app uses the OUTPUT terminals and sets each row's voltage exactly, with the zero and CAL steps in between.
+The same setting drives the E4418B/E4419B's Procedure 2 in `meter-test`, on the OUTPUT terminals, with the
+zero and CAL steps in between. There too the bench DVM goes on a **BNC tee at REF EXT**, with the calibrator into
+the tee, and the app trims each voltage (the CAL's 144.93 mV included) until the tee reads it to within ±20 ppm or
+1 µV. That takes out what the lead drops, its thermal EMFs and the 5440B's own offset. They are a few µV,
+nothing at 145 mV, but a percent at the 458.31 µV row. The record's 11683A column gives each tee reading's
+difference from the voltage, and the JSON the reading itself. Before the first REF EXT voltage of each test, the
+app reads the tee with the calibrator at 0 V. More than ±20 µV there is a ground loop, not offsets (the 5440B and
+34401A agree to about 2 µV), so it stops and asks you to check the GROUND–GUARD link, with Retry once it is off. A
+trim would hide a loop at the CAL, but the 11683A would still have its current in it. Set `dcSource.trimAtTee` to
+`false` to set the calibrator with no DVM, as before.
 
 1. **1 mW voltage.** The app needs the 1 mW DC REFERENCE OUTPUT voltage. It takes it from Part 1 in the same
    session, or measures it first.
