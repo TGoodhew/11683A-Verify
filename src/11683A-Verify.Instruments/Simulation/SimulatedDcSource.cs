@@ -4,12 +4,16 @@ namespace Verify11683A.Instruments.Simulation;
 
 /// <summary>
 /// A simulated 5440B on the simulated 11683A's REF EXT input. On its DIVIDER terminals the REF EXT load pulls the
-/// output a little low (the divider's source resistance is about 500 Ω), so the app's trim against the DVM has work to do.
+/// output a little low (the divider's source resistance is about 500 Ω), and on either pair the lead adds a small offset
+/// (thermal EMFs), so the app's trim against the DVM has work to do.
 /// </summary>
 public sealed class SimulatedDcSource(Simulated11683A target, bool useDivider = true) : IDcSource
 {
     /// <summary>How far low the divider output lands under load, as a fraction.</summary>
     public double DividerLoading { get; init; } = 60e-6;
+
+    /// <summary>What the lead to REF EXT adds while the output is on: a few µV, a percent at the lowest REF EXT row.</summary>
+    public double LeadOffsetVolts { get; init; } = -5e-6;
 
     public string Description => "SIMULATED Fluke 5440B";
 
@@ -19,7 +23,7 @@ public sealed class SimulatedDcSource(Simulated11683A target, bool useDivider = 
         useDivider && Math.Abs(volts) <= Fluke5440B.DividerMaximumVolts ? DcTerminals.Divider : DcTerminals.Output;
 
     public void Output(double volts) =>
-        target.ExternalSourceVolts = volts * (TerminalsFor(volts) == DcTerminals.Divider ? 1 - DividerLoading : 1);
+        target.ExternalSourceVolts = volts * (TerminalsFor(volts) == DcTerminals.Divider ? 1 - DividerLoading : 1) + LeadOffsetVolts;
 
     public void Standby() => target.ExternalSourceVolts = 0;
 

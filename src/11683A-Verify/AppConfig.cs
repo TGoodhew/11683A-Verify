@@ -104,6 +104,12 @@ public sealed class DcSourceConfig
     /// <summary>Part 4: use the DIVIDER terminals at 2.2 V and below (finer, quieter; the operator moves the leads once).</summary>
     public bool UseDivider { get; set; } = true;
 
+    /// <summary>
+    /// meter-test Procedure 2: a bus calibrator is trimmed against the DVM on a BNC tee at REF EXT, so the lead's drop and
+    /// thermal EMFs are taken out; false sets it open loop, with no DVM.
+    /// </summary>
+    public bool TrimAtTee { get; set; } = true;
+
     public int TimeoutMs { get; set; } = 20000;
 }
 

@@ -28,6 +28,9 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     private const int BusReadings = 3;
     private const int DvmReadings = 5;
 
+    /// <summary>DVM readings averaged at the REF EXT tee for each trim step, as Part 4 takes.</summary>
+    private const int TeeReadings = 3;
+
     private readonly Random _simOperator = new(435);
     private DvmIdentity? _dvmIdentity;
     private SimulatedPowerMeter? _simMeter;
@@ -120,7 +123,8 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         if (definition.Ambiguities.Count > 0)
             notes.Add($"Transcription notes for {definition.FileName}: " + string.Join(" ", definition.Ambiguities));
         if (_dcSource is not null)
-            notes.Add($"The DC calibrator on REF EXT ({_dcSource.Description}) was set by the app over the bus, on its OUTPUT terminals.");
+            notes.Add($"The DC calibrator on REF EXT ({_dcSource.Description}) was set by the app over the bus, on its OUTPUT terminals"
+                + (_teeWatched ? $", and trimmed until the DVM on a BNC tee at REF EXT read each voltage to within ±{TeeTrim.BandPpm:0} ppm or 1 µV (the 11683A column gives each tee reading's difference from the voltage)." : "."));
         IReadOnlyList<MeterTestResult> recorded = results;
         if (retest is not null)
         {
@@ -142,7 +146,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 Sim is not null ? "simulated" : useBus ? $"{definition.BusDriver} driver at {Resource}" : "readings typed in by the operator",
                 DataFileVersion.Of(defPath, definition.Manual)),
             Calibrator = new UnitUnderTest(config.Calibrator.Model, config.Calibrator.Serial, config.Calibrator.Options),
-            Dvm = recorderUsed && _dvmIdentity is { } id
+            Dvm = (recorderUsed || _teeWatched) && _dvmIdentity is { } id
                 ? new DvmRecord(config.Dvm.Details(id), bench.Dvm.ResourceName, id.Raw, config.Dvm.Details(id).StateOn(DateOnly.FromDateTime(started.Date)))
                 : null,
             SimulationScenario = Sim?.Scenario.Name,
@@ -421,11 +425,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 AnsiConsole.MarkupLine($"[bold]{Markup.Escape(point.Label)}[/]  [grey]11683A:[/] {Markup.Escape(point.Calibrator?.ToString() ?? "not used")}  "
                     + $"[grey]meter:[/] {Markup.Escape(point.MeterSetting)}");
                 if (dc is not null && point.Calibrator?.ExternalVolts is { } volts)
-                {
-                    dc.Output(volts);
-                    bench.Log.Write($"DC calibrator set to {volts.ToString("R", CultureInfo.InvariantCulture)} V");
-                    AnsiConsole.MarkupLine($"  [grey]DC calibrator set to {Si.Format(volts, "V", 5)}[/]");
-                }
+                    SetDcSource(dc, volts);
 
                 var simulated = false;
                 double? Take()
@@ -466,7 +466,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 }
 
                 var reading = ReadRow(test, channel, point, source, ownLine: false, Take);
-                var result = new MeterPointResult(point, source, reading, simulated);
+                var result = new MeterPointResult(point, source, reading, simulated) { RefExtVolts = TeeFor(point, reading) };
                 results.Add(result);
                 bench.Log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {reading?.ToString("R", CultureInfo.InvariantCulture) ?? "skipped"} {point.Unit} "
                     + $"[{point.Min}, {point.Max}] {source}{(simulated ? " (simulated operator)" : "")}");
@@ -563,7 +563,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                     }, log, canSkip: true));
                 }
 
-                var result = new MeterPointResult(point, source, reading, false);
+                var result = new MeterPointResult(point, source, reading, false) { RefExtVolts = TeeFor(point, reading) };
                 results.Add(result);
                 log.Write($"{definition.Model} {test.Id} {channel} '{point.Label}': {reading?.ToString("R", CultureInfo.InvariantCulture) ?? "skipped"} {point.Unit} "
                     + $"[{point.Min}, {point.Max}] {source}, automated");
@@ -820,7 +820,15 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         // here as well as in the switch panel.
         if (test.NeedsH01)
         {
-            rows.Add(("DC calibrator", (dc is null ? "HI/LO" : "OUTPUT HI/LO") + " → 11683A REF EXT (GROUND–GUARD link off, LO floating)"));
+            if (dc is not null && config.DcSource.TrimAtTee)
+            {
+                rows.Add(("DC calibrator", "OUTPUT HI/LO → BNC tee on 11683A REF EXT (GROUND–GUARD link off, LO floating)"));
+                rows.Add(("DVM", "HI/LO → the same BNC tee"));
+            }
+            else
+            {
+                rows.Add(("DC calibrator", (dc is null ? "HI/LO" : "OUTPUT HI/LO") + " → 11683A REF EXT (GROUND–GUARD link off, LO floating)"));
+            }
             rows.Add(("11683A REF switch", "EXT (rear panel)"));
             rows.Add(("11683A power", "unplugged (keep the power meter connected)"));
         }
@@ -861,15 +869,85 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             return;
         if (setting.ExternalVolts is { } v and not 0)
         {
-            ConsoleUi.Attempt($"Setting the DC calibrator to {Si.Format(v, "V", 5)}", () => Busy($"Setting the DC calibrator to {Si.Format(v, "V", 5)}", () => dc.Output(v)), bench.Log);
-            bench.Log.Write($"DC calibrator set to {v.ToString("R", CultureInfo.InvariantCulture)} V");
-            AnsiConsole.MarkupLine($"  [grey]DC calibrator set to {Si.Format(v, "V", 5)}[/]");
+            ConsoleUi.Attempt($"Setting the DC calibrator to {Si.Format(v, "V", 5)}", () => SetDcSource(dc, v), bench.Log);
         }
         else
         {
             ConsoleUi.Attempt("Putting the DC calibrator in Standby", dc.Standby, bench.Log);
+            _teeVolts = null;
             AnsiConsole.MarkupLine("  [grey]DC calibrator in Standby (0 V)[/]");
         }
+    }
+
+    /// <summary>What the DVM read at the REF EXT tee for the last setting; null when it isn't watched.</summary>
+    private double? _teeVolts;
+
+    /// <summary>The tee voltage to record for a row: only a REF EXT row that was read.</summary>
+    private double? TeeFor(MeterTestPoint point, double? reading) =>
+        reading is not null && point.Calibrator?.ExternalVolts is not null ? _teeVolts : null;
+
+    /// <summary>
+    /// Sets the bus calibrator to <paramref name="volts"/>. With dcSource.trimAtTee it is trimmed until the DVM on the
+    /// REF EXT tee reads that, which takes out what the lead drops and its thermal EMFs (issue #47); otherwise it is
+    /// set open loop.
+    /// </summary>
+    private void SetDcSource(IDcSource dc, double volts)
+    {
+        var shown = Si.Format(volts, "V", 5);
+        if (!config.DcSource.TrimAtTee)
+        {
+            Busy($"Setting the DC calibrator to {shown}", () => dc.Output(volts));
+            bench.Log.Write($"DC calibrator set to {volts.ToString("R", CultureInfo.InvariantCulture)} V");
+            AnsiConsole.MarkupLine($"  [grey]DC calibrator set to {shown}[/]");
+            return;
+        }
+
+        if (Sim is { } sim)
+            sim.DvmAt = DvmPoint.RefExtTee;   // the simulated DVM on the tee, as the Connect panel asked
+        var dvm = PreparedDvm();   // outside the spinner: the terminals check may ask
+        var trim = ConsoleUi.Busy($"Setting {shown} at the REF EXT tee", _ =>
+        {
+            var range = RangePicker.Pick(dvm.Ranges(DvmFunction.DcVoltage), volts);
+            dvm.Configure(DvmFunction.DcVoltage, range, 10);
+            return TeeTrim.Run(volts, dc.Output, () => MeanAtTee(dvm, range), step =>
+                bench.Log.Write($"DC calibrator set to {step.Setting.ToString("R", CultureInfo.InvariantCulture)} V; REF EXT tee "
+                    + $"{step.Tee.ToString("R", CultureInfo.InvariantCulture)} V (target {volts.ToString("R", CultureInfo.InvariantCulture)} V)"));
+        });
+        if (trim.Gross)
+        {
+            dc.Standby();
+            _teeVolts = null;
+            throw new InstrumentException($"The DVM reads {Si.Format(trim.Tee, "V", 6)} at the REF EXT tee with the calibrator set to "
+                + $"{Si.Format(trim.Setting, "V", 6)}. Check the DVM is on the tee and the calibrator's leads; the calibrator is in Standby.");
+        }
+        _teeVolts = trim.Tee;
+        _teeWatched = true;
+        AnsiConsole.MarkupLine($"  [grey]REF EXT tee {Si.Format(trim.Tee, "V", 6)}, calibrator at {Si.Format(trim.Setting, "V", 6)}[/]"
+            + (trim.Within ? "" : $" [yellow]not within ±{TeeTrim.BandPpm:0} ppm or 1 µV after {TeeTrim.MaxTrims} tries; recorded as read[/]"));
+    }
+
+    /// <summary>The DVM watched the REF EXT tee in this run.</summary>
+    private bool _teeWatched;
+
+    private static double MeanAtTee(IDvm dvm, double range)
+    {
+        var readings = Enumerable.Range(0, TeeReadings).Select(_ => dvm.Read()).Where(r => !r.Overload).Select(r => r.Value).ToList();
+        if (readings.Count == 0)
+            throw new InstrumentException($"The DVM overloaded at the REF EXT tee on its {range} V range.");
+        return readings.Average();
+    }
+
+    /// <summary>The bench DVM, identified, reset and its terminals checked on first use.</summary>
+    private IDvm PreparedDvm()
+    {
+        var dvm = bench.Dvm;
+        if (_dvmIdentity is null)
+        {
+            _dvmIdentity = dvm.Identify();
+            dvm.Reset();
+            bench.CheckTerminals();
+        }
+        return dvm;
     }
 
     /// <summary>
@@ -1087,8 +1165,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             _simMeter!.Zero();
         });
         var calVolts = H01.H01Table.LoadDefault().CalibrationVolts;
-        dc.Output(calVolts);
-        bench.Log.Write($"DC calibrator set to {calVolts.ToString("R", CultureInfo.InvariantCulture)} V for CAL");
+        SetDcSource(dc, calVolts);
         AnsiConsole.MarkupLine($"The calibrator is at {Si.Format(calVolts, "V", 5)}. 11683A FUNCTION [bold]CALIBRATE[/], then [bold]CAL[/] the meter.");
         bench.Step("Press Enter when the meter is calibrated", s =>
         {
@@ -1101,13 +1178,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     {
         if (source == ReadingSource.Recorder)
         {
-            var dvm = bench.Dvm;
-            if (_dvmIdentity is null)
-            {
-                _dvmIdentity = dvm.Identify();
-                dvm.Reset();
-                bench.CheckTerminals();
-            }
+            var dvm = PreparedDvm();
             var span = Math.Max(Math.Abs(point.Min), Math.Abs(point.Max));
             var volts = point.Unit == "mV" ? span * 1e-3 : span;
             // The 34401A and 3458A read 20% past each range.

@@ -7,6 +7,9 @@ namespace Verify11683A.Meters;
 /// <summary>One row as measured: the manual's row, and what was read.</summary>
 public sealed record MeterPointResult(MeterTestPoint Point, ReadingSource Source, double? Reading, bool Simulated)
 {
+    /// <summary>A REF EXT row: what the DVM on the REF EXT tee read, the calibrator trimmed to it. Null when not watched.</summary>
+    public double? RefExtVolts { get; init; }
+
     /// <summary>Inside the manual's limits (allowing for the last digit of rounding). Null when the row was skipped.</summary>
     public bool? Pass => Reading is { } r
         ? r >= Point.Min - Slack && r <= Point.Max + Slack
@@ -42,7 +45,7 @@ public sealed record MeterRun
     /// <summary>The range calibrator used: model, serial, options.</summary>
     public required UnitUnderTest Calibrator { get; init; }
 
-    /// <summary>The DVM, when a test read the recorder output.</summary>
+    /// <summary>The DVM, when a test read the recorder output or watched the REF EXT tee.</summary>
     public DvmRecord? Dvm { get; init; }
 
     public string? SimulationScenario { get; init; }

@@ -358,8 +358,13 @@ Fluke 5440B over the bus at `dcSource.resource` (default `GPIB0::7::INSTR`, the 
   it**, and connect nothing else to GUARD or GROUND. A plain BNC cable from OUTPUT HI/LO (centre HI, shell LO)
   to REF EXT is all the connection needs.
 
-The same setting drives the E4418B's Procedure 2 in `meter-test`. No DVM watches the calibrator there, so the
-app uses the OUTPUT terminals and sets each row's voltage exactly, with the zero and CAL steps in between.
+The same setting drives the E4418B/E4419B's Procedure 2 in `meter-test`, on the OUTPUT terminals, with the
+zero and CAL steps in between. There too the bench DVM goes on a **BNC tee at REF EXT**, with the calibrator into
+the tee, and the app trims each voltage (the CAL's 144.93 mV included) until the tee reads it to within ±20 ppm or
+1 µV. That takes out what the lead drops, its thermal EMFs and the 5440B's own offset. They are a few µV,
+nothing at 145 mV, but a percent at the 458.31 µV row. The record's 11683A column gives each tee reading's
+difference from the voltage, and the JSON the reading itself. Set `dcSource.trimAtTee` to `false` to set the
+calibrator with no DVM, as before.
 
 1. **1 mW voltage.** The app needs the 1 mW DC REFERENCE OUTPUT voltage. It takes it from Part 1 in the same
    session, or measures it first.

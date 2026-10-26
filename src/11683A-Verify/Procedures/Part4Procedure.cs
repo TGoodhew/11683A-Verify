@@ -28,12 +28,9 @@ namespace Verify11683A.App.Procedures;
 public static class Part4Procedure
 {
     /// <summary>The DC calibrator should be set within this of the target before a reading is taken.</summary>
-    public const double SourceBandPpm = 20;
+    public const double SourceBandPpm = TeeTrim.BandPpm;
 
     private const int PowerReadings = 5;
-
-    /// <summary>Bus calibrator: how many times to set it, read the tee and correct, before taking what it gives.</summary>
-    private const int MaxTrims = 4;
 
     public static Part4Result? Run(VerificationSession session, double? oneMilliwattVolts)
     {
@@ -282,25 +279,14 @@ public static class Part4Procedure
             _terminals = terminals;
 
             AnsiConsole.MarkupLine($"Setting the calibrator to [bold]{Si.Format(target, "V", 5)}[/] ({Markup.Escape(what)}), {Terminals(terminals)} terminals.");
-            var band = Math.Max(SourceBandPpm * 1e-6 * Math.Abs(target), 1e-6);
-            var setting = target;
-            for (var i = 0; i < MaxTrims; i++)
+            var trim = TeeTrim.Run(target, bus.Output, () => MeanAtTee(3, range), step =>
+                session.Log.Write($"DC calibrator set to {step.Setting.ToString("R", CultureInfo.InvariantCulture)} V; tee {step.Tee.ToString("R", CultureInfo.InvariantCulture)} V, "
+                    + $"{((step.Tee / target - 1) * 1e6).ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture)} ppm"));
+            if (trim.Gross)
             {
-                bus.Output(setting);
-                var tee = MeanAtTee(3, range);
-                var error = tee - target;
-                session.Log.Write($"DC calibrator set to {setting.ToString("R", CultureInfo.InvariantCulture)} V; tee {tee.ToString("R", CultureInfo.InvariantCulture)} V, "
-                    + $"{((tee / target - 1) * 1e6).ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture)} ppm");
-                if (Math.Abs(error) <= band)
-                    return;
-                // More than 2% off is not loading: the leads are on the wrong terminals, or not connected.
-                if (Math.Abs(error) > 0.02 * Math.Abs(target) + 10e-6)
-                {
-                    bus.Standby();
-                    throw new InstrumentException($"The DVM reads {Si.Format(tee, "V", 6)} at the REF EXT tee with the calibrator set to "
-                        + $"{Si.Format(setting, "V", 6)} on its {Terminals(terminals)} terminals. Check the leads; the calibrator is in Standby.");
-                }
-                setting -= error;
+                bus.Standby();
+                throw new InstrumentException($"The DVM reads {Si.Format(trim.Tee, "V", 6)} at the REF EXT tee with the calibrator set to "
+                    + $"{Si.Format(trim.Setting, "V", 6)} on its {Terminals(terminals)} terminals. Check the leads; the calibrator is in Standby.");
             }
         }
 
