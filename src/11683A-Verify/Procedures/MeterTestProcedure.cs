@@ -1223,8 +1223,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             var dvm = PreparedDvm();
             var span = Math.Max(Math.Abs(point.Min), Math.Abs(point.Max));
             var volts = point.Unit == "mV" ? span * 1e-3 : span;
-            // The 34401A and 3458A read 20% past each range.
-            var range = RangePicker.Pick(dvm.Ranges(DvmFunction.DcVoltage), volts / 1.2);
+            var range = RangePicker.Pick(dvm.Ranges(DvmFunction.DcVoltage), volts / dvm.OverrangeFactor);
             dvm.Configure(DvmFunction.DcVoltage, range, 10);
             var values = Enumerable.Range(0, DvmReadings).Select(_ => dvm.Read()).Where(r => !r.Overload).Select(r => r.Value).ToList();
             return values.Count == 0 ? null : MeterUnits.FromVolts(point.Unit, values.Average());

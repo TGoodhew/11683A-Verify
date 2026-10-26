@@ -76,7 +76,7 @@ public sealed class CommandLine
                                (default), supply-low, ratio-fail, ohms-fail, noisy, h01-ext-error,
                                drifting, rear-terminals, dvm-timeout, meter-timeout. See the README's
                                Simulation section.
-          --dvm <model>        34401A or 3458A (overrides dvm.model).
+          --dvm <model>        34401A, 3458A or 2001 (Keithley; overrides dvm.model).
           --resource <name>    VISA resource, e.g. GPIB0::22::INSTR (overrides dvm.resource).
           --period <p>         Spec column: 24h, 90d, 1y or 2y (overrides dvm.specPeriod).
           --ambient <degC>     Ambient temperature, for the temperature coefficient outside 18-28 C.

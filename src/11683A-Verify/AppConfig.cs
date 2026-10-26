@@ -16,7 +16,7 @@ public sealed class CalibratorConfig
 
 public sealed class DvmConfig
 {
-    /// <summary>34401A or 3458A. Also selects data/dvm-specs-&lt;model&gt;.json.</summary>
+    /// <summary>34401A, 3458A or 2001 (Keithley). Also selects data/dvm-specs-&lt;model&gt;.json.</summary>
     public string Model { get; set; } = "34401A";
 
     public string Resource { get; set; } = "GPIB0::22::INSTR";
