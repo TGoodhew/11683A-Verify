@@ -53,6 +53,10 @@ public static class MeterTestCommand
         Saving.CopyLog(bench.Log, Path.ChangeExtension(path, ".log"));
         AnsiConsole.WriteLine();
         MeterReport.Summary(run, path);
+        // An H01 test leaves the 11683A on REF EXT and unplugged; everything else needs it back on INT.
+        if (definition.Tests.Any(t => t.NeedsH01 && run.Tests.Any(r => r.TestId == t.Id)))
+            AnsiConsole.Write(new Panel(new Markup("Set the 11683A's rear [bold]REF switch back to INT[/], take the DC calibrator off REF EXT, "
+                + "and plug the 11683A's power cord back in.")).Header(" Put the 11683A back ").BorderColor(Color.Yellow));
         Printing.Offer(() => MeterReport.Build(MeterRun.Load(path), Path.GetFileName(path)), path, bench.Log);
         ConsoleUi.SessionLogLine(bench.Log);
         return run.Complete && run.Verdict == Verdict.Pass ? 0 : 1;
