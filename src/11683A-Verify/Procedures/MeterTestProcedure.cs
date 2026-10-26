@@ -816,13 +816,17 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         var input = definition.Channels.Count < 2 ? "sensor input"
             : (definition.BusDriver == "438A" ? "SENSOR " : "CHANNEL ") + channel;
         var rows = new List<(string, string)> { ("11730A cable", $"11683A POWER METER → {definition.Model} {input}") };
+        // The rear REF switch goes with the connections: EXT for the H01 tests, INT otherwise, so the change stands out
+        // here as well as in the switch panel.
         if (test.NeedsH01)
         {
             rows.Add(("DC calibrator", (dc is null ? "HI/LO" : "OUTPUT HI/LO") + " → 11683A REF EXT (GROUND–GUARD link off, LO floating)"));
+            rows.Add(("11683A REF switch", "EXT (rear panel)"));
             rows.Add(("11683A power", "unplugged (keep the power meter connected)"));
         }
         else
         {
+            rows.Add(("11683A REF switch", "INT (rear panel)"));
             rows.Add(("11683A power", "plugged in, LINE ON"));
         }
         return rows;
