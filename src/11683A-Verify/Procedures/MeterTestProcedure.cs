@@ -522,8 +522,8 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             (MeterSettings, double?)? applied = (baseline, null);
             log.Write($"{definition.Model} {test.Id} {channel}: preset; {baseline}");
 
-            if (test.Zero is not null)
-                ZeroMeter(control);
+            if (test.Zero is { } zeroStep)
+                ZeroMeter(control, test, zeroStep, dc);
             if (test.Cal is { } cal)
             {
                 if (control.CanCalibrate)
@@ -588,10 +588,46 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         return new MeterTestResult(test.Id, test.Title, test.Source, channel, results);
     }
 
-    private void ZeroMeter(IPowerMeterControl control)
+    /// <summary>
+    /// The zero, then the step's wait after it, and its check that the meter then reads next to nothing. Outside the
+    /// check the operator can redo the zero (after the drift wait and the STANDBY check again), go on, or exit.
+    /// </summary>
+    private void ZeroMeter(IPowerMeterControl control, MeterTest test, MeterStep zero, IDcSource? dc)
     {
-        ConsoleUi.Attempt("Zeroing the meter", () => Busy("Zeroing the meter", control.Zero), bench.Log);
-        AnsiConsole.MarkupLine("[green]✓[/] Meter zeroed.");
+        var display = test.Meter!.Display ?? MeterDisplay.Watts;
+        while (true)
+        {
+            ConsoleUi.Attempt("Zeroing the meter", () => Busy("Zeroing the meter", control.Zero), bench.Log);
+            AnsiConsole.MarkupLine("[green]✓[/] Meter zeroed.");
+            Settle(zero.WaitAfterSeconds, control, display, "Waiting after the zero");
+            if (zero.CheckWithinMicrowatts is not { } within || display != MeterDisplay.Watts || ZeroChecked(control, within))
+                return;
+            var choice = ConsoleUi.Interactive ? ConsoleUi.Choose("What now?", ["Redo the zero", "Go on", "Exit"], "Go on") : "Go on";
+            bench.Log.Write($"Operator chose {choice}");
+            if (choice == "Exit")
+                throw new OperatorStopException("Exited by the operator after the zero check.");
+            if (choice == "Go on")
+                return;
+            SetCalibrator(zero.Calibrator, dc, "for the zero", allowSkip: false);
+            SettleForZero(zero, control, display);
+            CheckStandby(control, zero);
+        }
+    }
+
+    /// <summary>After the zero, one reading: true if it is within ±<paramref name="withinMicrowatts"/> µW, or was skipped.</summary>
+    private bool ZeroChecked(IPowerMeterControl control, double withinMicrowatts)
+    {
+        var watts = ConsoleUi.Attempt("Checking the zero",
+            () => (double?)ConsoleUi.Busy("Checking the meter reads zero", _ => control.Read()), bench.Log, canSkip: true);
+        if (watts is not { } w)
+            return true;
+        var limit = withinMicrowatts.ToString("0.###", CultureInfo.InvariantCulture);
+        var good = Math.Abs(w) <= withinMicrowatts * 1e-6;
+        bench.Log.Write($"After the zero the meter read {w.ToString("R", CultureInfo.InvariantCulture)} W (0 ±{limit} µW): {(good ? "within" : "outside")}");
+        AnsiConsole.MarkupLine(good
+            ? $"[green]✓[/] After the zero the meter reads {Si.Format(w, "W", 4)} (0 ±{limit} µW)."
+            : $"[red]✗ After the zero the meter reads {Si.Format(w, "W", 4)}, outside 0 ±{limit} µW.[/] [grey]The 11683A may still have been drifting, or not in STANDBY.[/]");
+        return good;
     }
 
     /// <summary>
@@ -654,7 +690,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                     SetCalibrator(zero.Calibrator, dc, "for the zero", allowSkip: false);
                     SettleForZero(zero, control, test.Meter!.Display ?? MeterDisplay.Watts);
                     CheckStandby(control, zero);
-                    ZeroMeter(control);
+                    ZeroMeter(control, test, zero, dc);
                 }
             }
         }
@@ -836,7 +872,10 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     /// Waits for the 11683A to settle (its STANDBY drift takes up to 60 s), with a countdown and, beside it, what the
     /// meter reads meanwhile in <paramref name="display"/>'s units, so the drift can be seen dying away.
     /// </summary>
-    private void Settle(int seconds, IPowerMeterControl control, MeterDisplay display) => Settle(seconds, control, display, driftLimit: null);
+    private void Settle(int seconds, IPowerMeterControl control, MeterDisplay display, string what = SettleLabel) =>
+        Settle(seconds, control, display, driftLimit: null, what);
+
+    private const string SettleLabel = "Letting the 11683A settle";
 
     /// <summary>The longest wait for the 11683A's drift to stop before a zero.</summary>
     private static readonly TimeSpan MaxZeroSettle = TimeSpan.FromMinutes(5);
@@ -855,7 +894,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
     /// The countdown, and with <paramref name="driftLimit"/> (per minute, in the display's units) on after it until
     /// the readings stop drifting, at most <see cref="MaxZeroSettle"/> in all. Enter goes on at any time.
     /// </summary>
-    private void Settle(int seconds, IPowerMeterControl control, MeterDisplay display, double? driftLimit)
+    private void Settle(int seconds, IPowerMeterControl control, MeterDisplay display, double? driftLimit, string what = SettleLabel)
     {
         if (seconds <= 0 || Sim is not null)
             return;
@@ -863,7 +902,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         var minimum = TimeSpan.FromSeconds(seconds);
         var maximum = driftLimit is null ? minimum : MaxZeroSettle > minimum ? MaxZeroSettle : minimum;
         bool Steady(MeterWatch w) => driftLimit is { } limit && w.DriftPerMinute is { } d && Math.Abs(d) <= limit;
-        AnsiConsole.Status().Start($"Letting the 11683A settle: {seconds} s", ctx =>
+        AnsiConsole.Status().Start($"{what}: {seconds} s", ctx =>
         {
             using var watch = new MeterWatch(control.Read, () => maximum - clock.Elapsed);
             var steady = false;
@@ -874,7 +913,7 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
                 if (elapsed >= maximum || elapsed >= minimum && (driftLimit is null || steady || watch.Error is not null))
                     break;
                 ctx.Status(elapsed < minimum
-                    ? $"Letting the 11683A settle: {Math.Ceiling((minimum - elapsed).TotalSeconds):0} s   {Watching(watch, display)}   [grey](Enter to go on now)[/]"
+                    ? $"{what}: {Math.Ceiling((minimum - elapsed).TotalSeconds):0} s   {Watching(watch, display)}   [grey](Enter to go on now)[/]"
                     : $"Waiting for the 11683A's drift to stop: {elapsed:m\\:ss} of up to {maximum:m\\:ss}   {Watching(watch, display)}   [grey](Enter to go on now)[/]");
                 if (ConsoleUi.Interactive && Console.KeyAvailable && Console.ReadKey(intercept: true).Key == ConsoleKey.Enter)
                 {

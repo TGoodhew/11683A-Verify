@@ -58,8 +58,11 @@ public sealed class Fluke5440B(IVisaSession session, bool useDivider = true, Act
     /// <summary>The DIVIDER terminals' span (p. 2-6).</summary>
     public const double DividerMaximumVolts = 2.2;
 
-    /// <summary>Settling within 2 ppm of a change takes 5 s up to 22 V (p. 1-7). The Output Settled bit only means ±5%.</summary>
-    public static readonly TimeSpan SettleTime = TimeSpan.FromSeconds(5);
+    /// <summary>
+    /// Settling within 2 ppm of a change takes 5 s up to 22 V (p. 1-7); the app allows twice that, to be safe. The
+    /// Output Settled bit only means ±5%.
+    /// </summary>
+    public static readonly TimeSpan SettleTime = TimeSpan.FromSeconds(10);
 
     private const int OutputSettledBit = 16;     // Serial Poll Status Byte, Figure 4-6
     private const int VoltageModeCode = 1;       // Setup Status, Table 4-5
@@ -183,7 +186,7 @@ public sealed class Fluke5440B(IVisaSession session, bool useDivider = true, Act
             throw new DcSourceException($"{session.ResourceName}: the 5440B reported error {code} after '{statement}' (5440B User Manual, Section 2).");
     }
 
-    /// <summary>Polls the Output Settled bit for up to 15 s, then allows the 5 s the 2 ppm settling takes.</summary>
+    /// <summary>Polls the Output Settled bit for up to 15 s, then allows twice the 5 s the 2 ppm settling takes.</summary>
     private void WaitSettled()
     {
         for (var i = 0; i < 30; i++)

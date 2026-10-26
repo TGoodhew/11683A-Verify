@@ -248,10 +248,13 @@ reading and min/max limits, and the page each one came from.
 
 **With the meter on the bus you only set the 11683A.** The app presets the meter and makes every setting the
 manual asks for: units, range, filter, resolution, cal factor, zero and CAL. For the zero, the 11683A is in
-STANDBY, and the app waits at least 60 s and then until the meter's readings stop drifting: within 1.5% of the
-zero range's full scale per minute (47 nW/min at 3 µW), fitted over the last minute, for at most 5 minutes. The
-countdown shows the reading and the drift, and Enter goes on at any time. After a big range change, such as
-100 mW down to 3 µW when the cable moves to the next channel, the 11683A can take minutes. The CAL is on the
+STANDBY, and the app waits at least 120 s (twice the manuals' "typically under 60 s") and then until the meter's
+readings stop drifting: within 1.5% of the zero range's full scale per minute (47 nW/min at 3 µW), fitted over the
+last minute, for at most 5 minutes. The countdown shows the reading and the drift, and Enter goes on at any time.
+After a big range change, such as 100 mW down to 3 µW when the cable moves to the next channel, the 11683A can take
+minutes. On the E4418B/E4419B the Zero Test then waits 60 s before reading (twice the Service Guide's 30 s), and
+Procedures 1 and 2 check the meter reads 0 ±0.05 µW after the zero; if it doesn't, the app offers the zero again
+before the CAL. Every settling time the manuals give is doubled, to be safe. The CAL is on the
 11683A's 1 mW, not the meter's own POWER REF. It asks you to set the 11683A only when a
 row changes it: the zero carryover rows, which change only the meter's range, run straight through. A bus DC
 calibrator (`--dc-source 5440B`) is set by the app too. Each reading is repeated until two agree, because the
@@ -342,8 +345,8 @@ Fluke 5440B over the bus at `dcSource.resource` (default `GPIB0::7::INSTR`, the 
   off its front terminals, and the app starts it (`CALI`) and follows it (`GDNG`) to the end, about 6 minutes, then
   sets the 5440B up again. On the bench, before it was run, the OUTPUT read 33–80 µV low from 458 µV to 459 mV, which
   is enough to fail the lowest Procedure 2 rows; after, +6 µV. The record's calibrator description says when it was run.
-- For each voltage it sets the output, waits the 5 s the 5440B takes to settle to 2 ppm, and reads the DVM on the
-  tee. Then it corrects the setting by the DVM's error until the tee is within ±20 ppm (or 1 µV).
+- For each voltage it sets the output, waits 10 s (twice the 5 s the 5440B takes to settle to 2 ppm), and reads
+  the DVM on the tee. Then it corrects the setting by the DVM's error until the tee is within ±20 ppm (or 1 µV).
 - With `dcSource.useDivider` (the default), 2.2 V and below come from the 5440B's **DIVIDER** terminals: finer
   (0.01 µV steps up to 220 mV) and quieter. Its source resistance of about 500 Ω drops a little into the
   REF EXT load; the trim corrects that. The two highest Table 2-4 rows come from **OUTPUT**. The app puts the
