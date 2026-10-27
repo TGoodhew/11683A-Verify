@@ -108,21 +108,20 @@ static int RunCommand(string command, AppConfig config, CommandLine options) => 
 {
     "dvm-check" => DvmCheckCommand.Run(config, options),
     "spec-table" => SpecTableCommand.Run(config, options),
-    "wiring" => WiringCommand(),
+    "wiring" => WiringCommand(config),
     "print" => PrintCommand(config),
     "verify" => VerifyCommand.Run(config, options),
     "part1" => Part1Command.Run(config, options),
     "part2" => Part2Command.Run(config, options),
     "adjust" => AdjustCommand.Run(config, options),
-    "part4" => Part4Command.Run(config, options),
     "meter-test" => MeterTestCommand.Run(config, options),
     "exit" => 0,
     _ => throw new UsageException($"Unknown command '{command}'."),
 };
 
-static int WiringCommand()
+static int WiringCommand(AppConfig config)
 {
-    Verify11683A.App.Reports.Wiring.Write();
+    Verify11683A.App.Reports.Wiring.Write(config.Calibrator.Options.Contains("H01", StringComparison.OrdinalIgnoreCase));
     return 0;
 }
 
@@ -169,7 +168,6 @@ static string ChooseFromMenu(CommandLine options)
         ["Verify: Part 1 then Part 2"] = "verify",
         ["Part 1: DC voltage and ratio test"] = "part1",
         ["Part 2: four-wire resistance test"] = "part2",
-        ["Part 4: Option H01 REF EXT check (power meter)"] = "part4",
         ["Power meter performance test (435A, 435B, 436A, 437B, 438A, E4418B, E4419B)"] = "meter-test",
         ["Adjust: Power Supply Adjustment (A2R1), then Part 1"] = "adjust",
         ["DVM spec table and test-point limits"] = "spec-table",

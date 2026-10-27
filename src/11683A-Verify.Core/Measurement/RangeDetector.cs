@@ -54,7 +54,8 @@ public sealed class RangeDetector
 
     private readonly IReadOnlyList<ExpectedValue> _candidates;
 
-    public RangeDetector(DvmFunction function, IReadOnlyList<ExpectedValue> candidates, double tolerance = DefaultTolerance)
+    /// <param name="scope">What the candidates belong to, e.g. "Part 1", for telling the operator a RANGE position isn't used.</param>
+    public RangeDetector(DvmFunction function, IReadOnlyList<ExpectedValue> candidates, double tolerance = DefaultTolerance, string scope = "this test")
     {
         if (candidates.Count == 0)
             throw new ArgumentException("No expected values to match.", nameof(candidates));
@@ -63,7 +64,10 @@ public sealed class RangeDetector
         Function = function;
         _candidates = candidates;
         Tolerance = tolerance;
+        Scope = scope;
     }
+
+    public string Scope { get; }
 
     public DvmFunction Function { get; }
 
@@ -110,10 +114,34 @@ public sealed class RangeDetector
 
         if (within == 0)
             return new Detection(DetectionKind.OutOfFamily, reading, null, deviation,
-                $"{Si.Format(reading, unit, 5)} is not close to any expected value; the nearest is {nearest.Range} "
-                + $"({Si.Format(nearest.Nominal, unit, 5)}, {deviation.ToString("+0.0%;-0.0%;0.0%", CultureInfo.InvariantCulture)}). Check RANGE"
+                OtherPosition(magnitude, unit, nearest)
+                ?? $"{Si.Format(reading, unit, 5)} is not close to any expected value; the nearest is {nearest.Range} "
+                + $"({Si.Format(nearest.Nominal, unit, 5)}, {deviation.ToString("+0.0%;-0.0%;0.0%", CultureInfo.InvariantCulture)}). Check RANGE on the 11683A"
                 + (volts ? "." : ", and that FUNCTION is in STANDBY."));
 
         return new Detection(DetectionKind.Match, reading, nearest, deviation, $"RANGE {nearest.Range}");
+    }
+
+    /// <summary>
+    /// A reading a whole number of RANGE steps from the nearest candidate is another knob position: name it and say which
+    /// way to turn. The positions are √10 apart and the output scales with them. Null if the reading isn't on a step.
+    /// </summary>
+    private string? OtherPosition(double magnitude, string unit, ExpectedValue nearest)
+    {
+        var step = Math.Log(Math.Sqrt(10));
+        var steps = (int)Math.Round(Math.Log(magnitude / nearest.Nominal) / step);
+        var index = RangeSwitch.IndexOf(nearest.RangeId) + steps;
+        if (steps == 0 || index < 0 || index >= RangeSwitch.Positions.Count
+            || Math.Abs(Math.Log(magnitude / nearest.Nominal) - steps * step) > Math.Log(1 + Tolerance))
+            return null;
+
+        var on = RangeSwitch.Positions[index];
+        var used = _candidates.Select(c => RangeSwitch.IndexOf(c.RangeId)).ToList();
+        var needs = _candidates.Count == 1 ? $"{Scope} needs {nearest.Range}"
+            : index < used.Min() ? $"{Scope} needs {RangeSwitch.Positions[used.Min()]} or higher"
+            : index > used.Max() ? $"{Scope} needs {RangeSwitch.Positions[used.Max()]} or lower"
+            : $"{Scope} needs {nearest.Range}";
+        return $"You might be on the wrong range. {Si.Format(magnitude, unit, 5)} is what the 11683A gives on {on}, "
+            + $"which {Scope} doesn't use; {needs}";
     }
 }

@@ -16,7 +16,7 @@ public static class Preparation
         AskAmbient(session);
 
         session.Screens.Begin("Wiring", "Wiring: DVM to the 11683A DC REFERENCE OUTPUT");
-        Wiring.Write(heading: false);
+        Wiring.Write(session.Config.Calibrator.Options.Contains("H01", StringComparison.OrdinalIgnoreCase), heading: false);
         var timed = !(session.Bench.IsSimulation || session.Options.SkipWarmup || Console.IsInputRedirected);
         if (!timed)
         {

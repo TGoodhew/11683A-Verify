@@ -36,7 +36,7 @@ public static class Part1Procedure
         });
 
         var candidates = part.Points.Select(p => new ExpectedValue(p.Range, limits.NominalPart1Volts(p.Range))).ToList();
-        var acquirer = session.Acquirer(new RangeDetector(DvmFunction.DcVoltage, candidates));
+        var acquirer = session.Acquirer(new RangeDetector(DvmFunction.DcVoltage, candidates, scope: "Part 1"));
         var measured = new Dictionary<string, MeasuredPoint>();
         double? lastRange = null;
         string? lastLine = null;

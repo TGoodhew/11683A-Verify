@@ -116,7 +116,6 @@ public sealed class VerificationSession : IDisposable
         Log.Write($"Unit {c.Model} s/n {c.Serial} {c.Options}; DVM {DvmDetails}; spec {Specs.Model} {Period.Key()}; ambient {AmbientC?.ToString(CultureInfo.InvariantCulture) ?? "n/a"}");
     }
 
-    public Instruments.PowerMeter.IPowerMeter OpenPowerMeter() => Bench.OpenPowerMeter(Config.PowerMeter);
 
     public Instruments.DcSource.IDcSource? OpenDcSource() => Bench.OpenDcSource(Config.DcSource, Config.DcSource.UseDivider);
 
@@ -162,8 +161,8 @@ public sealed class VerificationSession : IDisposable
                     return ToMeasured(acquirer.Function, acquisition);
 
                 case AcquisitionOutcome.NotDetected:
-                    AnsiConsole.MarkupLine($"[yellow]⚠ {Markup.Escape(Capitalise(acquisition.Message))}.[/]");
-                    if (!Retry("Fix the switches, then:"))
+                    AnsiConsole.MarkupLine($"[bold yellow]⚠ {Markup.Escape(Capitalise(acquisition.Message))}.[/]");
+                    if (!CheckSwitches(acquisition.Detection?.Kind == DetectionKind.OutOfFamily))
                         return null;
                     break;
 
@@ -206,6 +205,22 @@ public sealed class VerificationSession : IDisposable
         if (Bench.Walkthrough)
             SimulatorKnobs.Adjust(Bench.Simulator!);
         return true;
+    }
+
+    /// <summary>
+    /// The reading doesn't match the switches this part needs: ask the operator to check the 11683A (its RANGE, when the
+    /// reading is another range's), then press Enter to measure. A scripted simulation stops; a walkthrough turns the
+    /// simulated knobs.
+    /// </summary>
+    private bool CheckSwitches(bool range)
+    {
+        if (Bench.Walkthrough)
+            return Retry("Fix the switches, then:");
+        if (Bench.IsSimulation || Console.IsInputRedirected)
+            return false;
+        var what = range ? "Check the RANGE setting on the 11683A" : "Check the switches on the 11683A";
+        var answer = ConsoleUi.Ask(new TextPrompt<string>($"[blue]{what}, then press Enter[/] [grey](X to stop)[/]").AllowEmpty()).Trim();
+        return !answer.Equals("X", StringComparison.OrdinalIgnoreCase);
     }
 
     private PointAcquisition AcquireWithStatus(PointAcquirer acquirer, bool allowUnsettled, double? startRange)

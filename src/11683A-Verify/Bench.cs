@@ -116,26 +116,6 @@ public sealed class Bench : IDisposable
         }
     }
 
-    /// <summary>The Part 4 power meter: simulated, typed in by the operator, or on the bus.</summary>
-    public IPowerMeter OpenPowerMeter(PowerMeterConfig config)
-    {
-        if (Simulator is { } sim)
-            return new SimulatedPowerMeter(sim);
-        if (config.Model.Equals("manual", StringComparison.OrdinalIgnoreCase))
-            return new TypedPowerMeter(config.Model);
-        Log.Write($"Opening power meter {config.Model} at {config.Resource}, timeout {config.TimeoutMs} ms");
-        var visa = VisaSession.Open(config.Resource, config.TimeoutMs);
-        try
-        {
-            return PowerMeters.Open(config.Model, new LoggingVisaSession(visa, Log.Write), config.Channel);
-        }
-        catch
-        {
-            visa.Dispose();
-            throw;
-        }
-    }
-
     /// <summary>Emergency Standby for each bus DC calibrator opened in this session, released when the bench closes.</summary>
     private readonly List<IDisposable> _emergency = [];
 
