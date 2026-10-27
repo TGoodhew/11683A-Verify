@@ -57,7 +57,6 @@ public sealed class CommandLine
                                100 mW, with uncertainty, TUR and verdicts.
           part2                Part 2: four-wire ohms from 300 uW to 3 uW with FUNCTION in STANDBY. No ohms
                                current unless a DC reading first shows the output is grounded.
-          part4                Part 4: Option H01 REF EXT transfer check against a power meter
                                (informational; E4418B Service Guide procedure 2).
           meter-test           Power meter performance tests with the 11683A: 435A, 435B, 436A, 437B, 438A,
                                E4418B, E4419B (definitions in data/meters). Menu choice, or --meter <model>.
@@ -69,7 +68,7 @@ public sealed class CommandLine
           (none)               Menu.
 
         Options:
-          --simulate[=name]    Use the simulated 11683A, DVM and (Part 4) power meter. Scenarios: nominal
+          --simulate[=name]    Use the simulated 11683A, DVM and power meter. Scenarios: nominal
                                (default), supply-low, ratio-fail, ohms-fail, noisy, h01-ext-error,
                                drifting, rear-terminals, dvm-timeout, meter-timeout. See the README's
                                Simulation section.
@@ -83,7 +82,7 @@ public sealed class CommandLine
           --retest             meter-test: run again only the tests the meter's last run (same serial)
                                failed or left incomplete; the record keeps that run's passing tests.
                                Offered anyway when there is such a run.
-          --dc-source <model>  The DC calibrator on REF EXT (Part 4, E4418B Procedure 2): manual, or 5440B
+          --dc-source <model>  The DC calibrator on REF EXT (meter-test, E4418B Procedure 2): manual, or 5440B
                                for the app to set it over the bus (overrides dcSource.model).
           --dc-source-resource <r>
                                Its VISA resource, e.g. GPIB0::12::INSTR (overrides dcSource.resource).

@@ -65,8 +65,8 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             // Every test on one channel before the cable moves to the next: A, then B.
             planned = [.. channels.SelectMany((c, i) => tests.Where(t => t.PerChannel || i == 0).Select(t => (t, c)))];
         }
-        var useBus = definition.BusDriver is not null && (Sim is not null
-            || ConsoleUi.Confirm($"Read the {definition.Model} over the bus at {Resource}?", defaultValue: true));
+        // A meter with a bus driver is always read over the bus: nothing is typed in that the bus can do.
+        var useBus = definition.BusDriver is not null;
         screens.SetSteps([.. planned.Select(p => StepName(p.Test, p.Channel)), "Results"]);
 
         var results = new List<MeterTestResult>();

@@ -31,7 +31,6 @@ cd src\11683A-Verify\bin\Debug\net10.0
 11683A-Verify verify                    # Part 1 then Part 2 (the Range Switch Performance Test)
 11683A-Verify part1                     # Part 1 only: DC voltage and ratio test
 11683A-Verify part2                     # Part 2 only: four-wire resistance test
-11683A-Verify part4                     # Part 4: Option H01 REF EXT check (needs a power meter)
 11683A-Verify meter-test --meter 437B   # power meter performance test (435A/B, 436A, 437B, 438A, E4418B, E4419B)
 11683A-Verify adjust                    # Part 3: Power Supply Adjustment assist (A2R1), then Part 1
 11683A-Verify wiring                    # wiring diagram and connections
@@ -110,7 +109,7 @@ an H01 unit REF EXT with nothing on it, the REF switch on INT and the power cord
   34401A, `TERM?` on the 3458A). If it is on REAR, the app asks you to press the button and waits until FRONT
   is selected. On REAR the open input floats at some millivolts, and the ohms safety check refuses ohms.
 - **Measure at DC REFERENCE OUTPUT**, the lower BNC. The upper BNC, **REF EXT**, is the Option H01
-  reference *input*, used only by `part4` and `meter-test` Procedure 2.
+  reference *input*, used only by `meter-test` Procedure 2.
 - **The 4-wire cable must go directly to the 11683A BNC.** Make the Kelvin split at the BNC plug. Use no
   adapters or tees: their contact resistance would be measured with the 11683A. The cable must be no more
   than 5 ft long (11683A manual, Table 2 and the note on p. 7).
@@ -147,8 +146,8 @@ pp. 7–8 (PDF pp. 18–19). All limits are in [`data/limits-11683A.json`](data/
   a step tracker with the current step highlighted, finished steps ticked and skipped ones struck through.
   A results screen waits for Enter before the next step clears it. The run uses the terminal's alternate
   screen, like a full-screen program. When it ends, the normal screen comes back with the results tables,
-  the summary and where everything was saved, so they stay in the scrollback. `dvm-check`, `adjust`,
-  `part4` and `meter-test` work the same way. Redirected or scripted runs scroll as before, with a heading
+  the summary and where everything was saved, so they stay in the scrollback. `dvm-check`, `adjust`
+  and `meter-test` work the same way. Redirected or scripted runs scroll as before, with a heading
   for each step. The session log has everything, whatever was on screen.
 - **Ambient temperature.** The app asks for it, unless `--ambient` was given. Outside 18–28 °C, the DVM's
   temperature coefficient is added.
@@ -221,7 +220,7 @@ The format is versioned (`"schema": "11683A-Verify/results/1"`), and a file with
 - **The meters are left usable.** A meter the app set up is put back in free run when the test ends.
 - **The session log has the detail**, including the full error, and its path is printed with the message. A stack
   trace is shown on screen only for an error in the app itself.
-- **Real-bench `meter-test` and Part 4 need you at the console.** They refuse to run with input or output
+- **Real-bench `meter-test` needs you at the console.** They refuse to run with input or output
   redirected, so they can't go on without your confirmations.
 - **Exit codes:** 0 pass; 1 a test that ran and didn't pass, or is incomplete; 2 a command-line error; 3 the run
   itself failed.
@@ -333,23 +332,11 @@ PDF p. 19):
 In simulation (`adjust --simulate=supply-low`), ↑/↓ turn the simulated A2R1 in coarse steps (0.1%) and
 ←/→ in fine steps (0.01%).
 
-## Part 4: Option H01 REF EXT transfer check
+## REF EXT and the DC calibrator (meter-test Procedure 2)
 
-`11683A-Verify part4`. It is not part of `verify`: `meter-test` Procedure 2 on an E4418B/E4419B makes the same
-check with the meter and the 5440B driven over the bus. The check is
-informational: it compares power meter readings, so the result is an indication under the power meter's own
-uncertainty and never changes the verdict. It follows the E4418B Service Guide's Instrument Accuracy Test
-Procedure 2 (pp. 2-11 to 2-14, PDF pp. 51–54), and Table 2-4 is stored in
-[`data/h01-ext-table.json`](data/h01-ext-table.json).
-
-You need:
-
-- a power meter on the 11683A's front-panel POWER METER output, connected with an 11730A cable;
-- a DC calibrator whose Guard and LO can float;
-- a BNC tee.
-
-Set `powerMeter.model` to `E4418B`, `E4419B`, `437B` or `438A` to read the meter over the bus
-(`powerMeter.resource`, default `GPIB0::13::INSTR`). Leave it as `manual` to type the readings in.
+The Option H01 REF EXT check is `meter-test` Procedure 2 on an E4418B/E4419B (E4418B Service Guide, Instrument
+Accuracy Test Procedure 2, pp. 2-11 to 2-14). The app drives the meter and the 5440B over the bus; you set the
+11683A and move the leads. It is not part of `verify`.
 
 **The DC calibrator, by hand or over the bus.** Leave `dcSource.model` as `manual` to set the calibrator
 yourself while the DVM shows the error live. Set it to `5440B` (or pass `--dc-source 5440B`) for the app to set a
@@ -380,7 +367,7 @@ Fluke 5440B over the bus at `dcSource.resource` (default `GPIB0::7::INSTR`, the 
   cable and the power meter's earth. On the bench (2026-10-26) that put about −200 µV on REF EXT at every
   setting: nothing at 500 mV, half the voltage at 458.31 µV.
 
-The same setting drives the E4418B/E4419B's Procedure 2 in `meter-test`, on the OUTPUT terminals, with the
+In Procedure 2 the 5440B is on its OUTPUT terminals, with the
 zero and CAL steps in between. There too the bench DVM goes on a **BNC tee at REF EXT**, with the calibrator into
 the tee, and the app trims each voltage (the CAL's 144.93 mV included) until the tee reads it to within ±20 ppm or
 1 µV. That takes out what the lead drops, its thermal EMFs and the 5440B's own offset. They are a few µV,
@@ -390,29 +377,6 @@ app reads the tee with the calibrator at 0 V. More than ±20 µV there is a grou
 34401A agree to about 2 µV), so it stops and asks you to check the GROUND–GUARD link, with Retry once it is off. A
 trim would hide a loop at the CAL, but the 11683A would still have its current in it. Set `dcSource.trimAtTee` to
 `false` to set the calibrator with no DVM, as before.
-
-1. **1 mW voltage.** The app needs the 1 mW DC REFERENCE OUTPUT voltage. It takes it from Part 1 in the same
-   session, or measures it first.
-2. **Step 1, REF INT.** Connect the power meter with the 11730A cable. Set RANGE 1 mW. In STANDBY, wait for
-   the meter's drift to stop and **zero** it. In CALIBRATE, **CAL** it. The app then reads the meter
-   (P_INT).
-3. **Step 2, REF EXT.** The app first warns about the shock risk from the H01 chassis unless the power meter is
-   connected. **Unplug the 11683A's power cord**: the H01 has a ground loop.
-   - Set RANGE **100 mW** and REF **EXT**, as the Service Guide's step 8 does.
-   - Move the DVM to a **BNC tee on REF EXT**, and connect the DC calibrator to the tee.
-   - Set the calibrator to the 1 mW voltage, to within ±20 ppm. The DVM shows the error live. A bus calibrator
-     is set and trimmed by the app.
-   - The app reads the meter (P_EXT). It reports P_EXT/P_INT − 1, corrected for the calibrator's small offset.
-     The default tolerance is ±0.2%. Table 2-4 relates 144.93 mV to 1 mW, so about +0.05% is expected at
-     145.00 mV.
-4. **Step 3, optional: Table 2-4.** These are the Service Guide's steps 9–14.
-   - Zero the meter in STANDBY with the calibrator at 0 V.
-   - CAL it at 144.93 mV.
-   - Set each of the ten voltages, from 458.31 µV to 15.588 V, with the meter filter the table gives. Each
-     reading is compared with the table's own limits.
-   - The rows are data and are **never scaled**: above 1 mW the table is not linear (15.588 V is 100 mW).
-5. Turn the calibrator off (a bus calibrator is already in Standby), set REF back to INT, plug the power cord
-   back in, and move the DVM back.
 
 **FET Balance Adjustment (not implemented).** The manual's FET Balance Adjustment (para 48–51, p. 8) is
 needed only after the U1 assembly is replaced, or after the A3A1–A3J1 wires have moved. It needs an
@@ -485,7 +449,7 @@ Every command runs without hardware with `--simulate[=scenario]`.
 
 Scripted (redirected) runs still go straight through, setting the knobs themselves. The simulator provides a simulated 11683A
 (knobs, settling, noise, drift, A2R1, REF EXT), a simulated 34401A that measures it with the real reading
-times, and, for Part 4, a simulated power meter with zero and CAL. The app turns the simulated knobs itself.
+times, and, for `meter-test`, a simulated power meter with zero and CAL. The app turns the simulated knobs itself.
 Every result is marked SIMULATED in the console, the JSON and the PDF, and an actuals export from a simulated
 run is flagged so it can't be used.
 
@@ -496,7 +460,6 @@ run is flagged so it can't be used.
 | `ratio-fail` | 10 mW 0.6% high: its ratio fails. | `part1 --simulate=ratio-fail` |
 | `ohms-fail` | 3 µW 0.4% high: Part 2 fails. | `part2 --simulate=ohms-fail` |
 | `noisy` | 30 ppm noise: slow to settle, wider σ. | `part1 --simulate=noisy` |
-| `h01-ext-error` | REF EXT path 0.4% high: Part 4's agreement is outside 0.2%. | `part4 --simulate=h01-ext-error` |
 | `drifting` | Outputs drift 15 ppm/min, as if not warmed up. | `part1 --simulate=drifting` |
 | `rear-terminals` | The DVM's Front/Rear switch starts on REAR: the app asks for FRONT before measuring. | `dvm-check --simulate=rear-terminals` |
 | `dvm-timeout` | The DVM's 40th reading times out, once: the point offers Try again, or the part stops and what was measured is saved. | `verify --simulate=dvm-timeout` |
@@ -504,9 +467,6 @@ run is flagged so it can't be used.
 
 - **Part 3:** in `adjust --simulate=...`, ↑/↓ turn the simulated A2R1 in coarse steps and ←/→ in fine steps.
   The live view needs a real console.
-- **Part 4:** the simulated power meter zeroes and CALs itself at the right moments. The simulated DC
-  calibrator lands 3 ppm off each target, so the offset correction is exercised. The DVM is moved to the
-  REF EXT tee and back.
 
 ## Step 1: what to try on the bench
 
@@ -562,16 +522,6 @@ recommends it.
 
 Even without adjusting anything, it's worth running `adjust` once on the bench just to watch the live view:
 decline the adjustment by pressing Enter straight away, then decline the rerun.
-
-**Part 4, the Option H01 check.** It needs a power meter and an 11730A cable.
-
-1. In `appsettings.local.json`, set `powerMeter.model` (`E4418B`, `437B`, `438A` or `manual`) and
-   `powerMeter.resource`.
-2. Run `11683A-Verify part4` and follow the prompts. The procedure is in the Part 4 section above.
-3. With a bus meter, check the session log: the identity reply and the reading commands. These drivers
-   have not run against a real meter yet.
-4. Check the EXT/INT agreement. About +0.05% is expected at 145.00 mV.
-5. Optionally run the Table 2-4 rows. Each should be within the table's limits.
 
 Send back the session logs (`results\*.log`) and the PDFs.
 

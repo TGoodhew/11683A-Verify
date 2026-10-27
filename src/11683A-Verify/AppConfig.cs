@@ -101,7 +101,7 @@ public sealed class DcSourceConfig
     /// <summary>7 is the 5440B factory default address.</summary>
     public string Resource { get; set; } = "GPIB0::7::INSTR";
 
-    /// <summary>Part 4: use the DIVIDER terminals at 2.2 V and below (finer, quieter; the operator moves the leads once).</summary>
+    /// <summary>meter-test Procedure 2: use the DIVIDER terminals at 2.2 V and below (finer, quieter; the operator moves the leads once).</summary>
     public bool UseDivider { get; set; } = true;
 
     /// <summary>

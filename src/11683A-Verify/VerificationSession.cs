@@ -116,7 +116,6 @@ public sealed class VerificationSession : IDisposable
         Log.Write($"Unit {c.Model} s/n {c.Serial} {c.Options}; DVM {DvmDetails}; spec {Specs.Model} {Period.Key()}; ambient {AmbientC?.ToString(CultureInfo.InvariantCulture) ?? "n/a"}");
     }
 
-    public Instruments.PowerMeter.IPowerMeter OpenPowerMeter() => Bench.OpenPowerMeter(Config.PowerMeter);
 
     public Instruments.DcSource.IDcSource? OpenDcSource() => Bench.OpenDcSource(Config.DcSource, Config.DcSource.UseDivider);
 
