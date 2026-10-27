@@ -92,23 +92,25 @@ None of it has run on a real 2001 yet: see *Keithley 2001: what to try on the be
 ## Wiring
 
 ```
- 34401A front terminals                      11683A rear panel
- ┌────────────────────┐                      ┌───────────────────────────────┐
- │  HI        ───┐    │                      │  REF EXT ◎   (H01 input,      │
- │  HI Sense  ───┤    │                      │               Part 4 only)    │
- │               ├────┼──── 4-wire cable ────┼─► DC REFERENCE OUTPUT ◎       │
- │  LO        ───┤    │     ≤ 5 ft, pairs    │      centre: HI + HI Sense    │
- │  LO Sense  ───┘    │     joined at the    │      shell:  LO + LO Sense    │
- └────────────────────┘     BNC plug         │   100 MEG LOAD MIN            │
-                                             └───────────────────────────────┘
+ DVM front terminals                       11683A rear panel
+ ┌───────────────┐                         ┌────────────────────────────┐
+ │  HI        ───┼───┐                     │  REF EXT ◎        (nothing)│
+ │  HI Sense  ───┼───┴─ centre ─┐  BNC     │                            │
+ │               │              ├─────────►│  DC REFERENCE OUTPUT ◎     │
+ │  LO        ───┼───┬─ shell ──┘          │                            │
+ │  LO Sense  ───┼───┘                     └────────────────────────────┘
+ └───────────────┘   4-wire, ≤ 5 ft
 ```
+
+The run's Wiring screen shows this with a **Connect** panel: DVM terminals FRONT, each pair, the cable, and on
+an H01 unit REF EXT with nothing on it, the REF switch on INT and the power cord in.
 
 - **The DVM must read its FRONT terminals.** The 34401A's Front/Rear button (the 3458A's Terminals button)
   can't be set over the bus. Before the first measurement every command reads the switch (`ROUT:TERM?` on the
   34401A, `TERM?` on the 3458A). If it is on REAR, the app asks you to press the button and waits until FRONT
   is selected. On REAR the open input floats at some millivolts, and the ohms safety check refuses ohms.
 - **Measure at DC REFERENCE OUTPUT**, the lower BNC. The upper BNC, **REF EXT**, is the Option H01
-  reference *input*. It is used only in Part 4.
+  reference *input*, used only by `part4` and `meter-test` Procedure 2.
 - **The 4-wire cable must go directly to the 11683A BNC.** Make the Kelvin split at the BNC plug. Use no
   adapters or tees: their contact resistance would be measured with the 11683A. The cable must be no more
   than 5 ft long (11683A manual, Table 2 and the note on p. 7).
@@ -212,7 +214,7 @@ The format is versioned (`"schema": "11683A-Verify/results/1"`), and a file with
   (a row) or **Stop**. A DVM point offers Try again; in `meter-test` every instrument step offers all three. A reply
   that arrives after a timeout is dropped, so it isn't taken for the next answer.
 - **Nothing measured is lost.** If a run stops (your Stop, or an error with no one at the console), what was
-  measured is saved, marked INCOMPLETE, with a note saying why. In `verify`, a failure in Part 2 or Part 4 keeps
+  measured is saved, marked INCOMPLETE, with a note saying why. In `verify`, a failure in Part 2 keeps
   Part 1. If the results folder can't be written, the run is saved in `%TEMP%\11683A-Verify-results` instead.
 - **The 5440B is left safe.** It is put in Standby after any error. If it doesn't confirm, a red panel tells you to
   press its STBY key. **Ctrl+C** sends it STBY on a session of its own before the app exits (Ctrl+C saves nothing).
@@ -333,7 +335,8 @@ In simulation (`adjust --simulate=supply-low`), ↑/↓ turn the simulated A2R1 
 
 ## Part 4: Option H01 REF EXT transfer check
 
-`11683A-Verify part4`, or `verify --part4`. On an H01 unit, `verify` also asks at the end. The check is
+`11683A-Verify part4`. It is not part of `verify`: `meter-test` Procedure 2 on an E4418B/E4419B makes the same
+check with the meter and the 5440B driven over the bus. The check is
 informational: it compares power meter readings, so the result is an indication under the power meter's own
 uncertainty and never changes the verdict. It follows the E4418B Service Guide's Instrument Accuracy Test
 Procedure 2 (pp. 2-11 to 2-14, PDF pp. 51–54), and Table 2-4 is stored in
@@ -488,7 +491,7 @@ run is flagged so it can't be used.
 
 | Scenario | What it does | Try it with |
 |---|---|---|
-| `nominal` | Every range at the centre of its limits; 1 ppm noise. | `verify --simulate --part4` |
+| `nominal` | Every range at the centre of its limits; 1 ppm noise. | `verify --simulate` |
 | `supply-low` | Supply 2% low: 1 mW about 142.1 mV, so A2R1 needs adjusting. The ratios still pass. | `verify`, then `adjust --simulate=supply-low` |
 | `ratio-fail` | 10 mW 0.6% high: its ratio fails. | `part1 --simulate=ratio-fail` |
 | `ohms-fail` | 3 µW 0.4% high: Part 2 fails. | `part2 --simulate=ohms-fail` |

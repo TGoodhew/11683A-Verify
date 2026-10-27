@@ -28,9 +28,6 @@ public sealed class CommandLine
     /// <summary>The DC calibrator's VISA resource (overrides dcSource.resource).</summary>
     public string? DcSourceResource { get; private set; }
 
-    /// <summary>verify: run Part 4 without asking.</summary>
-    public bool Part4 { get; private set; }
-
     /// <summary>meter-test: run again only the tests the meter's last run did not pass, without asking.</summary>
     public bool Retest { get; private set; }
 
@@ -81,7 +78,6 @@ public sealed class CommandLine
           --period <p>         Spec column: 24h, 90d, 1y or 2y (overrides dvm.specPeriod).
           --ambient <degC>     Ambient temperature, for the temperature coefficient outside 18-28 C.
                                Asked for at the start of a test if not given.
-          --part4              verify: also run Part 4 without asking.
           --meter <model>      meter-test: the power meter, e.g. 437B.
           --meter-resource <r> meter-test: its VISA resource (overrides powerMeter.resource).
           --retest             meter-test: run again only the tests the meter's last run (same serial)
@@ -164,9 +160,6 @@ public sealed class CommandLine
                     break;
                 case "--retest":
                     result.Retest = true;
-                    break;
-                case "--part4":
-                    result.Part4 = true;
                     break;
                 case "--skip-warmup":
                     result.SkipWarmup = true;
