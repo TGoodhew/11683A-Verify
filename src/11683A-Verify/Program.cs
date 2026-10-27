@@ -108,7 +108,7 @@ static int RunCommand(string command, AppConfig config, CommandLine options) => 
 {
     "dvm-check" => DvmCheckCommand.Run(config, options),
     "spec-table" => SpecTableCommand.Run(config, options),
-    "wiring" => WiringCommand(),
+    "wiring" => WiringCommand(config),
     "print" => PrintCommand(config),
     "verify" => VerifyCommand.Run(config, options),
     "part1" => Part1Command.Run(config, options),
@@ -120,9 +120,9 @@ static int RunCommand(string command, AppConfig config, CommandLine options) => 
     _ => throw new UsageException($"Unknown command '{command}'."),
 };
 
-static int WiringCommand()
+static int WiringCommand(AppConfig config)
 {
-    Verify11683A.App.Reports.Wiring.Write();
+    Verify11683A.App.Reports.Wiring.Write(config.Calibrator.Options.Contains("H01", StringComparison.OrdinalIgnoreCase));
     return 0;
 }
 

@@ -34,7 +34,7 @@ cd src\11683A-Verify\bin\Debug\net10.0
 11683A-Verify part4                     # Part 4: Option H01 REF EXT check (needs a power meter)
 11683A-Verify meter-test --meter 437B   # power meter performance test (435A/B, 436A, 437B, 438A, E4418B, E4419B)
 11683A-Verify adjust                    # Part 3: Power Supply Adjustment assist (A2R1), then Part 1
-11683A-Verify wiring                    # wiring diagram and 4-wire cable rules
+11683A-Verify wiring                    # wiring diagram and connections
 11683A-Verify --regen-pdf results\11683A_SG52060005_20261017-1430.json   # rebuild a PDF report
 11683A-Verify --print results\11683A_SG52060005_20261017-1430.json       # print a saved report
 11683A-Verify dvm-check --simulate      # no hardware; also --simulate=supply-low, ratio-fail,

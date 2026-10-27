@@ -95,19 +95,34 @@ public class ConsoleReportTests
     {
         Assert.Contains("DC REFERENCE OUTPUT", Wiring.Diagram);
         Assert.Contains("REF EXT", Wiring.Diagram);
-        Assert.Contains(Wiring.Rules, r => r.Contains("5 ft"));
+        Assert.Contains(Wiring.Connections(h01: true), c => c.Value.Contains("5 ft"));
     }
 
     [Fact]
-    public void Wiring_rules_start_below_the_diagram()
+    public void Wiring_connect_panel_starts_below_the_diagram()
     {
+        // Its own console, not the global one, which other test classes swap at the same time.
         var console = new TestConsole().Width(200);
-        Spectre.Console.AnsiConsole.Console = console;
-        Wiring.Write();
+        Wiring.Write(console, h01: true);
         var lines = console.Lines;
         var bottom = lines.Select((l, i) => (l, i)).Last(x => x.l.Contains('┘')).i;
-        Assert.DoesNotContain("•", lines[bottom]);
-        Assert.StartsWith("•", lines[bottom + 1].TrimStart());
+        Assert.Contains("Connect", lines[bottom + 1]);
+        Assert.Contains(lines, l => l.Contains("REF switch") && l.Contains("INT"));
+    }
+
+    [Fact]
+    public void Wiring_without_h01_has_no_ref_switch()
+    {
+        Assert.DoesNotContain(Wiring.Connections(h01: false), c => c.Name.Contains("REF"));
+    }
+
+    [Fact]
+    public void Wiring_diagram_keeps_hi_and_lo_apart()
+    {
+        // The HI pair goes to the centre pin and the LO pair to the shell; no line joins the two pairs at the DVM.
+        var lines = Wiring.Diagram.ReplaceLineEndings().Split(Environment.NewLine);
+        Assert.Contains(lines, l => l.Contains("HI Sense") && l.Contains("centre"));
+        Assert.Contains(lines, l => l.Contains("LO ") && l.Contains("shell"));
     }
 
     [Fact]
