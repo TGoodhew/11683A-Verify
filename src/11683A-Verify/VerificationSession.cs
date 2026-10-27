@@ -163,7 +163,7 @@ public sealed class VerificationSession : IDisposable
 
                 case AcquisitionOutcome.NotDetected:
                     AnsiConsole.MarkupLine($"[bold yellow]⚠ {Markup.Escape(Capitalise(acquisition.Message))}.[/]");
-                    if (!Retry("Set the switches, then:"))
+                    if (!CheckSwitches(acquisition.Detection?.Kind == DetectionKind.OutOfFamily))
                         return null;
                     break;
 
@@ -192,20 +192,36 @@ public sealed class VerificationSession : IDisposable
     }
 
     /// <summary>
-    /// Measure again or stop. A scripted simulation stops (nothing would change); in a walkthrough the operator can turn the
+    /// Try again or stop. A scripted simulation stops (nothing would change); in a walkthrough the operator can turn the
     /// simulated knobs before trying again.
     /// </summary>
     private bool Retry(string title)
     {
         if (Bench.IsSimulation && !Bench.Walkthrough)
             return false;
-        var choices = Bench.Walkthrough ? new[] { "Change the simulated switches, then try again", "Stop" } : new[] { "Done, measure", "Stop" };
+        var choices = Bench.Walkthrough ? new[] { "Change the simulated switches, then try again", "Stop" } : new[] { "Try again", "Stop" };
         var choice = ConsoleUi.Choose(title, choices, "Stop");
         if (choice == "Stop")
             return false;
         if (Bench.Walkthrough)
             SimulatorKnobs.Adjust(Bench.Simulator!);
         return true;
+    }
+
+    /// <summary>
+    /// The reading doesn't match the switches this part needs: ask the operator to check the 11683A (its RANGE, when the
+    /// reading is another range's), then press Enter to measure. A scripted simulation stops; a walkthrough turns the
+    /// simulated knobs.
+    /// </summary>
+    private bool CheckSwitches(bool range)
+    {
+        if (Bench.Walkthrough)
+            return Retry("Fix the switches, then:");
+        if (Bench.IsSimulation || Console.IsInputRedirected)
+            return false;
+        var what = range ? "Check the RANGE setting on the 11683A" : "Check the switches on the 11683A";
+        var answer = ConsoleUi.Ask(new TextPrompt<string>($"[blue]{what}, then press Enter[/] [grey](X to stop)[/]").AllowEmpty()).Trim();
+        return !answer.Equals("X", StringComparison.OrdinalIgnoreCase);
     }
 
     private PointAcquisition AcquireWithStatus(PointAcquirer acquirer, bool allowUnsettled, double? startRange)

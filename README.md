@@ -209,7 +209,7 @@ The format is versioned (`"schema": "11683A-Verify/results/1"`), and a file with
 - **An instrument doesn't answer, or reports an error.** The app says which one, what it sent and what to check,
   for example *"GPIB0::13::INSTR did not respond within 20 s while waiting for the reply to '\*IDN?'. Check that it
   is switched on, at this address, and not showing an error or a menu."* Where it can, it offers **Retry**, **Skip**
-  (a row) or **Stop**. A DVM point offers Done, measure; in `meter-test` every instrument step offers all three. A reply
+  (a row) or **Stop**. A DVM point offers Try again; in `meter-test` every instrument step offers all three. A reply
   that arrives after a timeout is dropped, so it isn't taken for the next answer.
 - **Nothing measured is lost.** If a run stops (your Stop, or an error with no one at the console), what was
   measured is saved, marked INCOMPLETE, with a note saying why. In `verify`, a failure in Part 2 or Part 4 keeps
@@ -496,7 +496,7 @@ run is flagged so it can't be used.
 | `h01-ext-error` | REF EXT path 0.4% high: Part 4's agreement is outside 0.2%. | `part4 --simulate=h01-ext-error` |
 | `drifting` | Outputs drift 15 ppm/min, as if not warmed up. | `part1 --simulate=drifting` |
 | `rear-terminals` | The DVM's Front/Rear switch starts on REAR: the app asks for FRONT before measuring. | `dvm-check --simulate=rear-terminals` |
-| `dvm-timeout` | The DVM's 40th reading times out, once: the point offers Done, measure, or the part stops and what was measured is saved. | `verify --simulate=dvm-timeout` |
+| `dvm-timeout` | The DVM's 40th reading times out, once: the point offers Try again, or the part stops and what was measured is saved. | `verify --simulate=dvm-timeout` |
 | `meter-timeout` | The power meter's 6th reading times out, once: Retry / Skip / Stop, or the run stops and the rows so far are saved. | `meter-test --meter 437B --simulate=meter-timeout` |
 
 - **Part 3:** in `adjust --simulate=...`, ↑/↓ turn the simulated A2R1 in coarse steps and ←/→ in fine steps.

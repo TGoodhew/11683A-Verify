@@ -116,7 +116,7 @@ public sealed class RangeDetector
             return new Detection(DetectionKind.OutOfFamily, reading, null, deviation,
                 OtherPosition(magnitude, unit, nearest)
                 ?? $"{Si.Format(reading, unit, 5)} is not close to any expected value; the nearest is {nearest.Range} "
-                + $"({Si.Format(nearest.Nominal, unit, 5)}, {deviation.ToString("+0.0%;-0.0%;0.0%", CultureInfo.InvariantCulture)}). Check RANGE"
+                + $"({Si.Format(nearest.Nominal, unit, 5)}, {deviation.ToString("+0.0%;-0.0%;0.0%", CultureInfo.InvariantCulture)}). Check RANGE on the 11683A"
                 + (volts ? "." : ", and that FUNCTION is in STANDBY."));
 
         return new Detection(DetectionKind.Match, reading, nearest, deviation, $"RANGE {nearest.Range}");
@@ -137,10 +137,11 @@ public sealed class RangeDetector
 
         var on = RangeSwitch.Positions[index];
         var used = _candidates.Select(c => RangeSwitch.IndexOf(c.RangeId)).ToList();
-        var turn = _candidates.Count == 1 ? $"turn RANGE to {nearest.Range}"
-            : index < used.Min() ? $"turn RANGE UP to {RangeSwitch.Positions[used.Min()]} or higher"
-            : index > used.Max() ? $"turn RANGE DOWN to {RangeSwitch.Positions[used.Max()]} or lower"
-            : $"turn RANGE to {nearest.Range}";
-        return $"RANGE is on {on} ({Si.Format(magnitude, unit, 5)}), which {Scope} doesn't use: {turn}";
+        var needs = _candidates.Count == 1 ? $"{Scope} needs {nearest.Range}"
+            : index < used.Min() ? $"{Scope} needs {RangeSwitch.Positions[used.Min()]} or higher"
+            : index > used.Max() ? $"{Scope} needs {RangeSwitch.Positions[used.Max()]} or lower"
+            : $"{Scope} needs {nearest.Range}";
+        return $"You might be on the wrong range. {Si.Format(magnitude, unit, 5)} is what the 11683A gives on {on}, "
+            + $"which {Scope} doesn't use; {needs}";
     }
 }
