@@ -101,6 +101,7 @@ public class PowerMeterDriverTests
         var meter = new E441xPowerMeter(session);
         meter.Identify();
         Assert.Equal("Agilent Technologies E4418B s/n GB12345678, fw A1.06.00, channel 1", meter.Description);
+        Assert.Equal("GB12345678", ((IPowerMeter)meter).Serial);   // meter-test takes it from here, not the operator
         Assert.Equal(1.2589254e-3, meter.ReadWatts(), 9);   // +1 dBm
         Assert.Equal(1.0003e-3, meter.ReadWatts(), 12);
         Assert.Empty(session.Commands);                      // queries only: the set-up is left alone

@@ -7,8 +7,8 @@ using Verify11683A.Meters;
 namespace Verify11683A.Instruments.PowerMeter;
 
 /// <summary>
-/// A power meter read during Part 4. Zero and CAL are done by the operator from the meter's front panel, as the
-/// E4418B Service Guide's procedure does; the app only reads the result.
+/// A power meter that meter-test reads. A bus meter that also implements IPowerMeterControl is set up, zeroed and
+/// CAL'd by the app.
 /// </summary>
 public interface IPowerMeter : IDisposable
 {
@@ -20,6 +20,9 @@ public interface IPowerMeter : IDisposable
 
     /// <summary>Confirms the meter is the expected model and fills in <see cref="Description"/>.</summary>
     void Identify();
+
+    /// <summary>The serial number the meter reported in <see cref="Identify"/>, or null if it doesn't report one.</summary>
+    string? Serial => null;
 
     /// <summary>The present reading, in watts.</summary>
     double ReadWatts();
@@ -82,6 +85,7 @@ public sealed class E441xPowerMeter(IVisaSession session, int channel = 1) : IPo
     private int _filter = 4;
 
     public string Description { get; private set; } = "E441x power meter";
+    public string? Serial { get; private set; }
     public bool OverBus => true;
     public bool CanCalibrate => true;
     public bool CanSetCalFactor => true;
@@ -97,6 +101,7 @@ public sealed class E441xPowerMeter(IVisaSession session, int channel = 1) : IPo
         if (channel != 1 && !_twoChannel)
             throw new PowerMeterException($"{session.ResourceName}: the {fields[1].Trim()} has one channel, so there is no channel {channel}.");
         Description = $"{fields[0].Trim()} {fields[1].Trim()} s/n {fields[2].Trim()}, fw {fields[3].Trim()}, channel {channel}";
+        Serial = fields[2].Trim() is { Length: > 0 } s ? s : null;
     }
 
     public double ReadWatts()

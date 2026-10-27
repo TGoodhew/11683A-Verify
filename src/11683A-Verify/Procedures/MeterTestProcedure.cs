@@ -44,7 +44,9 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         var started = bench.Clock.Now;
         Header();
 
-        var serial = AskSerial();
+        // A meter with a bus driver is always read over the bus: nothing is typed in that the bus can do.
+        var useBus = definition.BusDriver is not null;
+        var serial = SerialFromBus(useBus) ?? AskSerial();
         var retest = OfferRetest(serial);
         List<(MeterTest Test, string Channel)> planned;
         if (retest is not null)
@@ -65,8 +67,6 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
             // Every test on one channel before the cable moves to the next: A, then B.
             planned = [.. channels.SelectMany((c, i) => tests.Where(t => t.PerChannel || i == 0).Select(t => (t, c)))];
         }
-        // A meter with a bus driver is always read over the bus: nothing is typed in that the bus can do.
-        var useBus = definition.BusDriver is not null;
         screens.SetSteps([.. planned.Select(p => StepName(p.Test, p.Channel)), "Results"]);
 
         var results = new List<MeterTestResult>();
@@ -326,6 +326,20 @@ public sealed class MeterTestProcedure(AppConfig config, CommandLine options, Be
         foreach (var t in available.Where(t => !t.NeedsH01))
             prompt.Select(t);
         return ConsoleUi.Ask(prompt);
+    }
+
+    /// <summary>The serial number the meter reports over the bus (E441x *IDN?), or null if it doesn't report one.</summary>
+    private string? SerialFromBus(bool useBus)
+    {
+        if (!useBus || Sim is not null)
+            return null;
+        using var meter = ConsoleUi.Attempt($"Identifying the {definition.Model} at {Resource}",
+            () => OpenIdentified(useBus, definition.Channels[0]), bench.Log, canSkip: false)!;
+        if (meter.Serial is not { } serial)
+            return null;
+        AnsiConsole.MarkupLine($"{Markup.Escape(definition.Model)} serial number: [bold]{Markup.Escape(serial)}[/] [grey](from the meter)[/]");
+        bench.Log.Write($"Meter serial from the bus: {serial}");
+        return serial;
     }
 
     private string AskSerial()
