@@ -162,8 +162,8 @@ public sealed class VerificationSession : IDisposable
                     return ToMeasured(acquirer.Function, acquisition);
 
                 case AcquisitionOutcome.NotDetected:
-                    AnsiConsole.MarkupLine($"[yellow]⚠ {Markup.Escape(Capitalise(acquisition.Message))}.[/]");
-                    if (!Retry("Fix the switches, then:"))
+                    AnsiConsole.MarkupLine($"[bold yellow]⚠ {Markup.Escape(Capitalise(acquisition.Message))}.[/]");
+                    if (!Retry("Set the switches, then:"))
                         return null;
                     break;
 
@@ -192,14 +192,14 @@ public sealed class VerificationSession : IDisposable
     }
 
     /// <summary>
-    /// Try again or stop. A scripted simulation stops (nothing would change); in a walkthrough the operator can turn the
+    /// Measure again or stop. A scripted simulation stops (nothing would change); in a walkthrough the operator can turn the
     /// simulated knobs before trying again.
     /// </summary>
     private bool Retry(string title)
     {
         if (Bench.IsSimulation && !Bench.Walkthrough)
             return false;
-        var choices = Bench.Walkthrough ? new[] { "Change the simulated switches, then try again", "Stop" } : new[] { "Try again", "Stop" };
+        var choices = Bench.Walkthrough ? new[] { "Change the simulated switches, then try again", "Stop" } : new[] { "Done, measure", "Stop" };
         var choice = ConsoleUi.Choose(title, choices, "Stop");
         if (choice == "Stop")
             return false;

@@ -41,7 +41,7 @@ public static class Part2Procedure
         });
 
         var candidates = part.Points.Select(p => new ExpectedValue(p.Range, p.OhmsMid)).ToList();
-        var acquirer = session.Acquirer(new RangeDetector(DvmFunction.FourWireResistance, candidates), interlock);
+        var acquirer = session.Acquirer(new RangeDetector(DvmFunction.FourWireResistance, candidates, scope: "Part 2"), interlock);
         var measured = new Dictionary<string, MeasuredPoint>();
         double? lastRange = null;
         string? lastLine = null;

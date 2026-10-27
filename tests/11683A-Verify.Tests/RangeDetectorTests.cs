@@ -69,8 +69,33 @@ public class RangeDetectorTests
         // 100 µW in CALIBRATE: about 14.5 mV, a √10 step below 300 µW.
         var detection = Volts.Detect(0.0145, overload: false);
         Assert.Equal(DetectionKind.OutOfFamily, detection.Kind);
-        Assert.Contains("300 µW", detection.Message);
-        Assert.Contains("Check RANGE", detection.Message);
+        Assert.Contains("RANGE is on 100 µW", detection.Message);
+        Assert.Contains("turn RANGE UP to 300 µW or higher", detection.Message);
+    }
+
+    [Fact]
+    public void The_3_uW_position_in_part_1_says_turn_up()
+    {
+        // On the bench 2026-10-26: RANGE on 3 µW read 456.64 µV, four steps below 300 µW.
+        var detector = new RangeDetector(DvmFunction.DcVoltage, Volts.Candidates, scope: "Part 1");
+        var detection = detector.Detect(456.64e-6, overload: false);
+        Assert.Equal(DetectionKind.OutOfFamily, detection.Kind);
+        Assert.Equal("RANGE is on 3 µW (456.64 µV), which Part 1 doesn't use: turn RANGE UP to 300 µW or higher", detection.Message);
+    }
+
+    [Fact]
+    public void A_position_above_part_2_says_turn_down()
+    {
+        // 1 mW in STANDBY: a √10 step above 300 µW's 3150 Ω.
+        var detection = Ohms.Detect(Limits.Part2.Point("300uW").OhmsMid * Math.Sqrt(10) * 1.01, overload: false);
+        Assert.Contains("RANGE is on 1 mW", detection.Message);
+        Assert.Contains("turn RANGE DOWN to 300 µW or lower", detection.Message);
+    }
+
+    [Fact]
+    public void A_reading_between_steps_names_no_position()
+    {
+        Assert.Contains("Check RANGE", Volts.Detect(0.258, overload: false).Message);
     }
 
     [Fact]
